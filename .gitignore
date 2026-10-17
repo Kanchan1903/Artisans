@@ -1,0 +1,51 @@
+# Node / Web
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+.pytest_cache/
+
+# Databases & local state
+*.db
+*.sqlite
+*.sqlite3
+kalasathi.db
+
+# Storage & Uploads
+uploads/
+services/api/uploads/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.apk
+*.aab
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Secrets & Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

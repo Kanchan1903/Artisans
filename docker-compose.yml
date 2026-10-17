@@ -1,0 +1,132 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: kalasathi_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kalasathi}
+      POSTGRES_USER: ${POSTGRES_USER:-kalasathi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kalasathi_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kalasathi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: kalasathi_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_secret}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--pass", "${REDIS_PASSWORD:-redis_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── MinIO (S3-compatible object storage) ───────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: kalasathi_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_secret}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ─── Main Backend API ────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    container_name: kalasathi_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kalasathi}:${POSTGRES_PASSWORD:-kalasathi_secret}@postgres:5432/${POSTGRES_DB:-kalasathi}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-kalasathi-media}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change_me_in_production}
+      JWT_ALGORITHM: HS256
+      AI_SERVICE_URL: http://ai:8001
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ./services/api:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    working_dir: /app
+
+  # ─── AI Microservice ─────────────────────────────────────────────────────────
+  ai:
+    build:
+      context: ./services/ai
+      dockerfile: Dockerfile
+    container_name: kalasathi_ai
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      BHASHINI_API_KEY: ${BHASHINI_API_KEY:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      AI_MOCK_MODE: ${AI_MOCK_MODE:-true}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-kalasathi-media}
+    volumes:
+      - ./services/ai:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    working_dir: /app
+
+  # ─── Web Frontend (Next.js) ──────────────────────────────────────────────────
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: kalasathi_web
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_RAZORPAY_KEY: ${RAZORPAY_KEY_ID:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    profiles:
+      - web   # run with: docker compose --profile web up
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
