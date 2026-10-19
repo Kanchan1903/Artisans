@@ -1,20 +1,21 @@
 /**
- * Next.js Middleware — Auth-first gate
+ * Next.js Middleware — Auth gate
  * 
  * Rules:
- * - Public routes (products browsing, artisan pages): accessible without auth
- * - Protected routes (cart, checkout, account, orders): require login
+ * - Public routes (home, products browsing, artisan pages, cart): accessible without auth
+ * - Protected routes (checkout, account, orders): require login
  * - Auth routes (login, signup): redirect to home if already logged in
- * - All other routes: require login (login-first UX)
  */
 import { NextRequest, NextResponse } from "next/server";
 
 // Routes that are always public — no auth required
 const PUBLIC_PATHS = [
+  "/",
   "/login",
   "/signup",
-  "/products",  // public product browsing (SEO)
-  "/artisans",  // public artisan pages (SEO)
+  "/products",  // public product browsing
+  "/artisans",  // public artisan pages
+  "/cart",      // public cart viewing
   "/api/",
   "/_next/",
   "/favicon.ico",
@@ -26,7 +27,6 @@ const PUBLIC_PATHS = [
 const PROTECTED_PATHS = [
   "/account",
   "/checkout",
-  "/cart",
   "/orders",
 ];
 
@@ -34,6 +34,7 @@ const PROTECTED_PATHS = [
 const AUTH_ONLY_PATHS = ["/login", "/signup"];
 
 function isPublic(pathname: string): boolean {
+  if (pathname === "/") return true;
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
@@ -46,7 +47,6 @@ function isAuthOnly(pathname: string): boolean {
 }
 
 function getToken(request: NextRequest): string | null {
-  // Check HttpOnly cookie first (secure, set by login)
   const cookieToken = request.cookies.get("ks_token")?.value;
   if (cookieToken) return cookieToken;
   return null;
@@ -67,11 +67,6 @@ export function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // For home page "/" — require login (login-first UX)
-  if (!isLoggedIn && pathname === "/") {
-    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();

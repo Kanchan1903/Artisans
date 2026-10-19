@@ -19,14 +19,16 @@ export default function HomePage() {
 
   useEffect(() => {
     async function loadData() {
-      const [prodsData, cats, arts] = await Promise.all([
-        fetchProducts({ size: 8 }),
-        fetchCategories(),
-        fetchArtisans(),
-      ]);
-      setProducts(prodsData.items);
-      setCategories(cats);
-      setArtisans(arts);
+      try {
+        const [prodsRes, catsRes, artsRes] = await Promise.allSettled([
+          fetchProducts({ size: 8 }),
+          fetchCategories(),
+          fetchArtisans(),
+        ]);
+        if (prodsRes.status === "fulfilled") setProducts(prodsRes.value.items || []);
+        if (catsRes.status === "fulfilled") setCategories(catsRes.value || []);
+        if (artsRes.status === "fulfilled") setArtisans(artsRes.value || []);
+      } catch (_) {}
     }
     loadData();
 

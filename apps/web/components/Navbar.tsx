@@ -78,6 +78,7 @@ export default function Navbar() {
           <div className="relative">
             <button
               id="lang-select-btn"
+              type="button"
               onClick={() => setShowLangMenu(!showLangMenu)}
               className="flex items-center gap-1.5 bg-white border border-[#E5DDD0] rounded-full px-3 py-1.5 text-xs font-semibold text-[#262220] hover:border-[#C85A32] transition shadow-sm"
               title="Change Language / भाषा बदलें"
@@ -97,6 +98,7 @@ export default function Navbar() {
                   {languages.map((lang) => (
                     <button
                       key={lang.code}
+                      type="button"
                       onClick={() => {
                         setLocale(lang.code);
                         setShowLangMenu(false);
@@ -186,7 +188,7 @@ export default function Navbar() {
               </Link>
               <Link
                 id="nav-signup"
-                href="/login"
+                href="/login?tab=signup"
                 className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#C85A32] text-white hover:bg-[#B34D28] transition"
               >
                 {t("createAccount", "Create Account")}

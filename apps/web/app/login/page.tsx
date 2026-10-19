@@ -28,8 +28,16 @@ function LoginContent() {
   const { isLoggedIn, isLoading, loginWithPassword, registerWithPassword, token } = useAuth();
   const { locale, setLocale, t, languages } = useLanguage();
 
-  const [tab, setTab] = useState<"signin" | "signup">("signin");
+  const initialTab = searchParams.get("tab") === "signup" ? "signup" : "signin";
+  const [tab, setTab] = useState<"signin" | "signup">(initialTab);
   const [showLangMenu, setShowLangMenu] = useState(false);
+
+  useEffect(() => {
+    const qTab = searchParams.get("tab");
+    if (qTab === "signup" || qTab === "signin") {
+      setTab(qTab);
+    }
+  }, [searchParams]);
 
   // Sign In fields
   const [identifier, setIdentifier] = useState("");
