@@ -39,6 +39,7 @@ class User(Base):
     language: Mapped[Language] = mapped_column(SAEnum(Language, native_enum=False), default=Language.en, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     fcm_token: Mapped[str | None] = mapped_column(Text, nullable=True)  # Firebase push token
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

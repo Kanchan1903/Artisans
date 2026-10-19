@@ -4,12 +4,11 @@ import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Eye, EyeOff, Phone, Lock, Sparkles, ArrowRight,
-  Loader2, CheckCircle, ShieldCheck,
+  Eye, EyeOff, Lock, User, Mail, Phone,
+  Loader2, CheckCircle, ShieldCheck, Sparkles, ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
-// ─── Helper: set HttpOnly-style cookie via API route ─────────────────────────
 async function persistTokenCookie(token: string, remember: boolean) {
   try {
     await fetch("/api/auth/session", {
@@ -20,35 +19,33 @@ async function persistTokenCookie(token: string, remember: boolean) {
   } catch (_) {}
 }
 
-async function clearTokenCookie() {
-  try {
-    await fetch("/api/auth/session", { method: "DELETE" });
-  } catch (_) {}
-}
-
-// ─── OTP Step ─────────────────────────────────────────────────────────────────
-
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
-  const { isLoggedIn, isLoading, sendOtp, verifyOtp, token } = useAuth();
+  const { isLoggedIn, isLoading, loginWithPassword, registerWithPassword, token } = useAuth();
 
   const [tab, setTab] = useState<"signin" | "signup">("signin");
-  const [step, setStep] = useState<"phone" | "otp">("phone");
 
-  // Form fields
-  const [phone, setPhone] = useState("");
+  // Sign In fields
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Sign Up fields
   const [name, setName] = useState("");
-  const [otp, setOtp] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+
+  // Remember Me checkbox — unchecked by default (as required)
   const [rememberMe, setRememberMe] = useState(false);
 
   // UI state
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
+  const [success, setSuccess] = useState("");
 
   // Redirect if already logged in
   useEffect(() => {
@@ -59,59 +56,21 @@ function LoginContent() {
     }
   }, [isLoggedIn, isLoading, token, redirectTo, router]);
 
-  // Countdown timer for OTP resend
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [countdown]);
-
-  const formatPhone = (raw: string) => {
-    const digits = raw.replace(/\D/g, "");
-    if (digits.length <= 10) return digits;
-    return digits.slice(-10);
-  };
-
-  const fullPhone = `+91${phone}`;
-
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (phone.length < 10) {
-      setError("Enter a valid 10-digit mobile number.");
+    if (!identifier.trim()) {
+      setError("Please enter your name, email, or phone.");
       return;
     }
-    if (tab === "signup" && !name.trim()) {
-      setError("Please enter your full name.");
+    if (!password) {
+      setError("Please enter your password.");
       return;
     }
-    setLoading(true);
-    try {
-      const res = await sendOtp(fullPhone, "buyer");
-      setOtpSent(true);
-      setStep("otp");
-      setCountdown(30);
-      if (res.mock_code) setDevOtp(res.mock_code); // Dev only
-    } catch (err: any) {
-      setError(err.message || "Failed to send OTP. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (otp.length < 4) {
-      setError("Enter the 6-digit OTP sent to your number.");
-      return;
-    }
-    setLoading(true);
+    setSubmitting(true);
     try {
-      await verifyOtp(fullPhone, otp, tab === "signup" ? name : undefined, "buyer");
-      // Persist token in HttpOnly-style cookie
-      // token is updated in auth context after verifyOtp resolves
-      // We'll get it from localStorage via the context
+      await loginWithPassword(identifier.trim(), password);
       const stored = localStorage.getItem("kalasathi_auth");
       if (stored) {
         const auth = JSON.parse(stored);
@@ -119,9 +78,44 @@ function LoginContent() {
       }
       router.replace(redirectTo);
     } catch (err: any) {
-      setError(err.message || "Invalid OTP. Please check and try again.");
+      setError(err.message || "Invalid credentials. Please check your details.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) {
+      setError("Please enter your full name.");
+      return;
+    }
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      setError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const fullPhone = cleanPhone.startsWith("91") && cleanPhone.length > 10 ? `+${cleanPhone}` : `+91${cleanPhone.slice(-10)}`;
+      await registerWithPassword(name.trim(), fullPhone, signupPassword, email.trim() || undefined);
+      setSuccess("Account created successfully!");
+      const stored = localStorage.getItem("kalasathi_auth");
+      if (stored) {
+        const auth = JSON.parse(stored);
+        await persistTokenCookie(auth.token, rememberMe);
+      }
+      setTimeout(() => router.replace(redirectTo), 600);
+    } catch (err: any) {
+      setError(err.message || "Registration failed. Please check your details.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -134,272 +128,301 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FAF7F2] via-[#F3EFE6] to-[#EAE2D6] flex flex-col">
-      {/* Top Bar */}
-      <div className="bg-[#2C3E6B] text-white text-xs py-2 px-4 text-center font-medium">
+    <div className="min-h-screen bg-gradient-to-br from-[#FAF7F2] via-[#F3EFE6] to-[#EAE2D6] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Top Banner */}
+      <div className="fixed top-0 inset-x-0 bg-[#2C3E6B] text-white text-xs py-2 px-4 text-center font-medium z-10 shadow-sm">
         🛡️ Direct from Rural Artisans • 100% Fair Wage Guarantee • Authentic Handcrafted GI Crafts
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <Link href="/" className="inline-flex flex-col items-center gap-2">
-              <div className="w-14 h-14 rounded-2xl bg-[#C85A32] flex items-center justify-center shadow-lg">
-                <span className="text-white font-black text-2xl font-serif">क</span>
-              </div>
-              <div>
-                <span className="font-black text-2xl text-[#262220] font-serif">KalaSathi</span>
-                <p className="text-xs text-[#6B645F] font-medium tracking-wider uppercase">कलासाथी • Handicrafts</p>
-              </div>
-            </Link>
-            <p className="text-[#6B645F] text-sm mt-4 max-w-xs mx-auto">
-              Authentic Indian handicrafts, direct from artisan to you.
-            </p>
+      <div className="sm:mx-auto sm:w-full sm:max-w-md mt-6">
+        {/* Brand */}
+        <div className="text-center mb-6">
+          <Link href="/" className="inline-flex flex-col items-center gap-2">
+            <div className="w-14 h-14 rounded-2xl bg-[#C85A32] flex items-center justify-center shadow-lg">
+              <span className="text-white font-black text-2xl font-serif">क</span>
+            </div>
+            <div>
+              <span className="font-black text-2xl text-[#262220] font-serif">KalaSathi</span>
+              <p className="text-xs text-[#6B645F] font-medium tracking-wider uppercase">कलासाथी • Handicrafts</p>
+            </div>
+          </Link>
+          <p className="text-[#6B645F] text-sm mt-3">
+            Handcrafted treasures of Bharat, direct from village artisans
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-3xl shadow-xl border border-[#E5DDD0] overflow-hidden">
+          {/* Tabs */}
+          <div className="grid grid-cols-2 border-b border-[#E5DDD0]">
+            <button
+              type="button"
+              onClick={() => { setTab("signin"); setError(""); setSuccess(""); }}
+              className={`py-4 text-sm font-bold transition-colors ${
+                tab === "signin"
+                  ? "text-[#C85A32] border-b-2 border-[#C85A32] bg-[#FBECE6]/40"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTab("signup"); setError(""); setSuccess(""); }}
+              className={`py-4 text-sm font-bold transition-colors ${
+                tab === "signup"
+                  ? "text-[#C85A32] border-b-2 border-[#C85A32] bg-[#FBECE6]/40"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              Create Account
+            </button>
           </div>
 
-          {/* Card */}
-          <div className="bg-white rounded-3xl shadow-xl border border-[#E5DDD0] overflow-hidden">
-            {/* Tabs */}
-            <div className="grid grid-cols-2 border-b border-[#E5DDD0]">
-              <button
-                onClick={() => { setTab("signin"); setStep("phone"); setError(""); setOtp(""); setDevOtp(null); }}
-                className={`py-4 text-sm font-bold transition-colors ${
-                  tab === "signin"
-                    ? "text-[#C85A32] border-b-2 border-[#C85A32] bg-[#FBECE6]/40"
-                    : "text-stone-500 hover:text-stone-700"
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setTab("signup"); setStep("phone"); setError(""); setOtp(""); setDevOtp(null); }}
-                className={`py-4 text-sm font-bold transition-colors ${
-                  tab === "signup"
-                    ? "text-[#C85A32] border-b-2 border-[#C85A32] bg-[#FBECE6]/40"
-                    : "text-stone-500 hover:text-stone-700"
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
+          <div className="p-7">
+            {/* SIGN IN FORM */}
+            {tab === "signin" && (
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-stone-900">Welcome Back</h2>
+                  <p className="text-stone-500 text-xs mt-1">Sign in with your name, email, or mobile number</p>
+                </div>
 
-            <div className="p-7">
-              {/* Step: Phone */}
-              {step === "phone" && (
-                <form onSubmit={handleSendOtp} className="space-y-5">
-                  <div>
-                    <h2 className="font-serif text-xl font-bold text-stone-900">
-                      {tab === "signin" ? "Welcome back!" : "Join KalaSathi"}
-                    </h2>
-                    <p className="text-stone-500 text-sm mt-1">
-                      {tab === "signin"
-                        ? "Sign in with your mobile number"
-                        : "Create a buyer account to start shopping"}
-                    </p>
-                  </div>
-
-                  {tab === "signup" && (
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-600 mb-1.5">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Priya Sharma"
-                        autoComplete="name"
-                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1.5">
-                      Mobile Number
-                    </label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-stone-500 text-sm font-semibold pointer-events-none select-none">
-                        <Phone className="w-4 h-4" />
-                        <span>+91</span>
-                        <span className="text-stone-300">|</span>
-                      </div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(formatPhone(e.target.value))}
-                        placeholder="98765 43210"
-                        maxLength={10}
-                        autoComplete="tel"
-                        inputMode="numeric"
-                        className="w-full pl-20 pr-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
-                      />
-                    </div>
-                    <p className="text-[11px] text-stone-400 mt-1">We'll send a 6-digit OTP to this number</p>
-                  </div>
-
-                  {/* Remember Me */}
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="mt-0.5 flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        id="remember-me"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        className="sr-only"
-                      />
-                      <div
-                        onClick={() => setRememberMe(!rememberMe)}
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                          rememberMe
-                            ? "bg-[#C85A32] border-[#C85A32]"
-                            : "border-stone-300 bg-white group-hover:border-[#C85A32]"
-                        }`}
-                      >
-                        {rememberMe && (
-                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-sm text-stone-700 font-medium">Remember me</span>
-                      <p className="text-[11px] text-stone-400 mt-0.5">
-                        Keep me signed in across browser sessions
-                      </p>
-                    </div>
+                {/* Name / Email / Phone */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Name / Email / Mobile Number
                   </label>
-
-                  {error && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-                      <span className="text-red-500">⚠</span> {error}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading || phone.length < 10}
-                    className="w-full py-3.5 px-6 bg-[#C85A32] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#B34D28] disabled:opacity-60 disabled:cursor-not-allowed transition shadow-md shadow-[#C85A32]/20"
-                  >
-                    {loading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
-                    ) : (
-                      <>{tab === "signin" ? "Send OTP to Sign In" : "Create Account & Send OTP"} <ArrowRight className="w-4 h-4" /></>
-                    )}
-                  </button>
-                </form>
-              )}
-
-              {/* Step: OTP */}
-              {step === "otp" && (
-                <form onSubmit={handleVerifyOtp} className="space-y-5">
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => { setStep("phone"); setOtp(""); setError(""); setDevOtp(null); }}
-                      className="text-[#C85A32] text-sm font-semibold flex items-center gap-1 mb-3 hover:underline"
-                    >
-                      ← Back
-                    </button>
-                    <h2 className="font-serif text-xl font-bold text-stone-900">Enter OTP</h2>
-                    <p className="text-stone-500 text-sm mt-1">
-                      Sent to <strong className="text-stone-700">+91 {phone}</strong>
-                    </p>
-                  </div>
-
-                  {/* Dev OTP hint */}
-                  {devOtp && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
-                      <Sparkles className="w-4 h-4 flex-shrink-0" />
-                      <span>Dev mode — OTP: <strong className="font-mono">{devOtp}</strong></span>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1.5">
-                      6-Digit OTP
-                    </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
-                      inputMode="numeric"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="• • • • • •"
-                      maxLength={6}
-                      autoFocus
-                      autoComplete="one-time-code"
-                      className="w-full px-4 py-3.5 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-xl font-mono tracking-[0.5em] text-center placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder="e.g. Priya Sharma or priya@example.com"
+                      autoComplete="username"
+                      required
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
                     />
                   </div>
+                </div>
 
-                  {error && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-                      <span className="text-red-500">⚠</span> {error}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading || otp.length < 4}
-                    className="w-full py-3.5 px-6 bg-[#C85A32] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#B34D28] disabled:opacity-60 disabled:cursor-not-allowed transition shadow-md shadow-[#C85A32]/20"
-                  >
-                    {loading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
-                    ) : (
-                      <><CheckCircle className="w-4 h-4" /> Verify & {tab === "signin" ? "Sign In" : "Create Account"}</>
-                    )}
-                  </button>
-
-                  {/* Resend */}
-                  <p className="text-center text-sm text-stone-500">
-                    Didn't receive it?{" "}
-                    {countdown > 0 ? (
-                      <span className="text-stone-400">Resend in {countdown}s</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleSendOtp}
-                        disabled={loading}
-                        className="text-[#C85A32] font-semibold hover:underline disabled:opacity-50"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-                  </p>
-                </form>
-              )}
-
-              {/* Artisan nudge */}
-              <div className="mt-6 pt-5 border-t border-stone-100">
-                <div className="flex items-start gap-3 p-3 bg-[#FAF7F2] rounded-xl border border-[#E5DDD0]">
-                  <Sparkles className="w-4 h-4 text-[#E09F3E] flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-stone-600 font-medium">Are you an artisan?</p>
-                    <p className="text-xs text-stone-400 mt-0.5">
-                      Download the <strong className="text-stone-600">KalaSathi Mobile App</strong> to list your crafts using voice in your language.
-                    </p>
+                {/* Password */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-stone-700">
+                      Password
+                    </label>
                   </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      required
+                      className="w-full pl-10 pr-11 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember Me */}
+                <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 accent-[#C85A32] rounded cursor-pointer"
+                  />
+                  <span className="text-xs text-stone-600 font-medium select-none">
+                    Remember me on this browser
+                  </span>
+                </label>
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                    ⚠ {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3.5 px-6 bg-[#C85A32] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#B34D28] disabled:opacity-60 disabled:cursor-not-allowed transition shadow-md shadow-[#C85A32]/20 text-sm"
+                >
+                  {submitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
+                  ) : (
+                    <>Sign In <ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* SIGN UP FORM */}
+            {tab === "signup" && (
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-stone-900">Create an Account</h2>
+                  <p className="text-stone-500 text-xs mt-1">Join as a buyer to shop authentic handmade crafts</p>
+                </div>
+
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Full Name <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Priya Sharma"
+                      autoComplete="name"
+                      required
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Mobile Number */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Mobile Number <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      placeholder="98765 43210"
+                      maxLength={10}
+                      autoComplete="tel"
+                      required
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Email (optional) */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Email Address <span className="text-stone-400 font-normal">(optional)</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="priya@example.com"
+                      autoComplete="email"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    Password <span className="text-red-500">*</span> <span className="text-stone-400 font-normal">(min 6 chars)</span>
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showSignupPassword ? "text" : "password"}
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      required
+                      minLength={6}
+                      className="w-full pl-10 pr-11 py-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 focus:outline-none"
+                    >
+                      {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember Me */}
+                <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 accent-[#C85A32] rounded cursor-pointer"
+                  />
+                  <span className="text-xs text-stone-600 font-medium select-none">
+                    Remember me on this browser
+                  </span>
+                </label>
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                    ⚠ {error}
+                  </div>
+                )}
+
+                {success && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> {success}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3.5 px-6 bg-[#C85A32] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#B34D28] disabled:opacity-60 disabled:cursor-not-allowed transition shadow-md shadow-[#C85A32]/20 text-sm"
+                >
+                  {submitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Creating Account...</>
+                  ) : (
+                    <>Create Buyer Account <ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Artisan App Note */}
+            <div className="mt-6 pt-5 border-t border-stone-100">
+              <div className="flex items-start gap-3 p-3 bg-[#FAF7F2] rounded-xl border border-[#E5DDD0]">
+                <Sparkles className="w-4 h-4 text-[#E09F3E] flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-stone-700 font-semibold">Are you an artisan?</p>
+                  <p className="text-[11px] text-stone-500 mt-0.5 leading-relaxed">
+                    Download the <strong className="text-stone-700">KalaSathi Mobile App</strong> to list your crafts using voice in your dialect. The website is exclusively for buyers.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Trust badges */}
-          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-stone-400">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>OTP Secured</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-emerald-500" />
-              <span>No password stored</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span>🇮🇳</span>
-              <span>Made in India</span>
-            </div>
+        {/* Badges */}
+        <div className="flex items-center justify-center gap-6 mt-6 text-xs text-stone-400">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Encrypted Passwords</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>🇮🇳</span>
+            <span>Direct to Artisans</span>
           </div>
         </div>
       </div>

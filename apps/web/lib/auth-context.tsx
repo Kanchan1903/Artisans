@@ -28,6 +28,8 @@ interface AuthContextType {
   isArtisan: boolean;
   isBuyer: boolean;
   token: string | null;
+  loginWithPassword: (identifier: string, password: string) => Promise<void>;
+  registerWithPassword: (name: string, phone: string, password: string, email?: string) => Promise<void>;
   sendOtp: (phone: string, role: UserRole) => Promise<{ mock_code?: string }>;
   verifyOtp: (phone: string, code: string, name?: string, role?: UserRole) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -135,6 +137,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const loginWithPassword = useCallback(async (identifier: string, password: string) => {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Invalid credentials. Please try again.");
+    }
+
+    const data = await res.json();
+    const authUser: AuthUser = {
+      user_id: data.user_id,
+      name: data.name || identifier,
+      phone: data.phone || identifier,
+      role: data.role,
+      language: data.language,
+      artisan_id: data.artisan_id,
+      token: data.access_token,
+    };
+
+    setUser(authUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+  }, []);
+
+  const registerWithPassword = useCallback(
+    async (name: string, phone: string, password: string, email?: string) => {
+      const res = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone, password, email }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Registration failed. Please try again.");
+      }
+
+      const data = await res.json();
+      const authUser: AuthUser = {
+        user_id: data.user_id,
+        name: data.name || name,
+        phone: data.phone || phone,
+        role: data.role,
+        language: data.language,
+        artisan_id: null,
+        token: data.access_token,
+      };
+
+      setUser(authUser);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+    },
+    []
+  );
+
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
@@ -150,6 +209,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isArtisan: user?.role === "artisan",
         isBuyer: user?.role === "buyer" || user?.role === "admin",
         token: user?.token ?? null,
+        loginWithPassword,
+        registerWithPassword,
         sendOtp,
         verifyOtp,
         refreshProfile,

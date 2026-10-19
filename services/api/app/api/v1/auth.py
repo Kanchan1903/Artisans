@@ -8,8 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User, OTPCode, UserRole, Language
 from app.models.artisan import ArtisanProfile
-from app.schemas.auth import OTPRequest, OTPVerify, TokenResponse, UserOut, UserUpdate
-from app.core.security import generate_otp, otp_expiry, create_access_token
+from app.schemas.auth import (
+    OTPRequest, OTPVerify, TokenResponse, UserOut, UserUpdate,
+    PasswordRegister, PasswordLogin,
+)
+from app.core.security import (
+    generate_otp, otp_expiry, create_access_token,
+    hash_password, verify_password,
+)
 from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -180,6 +186,119 @@ async def verify_otp_endpoint(payload: OTPVerify, db: AsyncSession = Depends(get
         is_artisan=user.role == UserRole.artisan,
         artisan_id=artisan_id,
     )
+
+
+@router.post("/register", response_model=TokenResponse)
+async def register_with_password(
+    payload: PasswordRegister,
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a new customer using Name, Phone, Email, and Password."""
+    phone = payload.phone.strip()
+    name = payload.name.strip()
+    email = payload.email.strip().lower() if payload.email else None
+
+    # Check for duplicate phone
+    phone_res = await db.execute(select(User).where(User.phone == phone))
+    if phone_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this phone number already exists. Please sign in instead.",
+        )
+
+    # Check for duplicate email if provided
+    if email:
+        email_res = await db.execute(select(User).where(User.email == email))
+        if email_res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email address already exists.",
+            )
+
+    # Hash the password securely using bcrypt
+    hashed = hash_password(payload.password)
+
+    # Create new customer user
+    new_user = User(
+        phone=phone,
+        email=email,
+        name=name,
+        role=UserRole.buyer,  # Web customers are always buyers
+        language=Language.en,
+        is_verified=True,
+        is_active=True,
+        password_hash=hashed,
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    token = create_access_token(
+        subject=new_user.id,
+        extra={"role": new_user.role.value, "phone": new_user.phone},
+    )
+
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        user_id=new_user.id,
+        role=new_user.role,
+        name=new_user.name,
+        language=new_user.language,
+        is_artisan=False,
+        artisan_id=None,
+    )
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login_with_password(
+    payload: PasswordLogin,
+    db: AsyncSession = Depends(get_db),
+):
+    """Sign in using Name/Email/Phone + Password."""
+    ident = payload.identifier.strip()
+
+    # Find user by phone, email, or name
+    stmt = select(User).where(
+        (User.phone == ident) | (User.email == ident.lower()) | (User.name == ident)
+    )
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+
+    if not user or not user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials. Please check your name/email and password.",
+        )
+
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials. Please check your password.",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated. Please contact support.",
+        )
+
+    token = create_access_token(
+        subject=user.id,
+        extra={"role": user.role.value, "phone": user.phone},
+    )
+
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        user_id=user.id,
+        role=user.role,
+        name=user.name,
+        language=user.language,
+        is_artisan=user.role == UserRole.artisan,
+        artisan_id=None,
+    )
+
 
 
 @router.get("/me", response_model=UserOut)

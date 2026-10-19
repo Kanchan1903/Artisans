@@ -17,6 +17,19 @@ class OTPVerify(BaseModel):
     language: Language = Language.en
 
 
+class PasswordRegister(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100, description="Full name")
+    email: str | None = Field(None, description="Email address")
+    phone: str = Field(..., description="Phone number, e.g. +919876543210")
+    password: str = Field(..., min_length=6, description="Password (min 6 characters)")
+    role: UserRole = Field(default=UserRole.buyer, description="Role: buyer only for web")
+
+
+class PasswordLogin(BaseModel):
+    identifier: str = Field(..., description="Email, phone, or name")
+    password: str = Field(..., min_length=1, description="Password")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
