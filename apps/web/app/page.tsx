@@ -210,8 +210,8 @@ export default function HomePage() {
             <div className="lg:col-span-5 relative">
               <div className="relative mx-auto max-w-md rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-white">
                 <img
-                  src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=1000&auto=format&fit=crop&q=80"
-                  alt="Authentic Indian Handcrafted Pottery and Decor"
+                  src="/hero-crafts.jpg"
+                  alt="Authentic Indian Handcrafted Heritage Collection"
                   className="w-full h-[400px] object-cover hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-6 text-white">
@@ -219,10 +219,10 @@ export default function HomePage() {
                     Timeless Craftsmanship
                   </div>
                   <h3 className="font-serif font-black text-xl text-white">
-                    Authentic Terracotta &amp; Brass Decor
+                    Authentic Indian Handcrafts &amp; Decor
                   </h3>
                   <p className="text-xs text-white/80 mt-1 leading-relaxed">
-                    Handmade with natural earthen clay and heritage brass casting. Every piece carries the warmth of artisan hands.
+                    Hand-carved woodcraft, heritage brass decor, handloom textiles, and blue pottery from regional artisan clusters.
                   </p>
                   <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between text-xs font-semibold">
                     <span className="text-[#E09F3E]">100% Genuine Artisan Origin</span>
