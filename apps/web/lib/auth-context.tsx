@@ -3,6 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { API_BASE_URL } from "./api";
 
+async function clearSessionCookie() {
+  try {
+    await fetch("/api/auth/session", { method: "DELETE" });
+  } catch (_) {}
+}
+
 export type UserRole = "buyer" | "artisan" | "admin";
 
 export interface AuthUser {
@@ -132,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    clearSessionCookie(); // Clear HttpOnly cookie (Remember Me)
   }, []);
 
   return (

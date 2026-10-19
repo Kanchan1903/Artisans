@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { CartProvider } from "@/lib/cart-context";
 import { AuthProvider } from "@/lib/auth-context";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import ShellWrapper from "@/components/ShellWrapper";
 
 export const metadata: Metadata = {
   title: "KalaSathi | Direct Handcrafted Treasures from Indian Artisans",
@@ -35,9 +34,7 @@ export default function RootLayout({
       <body className="min-h-screen flex flex-col bg-[#FAF7F2] text-[#262220]">
         <AuthProvider>
           <CartProvider>
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
+            <ShellWrapper>{children}</ShellWrapper>
           </CartProvider>
         </AuthProvider>
       </body>

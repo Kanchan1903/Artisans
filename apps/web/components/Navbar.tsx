@@ -42,7 +42,7 @@ export default function Navbar({
   const handleLogout = () => {
     logout();
     setShowUserMenu(false);
-    router.push("/");
+    router.push("/login");
   };
 
   return (
