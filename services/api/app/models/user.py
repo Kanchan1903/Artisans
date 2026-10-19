@@ -50,6 +50,7 @@ class User(Base):
     orders: Mapped[list["Order"]] = relationship(back_populates="buyer", foreign_keys="Order.buyer_id")  # type: ignore # noqa: F821
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")  # type: ignore # noqa: F821
     reviews: Mapped[list["Review"]] = relationship(back_populates="buyer")  # type: ignore # noqa: F821
+    wishlist_items: Mapped[list["WishlistItem"]] = relationship(back_populates="user", cascade="all, delete-orphan")  # type: ignore # noqa: F821
 
 
 class OTPCode(Base):

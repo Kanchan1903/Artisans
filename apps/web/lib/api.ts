@@ -1,5 +1,14 @@
+/**
+ * KalaSathi API Client
+ * Single source of truth for all backend API calls.
+ * NEVER falls back to fake/hardcoded data in the production render path.
+ * All functions that require auth accept an optional token parameter.
+ */
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+// ─── Type Definitions ─────────────────────────────────────────────────────────
 
 export interface Category {
   id: number;
@@ -64,138 +73,290 @@ export interface Product {
   artisan?: ArtisanPublic;
 }
 
-// ─── API Methods ─────────────────────────────────────────────────────────────
+export interface ProductListResponse {
+  items: Product[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface OrderItem {
+  id: number;
+  product_id: number;
+  artisan_id: number;
+  quantity: number;
+  unit_price: number;
+  product_title?: string;
+  product_image_url?: string;
+}
+
+export interface Order {
+  id: number;
+  buyer_id: number;
+  status: string;
+  total: number;
+  shipping_address: Record<string, string>;
+  payment_method: string;
+  payment_id?: string;
+  payment_status: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+  items: OrderItem[];
+}
+
+export interface Review {
+  id: number;
+  product_id: number;
+  buyer_id: number;
+  rating: number;
+  comment?: string;
+  created_at: string;
+  buyer_name?: string;
+}
+
+export interface UserProfile {
+  id: number;
+  phone: string;
+  email?: string;
+  name?: string;
+  role: string;
+  language: string;
+  is_verified: boolean;
+}
+
+export interface WishlistItem {
+  id: number;
+  user_id: number;
+  product_id: number;
+  created_at: string;
+  product: Product;
+}
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+function authHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
 
 export async function fetchProducts(params: {
   category_id?: number;
+  artisan_id?: number;
   state?: string;
   min_price?: number;
   max_price?: number;
   search?: string;
   page?: number;
   size?: number;
-} = {}): Promise<{ items: Product[]; total: number }> {
-  try {
-    const query = new URLSearchParams();
-    if (params.category_id) query.set("category_id", params.category_id.toString());
-    if (params.state) query.set("state", params.state);
-    if (params.min_price) query.set("min_price", params.min_price.toString());
-    if (params.max_price) query.set("max_price", params.max_price.toString());
-    if (params.search) query.set("search", params.search);
-    if (params.page) query.set("page", params.page.toString());
-    if (params.size) query.set("size", params.size.toString());
+} = {}): Promise<ProductListResponse> {
+  const query = new URLSearchParams();
+  if (params.category_id) query.set("category_id", params.category_id.toString());
+  if (params.artisan_id) query.set("artisan_id", params.artisan_id.toString());
+  if (params.state) query.set("state", params.state);
+  if (params.min_price != null) query.set("min_price", params.min_price.toString());
+  if (params.max_price != null) query.set("max_price", params.max_price.toString());
+  if (params.search) query.set("search", params.search);
+  if (params.page) query.set("page", params.page.toString());
+  if (params.size) query.set("size", params.size.toString());
 
-    const res = await fetch(`${API_BASE_URL}/products?${query.toString()}`, {
-      cache: "no-store",
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    // API not running or network error, return fallback
+  const res = await fetch(`${API_BASE_URL}/products?${query.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load products (${res.status})`);
   }
 
-  return {
-    items: SAMPLE_PRODUCTS,
-    total: SAMPLE_PRODUCTS.length,
-  };
+  return res.json();
 }
 
 export async function fetchProductById(id: number): Promise<Product | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/products/${id}`, { cache: "no-store" });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return SAMPLE_PRODUCTS.find((p) => p.id === id) || SAMPLE_PRODUCTS[0];
+  const res = await fetch(`${API_BASE_URL}/products/${id}`, { cache: "no-store" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load product #${id} (${res.status})`);
+  return res.json();
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/products/categories`, { cache: "no-store" });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return [
-    { id: 1, name: "Pottery & Terracotta", name_hi: "मिट्टी के बर्तन", slug: "pottery" },
-    { id: 2, name: "Handloom & Textiles", name_hi: "हथकरघा और वस्त्र", slug: "handloom" },
-    { id: 3, name: "Tribal & Folk Art", name_hi: "जनजातीय और लोक कला", slug: "folk-art" },
-    { id: 4, name: "Woodcraft & Toys", name_hi: "काष्ठकला और खिलौने", slug: "woodcraft" },
-    { id: 5, name: "Jewelry & Beads", name_hi: "पारंपरिक आभूषण", slug: "jewelry" },
-  ];
+  const res = await fetch(`${API_BASE_URL}/products/categories`, { cache: "no-store" });
+  if (!res.ok) return []; // Non-critical — return empty, UI handles gracefully
+  return res.json();
 }
 
+export async function fetchProductReviews(productId: number): Promise<Review[]> {
+  const res = await fetch(`${API_BASE_URL}/products/${productId}/reviews`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function submitReview(
+  productId: number,
+  payload: { rating: number; comment?: string },
+  token: string
+): Promise<Review> {
+  const res = await fetch(`${API_BASE_URL}/products/${productId}/reviews`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to submit review (${res.status})`);
+  }
+  return res.json();
+}
+
+// ─── Artisans ─────────────────────────────────────────────────────────────────
+
 export async function fetchArtisans(): Promise<ArtisanPublic[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/artisans`, { cache: "no-store" });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return SAMPLE_ARTISANS;
+  const res = await fetch(`${API_BASE_URL}/artisans`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export async function fetchArtisanById(id: number): Promise<ArtisanPublic | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/artisans/${id}`, { cache: "no-store" });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return SAMPLE_ARTISANS.find((a) => a.id === id) || SAMPLE_ARTISANS[0];
+  const res = await fetch(`${API_BASE_URL}/artisans/${id}`, { cache: "no-store" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load artisan #${id} (${res.status})`);
+  return res.json();
 }
 
-export async function fetchOrderById(id: number): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/orders/${id}`, { cache: "no-store" });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return {
-    id,
-    status: "accepted",
-    total: 1800,
-    shipping_address: "Flat 402, Lotus Towers, Pune, Maharashtra 411038",
-    payment_method: "Razorpay (UPI / Card)",
-    payment_status: "paid",
-    tracking_number: `KS-TRK-${id}`,
-    estimated_delivery: "Within 4-6 business days",
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-    items: [
-      {
-        id: 1,
-        product_id: 1,
-        title: "Warli Village Harvest Celebration Canvas",
-        quantity: 1,
-        unit_price: 1800,
-        image_url: "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800",
-      },
-    ],
+// ─── Orders ───────────────────────────────────────────────────────────────────
+
+export interface CreateOrderPayload {
+  items: Array<{ product_id: number; quantity: number }>;
+  shipping_address: {
+    name: string;
+    phone: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    pincode: string;
   };
+  payment_method: "cod" | "razorpay" | "upi";
+  payment_id?: string;
+  notes?: string;
 }
 
-export async function createOrder(payload: any): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return {
-    id: Math.floor(Math.random() * 9000) + 1000,
-    status: "pending",
-    total: payload.items?.reduce((acc: number, item: any) => acc + (item.unit_price || 500) * (item.quantity || 1), 0) || 1200,
-    shipping_address: payload.shipping_address,
-    created_at: new Date().toISOString(),
-  };
+export async function createOrder(
+  payload: CreateOrderPayload,
+  token: string
+): Promise<Order> {
+  const res = await fetch(`${API_BASE_URL}/orders`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Checkout failed (${res.status}). Please try again.`);
+  }
+  return res.json();
 }
+
+export async function fetchMyOrders(token: string): Promise<Order[]> {
+  const res = await fetch(`${API_BASE_URL}/orders`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Failed to load orders (${res.status})`);
+  return res.json();
+}
+
+export async function fetchOrderById(id: number, token: string): Promise<Order> {
+  const res = await fetch(`${API_BASE_URL}/orders/${id}`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (res.status === 404) throw new Error("Order not found");
+  if (!res.ok) throw new Error(`Failed to load order #${id} (${res.status})`);
+  return res.json();
+}
+
+export async function cancelOrder(id: number, token: string): Promise<Order> {
+  const res = await fetch(`${API_BASE_URL}/orders/${id}/cancel`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to cancel order (${res.status})`);
+  }
+  return res.json();
+}
+
+// ─── User Profile ─────────────────────────────────────────────────────────────
+
+export async function fetchMyProfile(token: string): Promise<UserProfile> {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Failed to load profile (${res.status})`);
+  return res.json();
+}
+
+export async function updateMyProfile(
+  payload: { name?: string; email?: string },
+  token: string
+): Promise<UserProfile> {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to update profile (${res.status})`);
+  }
+  return res.json();
+}
+
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
+
+export async function fetchMyWishlist(token: string): Promise<WishlistItem[]> {
+  const res = await fetch(`${API_BASE_URL}/wishlist`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function toggleWishlist(
+  productId: number,
+  token: string
+): Promise<{ wishlisted: boolean; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/wishlist/${productId}`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to update wishlist");
+  }
+  return res.json();
+}
+
+export async function checkWishlist(
+  productId: number,
+  token: string
+): Promise<boolean> {
+  const res = await fetch(`${API_BASE_URL}/wishlist/check/${productId}`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return data.wishlisted === true;
+}
+
+// ─── B2B Inquiry ─────────────────────────────────────────────────────────────
 
 export async function submitB2BInquiry(payload: {
   product_id: number;
@@ -203,21 +364,26 @@ export async function submitB2BInquiry(payload: {
   buyer_email: string;
   message: string;
   quantity_needed?: number;
-}): Promise<any> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/inquiries`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {}
-  return { id: 101, message: "Inquiry submitted successfully" };
+}): Promise<{ id: number; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/inquiries`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to submit inquiry");
+  }
+  return res.json();
 }
 
-// ─── Sample Fallback Data ────────────────────────────────────────────────────
+// ─── Dev/Seed Fallback Data (displayed ONLY in explicit DEV_MODE, never silently) ──────────
+// These are for the /admin seed page and storybook only.
+// They must NOT appear in any production product listing or cart.
+
+export const DEV_MODE =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_SHOW_DEMO_DATA === "true";
 
 export const SAMPLE_ARTISANS: ArtisanPublic[] = [
   {
@@ -228,7 +394,7 @@ export const SAMPLE_ARTISANS: ArtisanPublic[] = [
     village: "Ganjad, Palghar",
     district: "Palghar",
     state: "Maharashtra",
-    bio: "Sunita Bai has been painting ancestral Warli folklore for over 18 years, preserving indigenous traditions through natural rice paste pigments.",
+    bio: "Sunita Bai has been painting ancestral Warli folklore for over 18 years.",
     profile_photo_url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400",
     years_experience: 18,
     is_approved: true,
@@ -242,25 +408,11 @@ export const SAMPLE_ARTISANS: ArtisanPublic[] = [
     village: "Ranti, Madhubani",
     district: "Madhubani",
     state: "Bihar",
-    bio: "Master artisan creating intricate Tree of Life and Kohbar Mithila paintings using twig nibs and natural botanical dyes.",
+    bio: "Master artisan creating intricate Tree of Life paintings using natural botanical dyes.",
     profile_photo_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400",
     years_experience: 24,
     is_approved: true,
     product_count: 8,
-  },
-  {
-    id: 3,
-    user_id: 3,
-    name: "Basavaraju Gudigar",
-    craft_type: "Channapatna Lacquerware Woodcraft",
-    village: "Channapatna",
-    district: "Ramanagara",
-    state: "Karnataka",
-    bio: "State-recognized wooden craftsperson turning ivory wood on traditional lathe machines using non-toxic vegetable dyes.",
-    profile_photo_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400",
-    years_experience: 20,
-    is_approved: true,
-    product_count: 6,
   },
 ];
 
@@ -270,34 +422,15 @@ export const SAMPLE_PRODUCTS: Product[] = [
     artisan_id: 1,
     category_id: 3,
     title_en: "Warli Village Harvest Celebration Canvas",
-    description_en: "Authentic handmade Warli painting on treated earthen canvas depicting the sacred Tarpa dance and bumper harvest celebration. Created using organic rice flour paste and natural resin gum.",
-    title_hi: "वारली ग्राम फसल उत्सव कैनवास चित्रकला",
-    description_hi: "चावल के आटे और प्राकृतिक गोंद से निर्मित पारंपरिक वारली चित्रकला, जिसमें तारपा नृत्य और फसल उत्सव दर्शाया गया है।",
-    material: "Handspun Cotton, Rice Flour Paste, Organic Gum",
+    description_en: "Authentic handmade Warli painting on treated earthen canvas.",
+    material: "Handspun Cotton, Rice Flour Paste",
     technique: "Freehand Bamboo Twig Painting",
-    care_instructions: "Keep away from moisture. Dust gently with dry micro-fiber cloth.",
     price: 1800,
     stock: 4,
     status: "published",
     ai_generated: true,
-    published_at: "2026-10-15T10:00:00Z",
-    images: [
-      { id: 1, url: "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800", is_primary: true, order_index: 0 },
-    ],
-    translations: [
-      { id: 1, language: "en", title: "Warli Village Harvest Celebration Canvas", description: "Authentic handmade Warli painting on treated earthen canvas depicting the sacred Tarpa dance." },
-      { id: 2, language: "hi", title: "वारली ग्राम फसल उत्सव कैनवास चित्रकला", description: "चावल के आटे और प्राकृतिक गोंद से निर्मित पारंपरिक वारली चित्रकला।" },
-      { id: 3, language: "mr", title: "वारली गाव पीक उत्सव कॅनव्हास चित्रकला", description: "तांदळाचे पीठ आणि नैसर्गिक डिंकाचा वापर करून बांबूच्या काडीने हाताने रंगवलेली अस्सल वारली चित्रकला." },
-      { id: 4, language: "bn", title: "ওয়ারলি গ্রাম ফসল উৎসব ক্যানভাস চিত্রকলা", description: "চালগুঁড়োর প্রাকৃতিক রঙ্গে আঁকা মহারাষ্ট্রের ঐতিহ্যবাহী ওয়ারলি চিত্রকর্ম।" },
-      { id: 5, language: "ta", title: "வார்லி கிராம அறுவடை ஓவியம்", description: "அரிசி மாவு மற்றும் இயற்கை பிசின் கொண்டு வரையப்பட்ட பாரம்பரிய வார்லி ஓவியம்." },
-      { id: 6, language: "te", title: "వార్లీ గ్రామీణ పంట సంబరాల కాన్వాస్ చిత్రం", description: "బియ్యపు పిండి మరియు సహజ రంగులతో గీసిన సాంప్రదాయ వార్లీ పెయింటింగ్." },
-      { id: 7, language: "kn", title: "ವಾರ್ಲಿ ಹಳ್ಳಿ ಸುಗ್ಗಿ ಹಬ್ಬದ ಚಿತ್ರಕಲೆ", description: "ಅಕ್ಕಿ ಹಿಟ್ಟು ಮತ್ತು ನೈಸರ್ಗಿಕ ಜಿಗುಟಿನಿಂದ ರಚಿಸಲಾದ ಸಾಂಪ್ರದಾಯಿಕ ವಾರ್ಲಿ ಕಲೆ." },
-      { id: 8, language: "ml", title: "വാർലി ഗ്രാമീണ വിളവെടുപ്പ് കാൻവാസ് ചിത്രം", description: "അരിപ്പൊടിയും പ്രകൃതിദത്ത പശയും ഉപയോഗിച്ച് വരച്ച പരമ്പരാഗത വാർലി കല." },
-      { id: 9, language: "gu", title: "વારલી ગ્રામીણ લણણી ઉત્સવ કેનવાસ ચિત્રકળા", description: "ચોખાના લોટ અને કુદરતી ગુંદરથી વાંસની સળી વડે બનાવેલું વારલી ચિત્ર." },
-      { id: 10, language: "pa", title: "ਵਾਰਲੀ ਪੇਂਡੂ ਵਾਢੀ ਉਤਸਵ ਕੈਨਵਸ ਪੇਂਟਿੰਗ", description: "ਚੌਲਾਂ ਦੇ ਆਟੇ ਅਤੇ ਕੁਦਰતી ਗੂੰਦ ਨਾਲ ਤਿਆਰ ਕੀਤੀ ਗਈ ਰਵਾਇਤੀ ਪੇਂਟਿੰਗ।" },
-      { id: 11, language: "or", title: "ୱାର୍ଲି ଗ୍ରାମୀଣ ଅମଳ ଉତ୍ସବ କାନଭାସ ଚିତ୍ରକଳା", description: "ଚାଉଳ ଚୂନା ଏବଂ ପ୍ରାକୃତିକ ଅଠାରେ ତିଆରି ପାରମ୍ପରିକ ୱାର୍ଲି ଚିତ୍ରକଳା।" },
-      { id: 12, language: "as", title: "ৱাৰ্লি গাঁৱলীয়া শস্য চপোৱা উৎসৱৰ কেনভাচ ছবি", description: "চাউলৰ গুড়ি আৰু প্ৰাকৃতিক আঠাৰে তৈয়াৰী পৰম্পৰাগত ৱাৰ্লি ছবি।" },
-    ],
+    images: [{ id: 1, url: "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800", is_primary: true, order_index: 0 }],
+    translations: [],
     artisan: SAMPLE_ARTISANS[0],
   },
   {
@@ -305,77 +438,15 @@ export const SAMPLE_PRODUCTS: Product[] = [
     artisan_id: 2,
     category_id: 3,
     title_en: "Madhubani Tree of Life Mithila Painting",
-    description_en: "Intricate symbolic Tree of Life canvas embodying spiritual harmony and prosperity, rendered with fine bamboo nibs in authentic Kachni style.",
-    title_hi: "मधुबनी जीवन वृक्ष मिथिला चित्रकला",
-    description_hi: "कचनी शैली में निर्मित मधुबनी जीवन वृक्ष, जो समृद्धि और प्राकृतिक सद्भाव का प्रतीक है।",
-    material: "Handmade Rag Paper, Plant Indigo, Turmeric Pigment",
-    technique: "Fine Line Kachni Style with Bamboo Nib",
-    care_instructions: "Frame under glass to protect from direct sunlight and humidity.",
+    description_en: "Intricate symbolic Tree of Life canvas in authentic Kachni style.",
+    material: "Handmade Rag Paper, Plant Indigo",
+    technique: "Fine Line Kachni Style",
     price: 3200,
     stock: 2,
     status: "published",
     ai_generated: true,
-    published_at: "2026-10-14T12:00:00Z",
-    images: [
-      { id: 2, url: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800", is_primary: true, order_index: 0 },
-    ],
-    translations: [
-      { id: 13, language: "en", title: "Madhubani Tree of Life Mithila Painting", description: "Intricate symbolic Tree of Life canvas embodying spiritual harmony and prosperity." },
-      { id: 14, language: "hi", title: "मधुबनी जीवन वृक्ष मिथिला चित्रकला", description: "कचनी शैली में निर्मित मधुबनी जीवन वृक्ष, जो समृद्धि और प्राकृतिक सद्भाव का प्रतीक है।" },
-      { id: 15, language: "mr", title: "मधुबनी जीवन वृक्ष मिथिला चित्रकला", description: "बांबूच्या टोकदार काडीने रेखाटलेली अस्सल मधुबनी जीवन वृक्षाची चित्रकृती." },
-    ],
+    images: [{ id: 2, url: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800", is_primary: true, order_index: 0 }],
+    translations: [],
     artisan: SAMPLE_ARTISANS[1],
-  },
-  {
-    id: 3,
-    artisan_id: 3,
-    category_id: 4,
-    title_en: "Channapatna Eco-Friendly Wooden Stacking Toy",
-    description_en: "Safe, smooth non-toxic wooden nesting toys for children hand-lathed from Wrightia tinctoria (Aale mara) wood and polished with pure beeswax and vegetable colors.",
-    title_hi: "चन्नपटना पर्यावरण अनुकूल लकड़ी का खिलौना",
-    description_hi: "शुद्ध हाथी लकड़ी और प्राकृतिक वनस्पति रंगों से बना सुरक्षित और विष-मुक्त पारंपरिक खिलौना।",
-    material: "Ivory Wood (Aale Mara), Natural Vegetable Lacquer, Beeswax",
-    technique: "Traditional Lathe Turning & Friction Lacquering",
-    care_instructions: "Wipe clean with a damp cloth. Do not soak in water.",
-    price: 650,
-    stock: 12,
-    status: "published",
-    ai_generated: true,
-    published_at: "2026-10-16T15:00:00Z",
-    images: [
-      { id: 3, url: "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=800", is_primary: true, order_index: 0 },
-    ],
-    translations: [
-      { id: 16, language: "en", title: "Channapatna Eco-Friendly Wooden Stacking Toy", description: "Safe, smooth non-toxic wooden nesting toys for children." },
-      { id: 17, language: "hi", title: "चन्नपटना पर्यावरण अनुकूल लकड़ी का खिलौना", description: "शुद्ध लकड़ी और प्राकृतिक रंगों से बना सुरक्षित खिलौना।" },
-      { id: 18, language: "kn", title: "ಚನ್ನಪಟ್ಟಣ ಪರಿಸರ ಸ್ನೇಹಿ ಮರದ ಆಟಿಕೆ", description: "ನೈಸರ್ಗಿಕ ತರಕಾರಿ ಬಣ್ಣಗಳನ್ನು ಬಳಸಿ ಸಾಂಪ್ರದಾಯಿಕ ಲೇತ್‌ನಲ್ಲಿ ತಯಾರಿಸಿದ ಸುರಕ್ಷಿತ ಆಟಿಕೆ." },
-    ],
-    artisan: SAMPLE_ARTISANS[2],
-  },
-  {
-    id: 4,
-    artisan_id: 1,
-    category_id: 1,
-    title_en: "Terracotta Handcrafted Long-Neck Water Pitcher",
-    description_en: "Hand-thrown porous terracotta pitcher naturally keeping water cool through evaporative micro-cooling.",
-    title_hi: "हस्तनिर्मित पारंपरिक मिट्टी की सुराही",
-    description_hi: "प्राकृतिक नदी की मिट्टी से चाक पर गढ़ी गई सुराही जो पानी को ठंडा रखती है।",
-    material: "Riverbed Terracotta Clay",
-    technique: "Potter's Wheel Shaping",
-    care_instructions: "Rinse with plain water before first use.",
-    price: 550,
-    stock: 7,
-    status: "published",
-    ai_generated: true,
-    published_at: "2026-10-15T09:00:00Z",
-    images: [
-      { id: 4, url: "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800", is_primary: true, order_index: 0 },
-    ],
-    translations: [
-      { id: 19, language: "en", title: "Terracotta Handcrafted Long-Neck Water Pitcher", description: "Hand-thrown porous terracotta pitcher naturally keeping water cool." },
-      { id: 20, language: "hi", title: "हस्तनिर्मित पारंपरिक मिट्टी की सुराही", description: "प्राकृतिक नदी की मिट्टी से चाक पर गढ़ी गई सुराही।" },
-      { id: 21, language: "mr", title: "हातमातीची पारंपरिक सुरई", description: "नैसर्गिक नदीच्या मातीपासून चाकावर घडवलेली सुरई." },
-    ],
-    artisan: SAMPLE_ARTISANS[0],
   },
 ];

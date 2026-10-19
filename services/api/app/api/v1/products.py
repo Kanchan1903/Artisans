@@ -54,6 +54,7 @@ async def list_products(
     min_price: float | None = Query(None, ge=0.0),
     max_price: float | None = Query(None, ge=0.0),
     search: str | None = Query(None, description="Search by title, material, or keywords"),
+    artisan_id: int | None = Query(None, description="Filter by artisan ID"),
     language: str = Query("en", description="Target language for preferred translation"),
     page: int = Query(1, ge=1),
     size: int = Query(12, ge=1, le=50),
@@ -93,6 +94,9 @@ async def list_products(
                 Product.technique.ilike(search_term),
             )
         )
+
+    if artisan_id is not None:
+        query = query.where(Product.artisan_id == artisan_id)
 
     # Count total
     count_query = select(func.count()).select_from(query.subquery())

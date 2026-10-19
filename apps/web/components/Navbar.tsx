@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ShoppingBag, Search, Globe, ShieldCheck, User, Palette,
+  ShoppingBag, Search, Globe, ShieldCheck, User,
   LogOut, ChevronDown, LayoutDashboard,
 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
@@ -20,7 +20,7 @@ export default function Navbar({
 }) {
   const router = useRouter();
   const { itemCount } = useCart();
-  const { user, isLoggedIn, isArtisan, logout } = useAuth();
+  const { user, isLoggedIn, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentLang, setCurrentLang] = useState<SupportedLocale>(locale);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -44,8 +44,6 @@ export default function Navbar({
     setShowUserMenu(false);
     router.push("/");
   };
-
-  const dashboardHref = isArtisan ? "/artisan/dashboard" : "/account";
 
   return (
     <header className="sticky top-0 z-50 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E5DDD0]">
@@ -109,18 +107,15 @@ export default function Navbar({
 
           {/* Auth Controls */}
           {isLoggedIn && user ? (
-            // Logged-in user menu
+            // Logged-in buyer menu
             <div className="relative">
               <button
                 id="user-menu-btn"
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5DDD0] text-xs font-semibold text-[#262220] hover:border-[#C85A32] transition"
               >
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isArtisan ? "bg-[#2C3E6B]/15" : "bg-[#C85A32]/15"}`}>
-                  {isArtisan
-                    ? <Palette className="w-3 h-3 text-[#2C3E6B]" />
-                    : <User className="w-3 h-3 text-[#C85A32]" />
-                  }
+                <div className="w-5 h-5 rounded-full bg-[#C85A32]/15 flex items-center justify-center">
+                  <User className="w-3 h-3 text-[#C85A32]" />
                 </div>
                 <span className="max-w-[80px] truncate">{user.name.split(" ")[0]}</span>
                 <ChevronDown className={`w-3 h-3 text-stone-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
@@ -132,26 +127,24 @@ export default function Navbar({
                   <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden z-20">
                     <div className="px-4 py-3 border-b border-stone-100 bg-stone-50">
                       <p className="text-xs font-semibold text-stone-900 truncate">{user.name}</p>
-                      <p className="text-[11px] text-stone-500 capitalize">{user.role}</p>
+                      <p className="text-[11px] text-stone-500">Buyer Account</p>
                     </div>
                     <Link
-                      href={dashboardHref}
+                      href="/account"
                       onClick={() => setShowUserMenu(false)}
                       className="flex items-center gap-2.5 px-4 py-3 text-sm text-stone-700 hover:bg-stone-50 transition"
                     >
                       <LayoutDashboard className="w-4 h-4 text-[#2C3E6B]" />
-                      {isArtisan ? "Artisan Dashboard" : "My Account"}
+                      My Account
                     </Link>
-                    {!isArtisan && (
-                      <Link
-                        href="/orders"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center gap-2.5 px-4 py-3 text-sm text-stone-700 hover:bg-stone-50 transition border-t border-stone-100"
-                      >
-                        <ShoppingBag className="w-4 h-4 text-[#C85A32]" />
-                        My Orders
-                      </Link>
-                    )}
+                    <Link
+                      href="/account"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2.5 px-4 py-3 text-sm text-stone-700 hover:bg-stone-50 transition border-t border-stone-100"
+                    >
+                      <ShoppingBag className="w-4 h-4 text-[#C85A32]" />
+                      My Orders
+                    </Link>
                     <button
                       id="logout-btn"
                       onClick={handleLogout}

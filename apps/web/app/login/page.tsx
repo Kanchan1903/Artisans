@@ -4,19 +4,18 @@ import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Smartphone, ShieldCheck, ArrowRight, RefreshCw, Eye, EyeOff, Palette, ShoppingBag } from "lucide-react";
-import { useAuth, UserRole } from "@/lib/auth-context";
+import { Smartphone, ShieldCheck, ArrowRight, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
-type Step = "role" | "phone" | "otp";
+type Step = "phone" | "otp";
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = searchParams.get("redirect") || "/account";
   const { sendOtp, verifyOtp, isLoggedIn, user } = useAuth();
 
-  const [step, setStep] = useState<Step>("role");
-  const [role, setRole] = useState<UserRole>("buyer");
+  const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("+91");
   const [otp, setOtp] = useState("");
   const [mockCode, setMockCode] = useState<string | null>(null);
@@ -28,13 +27,10 @@ function LoginContent() {
   // Redirect if already logged in
   useEffect(() => {
     if (isLoggedIn && user) {
-      if (user.role === "artisan") router.replace("/artisan/dashboard");
-      else if (user.role === "admin") router.replace("/admin");
-      else router.replace(redirect);
+      router.replace(redirect === "/artisan/dashboard" ? "/account" : redirect);
     }
   }, [isLoggedIn, user, redirect, router]);
 
-  // OTP resend countdown
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
@@ -50,7 +46,7 @@ function LoginContent() {
     }
     setLoading(true);
     try {
-      const data = await sendOtp(cleaned, role);
+      const data = await sendOtp(cleaned, "buyer");
       setMockCode(data.mock_code || null);
       setStep("otp");
       setCountdown(30);
@@ -69,7 +65,7 @@ function LoginContent() {
     }
     setLoading(true);
     try {
-      await verifyOtp(phone.replace(/\s/g, ""), otp, undefined, role);
+      await verifyOtp(phone.replace(/\s/g, ""), otp, undefined, "buyer");
       // redirect handled by useEffect above
     } catch (e: any) {
       setError(e.message || "Invalid OTP. Please try again.");
@@ -80,7 +76,6 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAF7F2] via-[#F5EFE5] to-[#EDE3D5] flex items-center justify-center px-4 py-12">
-      {/* Decorative blob */}
       <div className="fixed top-0 right-0 w-96 h-96 bg-[#C85A32]/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
       <div className="fixed bottom-0 left-0 w-80 h-80 bg-[#2C3E6B]/5 rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
@@ -101,9 +96,7 @@ function LoginContent() {
             </div>
           </Link>
           <p className="mt-3 text-sm text-[#6B645F]">
-            {step === "role" && "Choose how you want to continue"}
-            {step === "phone" && "Enter your mobile number to receive OTP"}
-            {step === "otp" && `OTP sent to ${phone}`}
+            {step === "phone" ? "Sign in to your buyer account" : `OTP sent to ${phone}`}
           </p>
         </div>
 
@@ -112,77 +105,17 @@ function LoginContent() {
           <div className="h-1 bg-stone-100">
             <div
               className="h-full bg-gradient-to-r from-[#C85A32] to-[#E09F3E] transition-all duration-500"
-              style={{ width: step === "role" ? "33%" : step === "phone" ? "66%" : "100%" }}
+              style={{ width: step === "phone" ? "50%" : "100%" }}
             />
           </div>
 
           <div className="p-8">
-            {/* STEP 1: Role Selection */}
-            {step === "role" && (
-              <div className="space-y-4">
-                <h1 className="font-serif text-2xl font-bold text-stone-900 text-center mb-6">
-                  Welcome back!
-                </h1>
-                <p className="text-center text-sm text-stone-500 -mt-4 mb-6">Who are you logging in as?</p>
-
-                <button
-                  id="login-as-buyer"
-                  onClick={() => { setRole("buyer"); setStep("phone"); }}
-                  className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-stone-200 hover:border-[#C85A32] hover:bg-[#FFF8F5] transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[#C85A32]/10 flex items-center justify-center group-hover:bg-[#C85A32]/20 transition-colors">
-                    <ShoppingBag className="w-6 h-6 text-[#C85A32]" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <span className="font-bold text-stone-900 block">I&apos;m a Buyer</span>
-                    <span className="text-xs text-stone-500">Browse crafts, place orders, track deliveries</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-[#C85A32] transition-colors" />
-                </button>
-
-                <button
-                  id="login-as-artisan"
-                  onClick={() => { setRole("artisan"); setStep("phone"); }}
-                  className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-stone-200 hover:border-[#2C3E6B] hover:bg-[#F5F7FF] transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[#2C3E6B]/10 flex items-center justify-center group-hover:bg-[#2C3E6B]/20 transition-colors">
-                    <Palette className="w-6 h-6 text-[#2C3E6B]" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <span className="font-bold text-stone-900 block">I&apos;m an Artisan</span>
-                    <span className="text-xs text-stone-500">Manage products, view orders & earnings</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-[#2C3E6B] transition-colors" />
-                </button>
-
-                <div className="pt-2 text-center">
-                  <span className="text-xs text-stone-500">New here? </span>
-                  <Link href="/signup" className="text-xs font-semibold text-[#C85A32] hover:underline">
-                    Create an account
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Phone Entry */}
+            {/* STEP 1: Phone */}
             {step === "phone" && (
               <div className="space-y-5">
-                <div className="flex items-center gap-3 mb-6">
-                  <button
-                    onClick={() => setStep("role")}
-                    className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center hover:bg-stone-200 transition-colors"
-                  >
-                    <span className="text-stone-600 text-sm">←</span>
-                  </button>
-                  <div>
-                    <h2 className="font-serif text-xl font-bold text-stone-900">
-                      {role === "artisan" ? "Artisan Login" : "Buyer Login"}
-                    </h2>
-                    <p className="text-xs text-stone-500">Sign in with your mobile number</p>
-                  </div>
-                  <div className={`ml-auto px-2.5 py-1 rounded-full text-xs font-bold ${role === "artisan" ? "bg-[#2C3E6B]/10 text-[#2C3E6B]" : "bg-[#C85A32]/10 text-[#C85A32]"}`}>
-                    {role === "artisan" ? "🎨 Artisan" : "🛍️ Buyer"}
-                  </div>
+                <div className="mb-6">
+                  <h1 className="font-serif text-2xl font-bold text-stone-900">Welcome back!</h1>
+                  <p className="text-xs text-stone-500 mt-1">Enter your mobile number to receive a one-time password</p>
                 </div>
 
                 <div>
@@ -202,14 +135,21 @@ function LoginContent() {
                     />
                   </div>
                   <p className="text-xs text-stone-400 mt-1.5">
-                    In demo mode, use <code className="bg-stone-100 px-1 rounded">+919800000001</code> (artisan) or <code className="bg-stone-100 px-1 rounded">+919820000001</code> (buyer)
+                    In demo mode, use <code className="bg-stone-100 px-1 rounded">+919820000001</code> with OTP <code className="bg-stone-100 px-1 rounded">123456</code>
+                  </p>
+                </div>
+
+                {/* Artisan nudge */}
+                <div className="bg-[#2C3E6B]/5 border border-[#2C3E6B]/10 rounded-xl p-4 flex items-center gap-3">
+                  <span className="text-xl">🎨</span>
+                  <p className="text-xs text-[#2C3E6B]/80 leading-relaxed">
+                    <strong>Artisan?</strong> Manage your products and orders in the{" "}
+                    <Link href="/artisan/dashboard" className="font-bold underline">KalaSathi mobile app</Link>.
                   </p>
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3">
-                    {error}
-                  </div>
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3">{error}</div>
                 )}
 
                 <button
@@ -224,10 +164,17 @@ function LoginContent() {
                     <>Send OTP <ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
+
+                <div className="pt-2 text-center">
+                  <span className="text-xs text-stone-500">New here? </span>
+                  <Link href="/signup" className="text-xs font-semibold text-[#C85A32] hover:underline">
+                    Create an account
+                  </Link>
+                </div>
               </div>
             )}
 
-            {/* STEP 3: OTP Verification */}
+            {/* STEP 2: OTP */}
             {step === "otp" && (
               <div className="space-y-5">
                 <div className="flex items-center gap-3 mb-6">
@@ -243,7 +190,7 @@ function LoginContent() {
                   </div>
                 </div>
 
-                {/* Mock code hint (dev mode) */}
+                {/* Dev mode OTP hint */}
                 {mockCode && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between">
                     <span className="text-xs text-amber-700 font-medium">
@@ -279,9 +226,7 @@ function LoginContent() {
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3">
-                    {error}
-                  </div>
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3">{error}</div>
                 )}
 
                 <button
@@ -293,7 +238,7 @@ function LoginContent() {
                   {loading ? (
                     <><RefreshCw className="w-4 h-4 animate-spin" /> Verifying…</>
                   ) : (
-                    <><ShieldCheck className="w-4 h-4" /> Verify & Sign In</>
+                    <><ShieldCheck className="w-4 h-4" /> Verify &amp; Sign In</>
                   )}
                 </button>
 
@@ -303,10 +248,7 @@ function LoginContent() {
                       Resend OTP in <span className="font-bold text-stone-600">{countdown}s</span>
                     </span>
                   ) : (
-                    <button
-                      onClick={() => { handleSendOtp(); }}
-                      className="text-xs font-semibold text-[#C85A32] hover:underline"
-                    >
+                    <button onClick={handleSendOtp} className="text-xs font-semibold text-[#C85A32] hover:underline">
                       Didn&apos;t receive OTP? Resend
                     </button>
                   )}

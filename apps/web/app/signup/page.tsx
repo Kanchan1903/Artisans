@@ -4,19 +4,17 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Smartphone, ShieldCheck, ArrowRight, RefreshCw, Eye, EyeOff,
-  Palette, ShoppingBag, User, MapPin,
+  Smartphone, ShieldCheck, ArrowRight, RefreshCw, Eye, EyeOff, User,
 } from "lucide-react";
-import { useAuth, UserRole } from "@/lib/auth-context";
+import { useAuth } from "@/lib/auth-context";
 
-type Step = "role" | "info" | "otp";
+type Step = "info" | "otp";
 
 export default function SignupPage() {
   const router = useRouter();
   const { sendOtp, verifyOtp, isLoggedIn, user } = useAuth();
 
-  const [step, setStep] = useState<Step>("role");
-  const [role, setRole] = useState<UserRole>("buyer");
+  const [step, setStep] = useState<Step>("info");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+91");
   const [otp, setOtp] = useState("");
@@ -26,10 +24,10 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
 
+  // Redirect if already logged in (buyers go to account)
   useEffect(() => {
     if (isLoggedIn && user) {
-      if (user.role === "artisan") router.replace("/artisan/dashboard");
-      else router.replace("/account");
+      router.replace("/account");
     }
   }, [isLoggedIn, user, router]);
 
@@ -52,7 +50,7 @@ export default function SignupPage() {
     }
     setLoading(true);
     try {
-      const data = await sendOtp(cleaned, role);
+      const data = await sendOtp(cleaned, "buyer");
       setMockCode(data.mock_code || null);
       setStep("otp");
       setCountdown(30);
@@ -71,16 +69,13 @@ export default function SignupPage() {
     }
     setLoading(true);
     try {
-      await verifyOtp(phone.replace(/\s/g, ""), otp, name.trim(), role);
+      await verifyOtp(phone.replace(/\s/g, ""), otp, name.trim(), "buyer");
     } catch (e: any) {
       setError(e.message || "Invalid OTP. Please try again.");
     } finally {
       setLoading(false);
     }
   };
-
-  const themeColor = role === "artisan" ? "#2C3E6B" : "#C85A32";
-  const themeBg = role === "artisan" ? "hover:border-[#2C3E6B] hover:bg-[#F5F7FF]" : "hover:border-[#C85A32] hover:bg-[#FFF8F5]";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAF7F2] via-[#F5EFE5] to-[#EDE3D5] flex items-center justify-center px-4 py-12">
@@ -99,10 +94,13 @@ export default function SignupPage() {
                 Kala<span className="text-[#C85A32]">Sathi</span>
               </span>
               <span className="block text-xs uppercase tracking-widest text-[#6B645F] font-semibold -mt-1">
-                Join the artisan community
+                कलासाथी • Handicrafts
               </span>
             </div>
           </Link>
+          <p className="mt-3 text-sm text-[#6B645F]">
+            {step === "info" ? "Create your buyer account" : `OTP sent to ${phone}`}
+          </p>
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl shadow-stone-200/60 border border-stone-100 overflow-hidden">
@@ -110,70 +108,19 @@ export default function SignupPage() {
           <div className="h-1 bg-stone-100">
             <div
               className="h-full bg-gradient-to-r from-[#C85A32] to-[#E09F3E] transition-all duration-500"
-              style={{ width: step === "role" ? "33%" : step === "info" ? "66%" : "100%" }}
+              style={{ width: step === "info" ? "50%" : "100%" }}
             />
           </div>
 
           <div className="p-8">
-            {/* STEP 1: Role */}
-            {step === "role" && (
-              <div className="space-y-4">
-                <h1 className="font-serif text-2xl font-bold text-stone-900 text-center mb-2">Create your account</h1>
-                <p className="text-center text-sm text-stone-500 mb-6">How will you use KalaSathi?</p>
-
-                <button
-                  id="signup-as-buyer"
-                  onClick={() => { setRole("buyer"); setStep("info"); }}
-                  className={`w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-stone-200 transition-all group ${themeBg}`}
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[#C85A32]/10 flex items-center justify-center">
-                    <ShoppingBag className="w-6 h-6 text-[#C85A32]" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <span className="font-bold text-stone-900 block">Join as a Buyer</span>
-                    <span className="text-xs text-stone-500">Discover authentic Indian handicrafts and support rural artisans</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-[#C85A32] transition-colors" />
-                </button>
-
-                <button
-                  id="signup-as-artisan"
-                  onClick={() => { setRole("artisan"); setStep("info"); }}
-                  className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-stone-200 hover:border-[#2C3E6B] hover:bg-[#F5F7FF] transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[#2C3E6B]/10 flex items-center justify-center">
-                    <Palette className="w-6 h-6 text-[#2C3E6B]" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <span className="font-bold text-stone-900 block">Join as an Artisan</span>
-                    <span className="text-xs text-stone-500">List your crafts, reach global buyers, receive fair wages</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-stone-400 group-hover:text-[#2C3E6B] transition-colors" />
-                </button>
-
-                <div className="pt-2 text-center">
-                  <span className="text-xs text-stone-500">Already have an account? </span>
-                  <Link href="/login" className="text-xs font-semibold text-[#C85A32] hover:underline">Sign in</Link>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Info + Phone */}
+            {/* STEP 1: Name + Phone */}
             {step === "info" && (
               <div className="space-y-5">
-                <div className="flex items-center gap-3 mb-6">
-                  <button onClick={() => setStep("role")} className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center hover:bg-stone-200 transition-colors">
-                    <span className="text-stone-600 text-sm">←</span>
-                  </button>
-                  <div>
-                    <h2 className="font-serif text-xl font-bold text-stone-900">
-                      {role === "artisan" ? "Artisan Registration" : "Buyer Registration"}
-                    </h2>
-                    <p className="text-xs text-stone-500">Your account details</p>
-                  </div>
-                  <div className={`ml-auto px-2.5 py-1 rounded-full text-xs font-bold ${role === "artisan" ? "bg-[#2C3E6B]/10 text-[#2C3E6B]" : "bg-[#C85A32]/10 text-[#C85A32]"}`}>
-                    {role === "artisan" ? "🎨 Artisan" : "🛍️ Buyer"}
-                  </div>
+                <div className="mb-6">
+                  <h1 className="font-serif text-2xl font-bold text-stone-900">Create Account</h1>
+                  <p className="text-xs text-stone-500 mt-1">
+                    Join thousands of buyers discovering authentic Indian crafts
+                  </p>
                 </div>
 
                 <div>
@@ -188,7 +135,7 @@ export default function SignupPage() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full pl-10 pr-4 py-3.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#C85A32] text-stone-900 text-sm transition"
-                      placeholder={role === "artisan" ? "e.g. Sunita Bai Sonawane" : "e.g. Pooja Kulkarni"}
+                      placeholder="e.g. Pooja Kulkarni"
                     />
                   </div>
                 </div>
@@ -211,16 +158,16 @@ export default function SignupPage() {
                   </div>
                 </div>
 
-                {role === "artisan" && (
-                  <div className="bg-[#2C3E6B]/5 rounded-xl p-4 border border-[#2C3E6B]/10">
-                    <div className="flex items-start gap-3">
-                      <MapPin className="w-4 h-4 text-[#2C3E6B] mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-[#2C3E6B]/80 leading-relaxed">
-                        After sign-up, complete your artisan profile with your craft type, village, and district to get approved and start listing products.
-                      </p>
-                    </div>
+                {/* Artisan CTA */}
+                <div className="bg-[#2C3E6B]/5 rounded-xl p-4 border border-[#2C3E6B]/10 flex items-start gap-3">
+                  <span className="text-xl mt-0.5">🎨</span>
+                  <div>
+                    <p className="text-xs font-semibold text-[#2C3E6B] mb-0.5">Are you an artisan?</p>
+                    <p className="text-xs text-[#2C3E6B]/70 leading-relaxed">
+                      Download the <strong>KalaSathi mobile app</strong> to list your crafts using voice in your language.
+                    </p>
                   </div>
-                )}
+                </div>
 
                 {error && (
                   <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3">{error}</div>
@@ -230,8 +177,7 @@ export default function SignupPage() {
                   id="signup-send-otp"
                   onClick={handleSendOtp}
                   disabled={loading}
-                  className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                  style={{ backgroundColor: themeColor }}
+                  className="w-full py-3.5 rounded-xl bg-[#C85A32] text-white font-bold text-sm hover:bg-[#B34D28] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <><RefreshCw className="w-4 h-4 animate-spin" /> Sending OTP…</>
@@ -239,10 +185,15 @@ export default function SignupPage() {
                     <>Send OTP <ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
+
+                <div className="pt-2 text-center">
+                  <span className="text-xs text-stone-500">Already have an account? </span>
+                  <Link href="/login" className="text-xs font-semibold text-[#C85A32] hover:underline">Sign in</Link>
+                </div>
               </div>
             )}
 
-            {/* STEP 3: OTP */}
+            {/* STEP 2: OTP */}
             {step === "otp" && (
               <div className="space-y-5">
                 <div className="flex items-center gap-3 mb-6">
@@ -251,7 +202,7 @@ export default function SignupPage() {
                   </button>
                   <div>
                     <h2 className="font-serif text-xl font-bold text-stone-900">Verify Phone</h2>
-                    <p className="text-xs text-stone-500">OTP sent to {phone}</p>
+                    <p className="text-xs text-stone-500">6-digit code sent to {phone}</p>
                   </div>
                 </div>
 
@@ -271,7 +222,7 @@ export default function SignupPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-2">
-                    6-Digit OTP <span className="text-[#C85A32]">*</span>
+                    One-Time Password <span className="text-[#C85A32]">*</span>
                   </label>
                   <input
                     id="signup-otp"
@@ -292,13 +243,12 @@ export default function SignupPage() {
                   id="signup-verify"
                   onClick={handleVerifyOtp}
                   disabled={loading}
-                  className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                  style={{ backgroundColor: themeColor }}
+                  className="w-full py-3.5 rounded-xl bg-[#C85A32] text-white font-bold text-sm hover:bg-[#B34D28] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <><RefreshCw className="w-4 h-4 animate-spin" /> Creating account…</>
                   ) : (
-                    <><ShieldCheck className="w-4 h-4" /> Create Account & Sign In</>
+                    <><ShieldCheck className="w-4 h-4" /> Create Account &amp; Sign In</>
                   )}
                 </button>
 
