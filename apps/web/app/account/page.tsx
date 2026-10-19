@@ -22,10 +22,12 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { fetchMyOrders, fetchMyWishlist, toggleWishlist, Order, WishlistItem } from "@/lib/api";
 import { useCart } from "@/lib/cart-context";
+import { useLanguage } from "@/lib/language-context";
 
 export default function AccountPage() {
   const { user, isLoggedIn, isArtisan, logout, isLoading, token } = useAuth();
   const { addToCart } = useCart();
+  const { t } = useLanguage();
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<"orders" | "addresses" | "wishlist">("orders");
@@ -102,10 +104,13 @@ export default function AccountPage() {
   // Extract unique saved addresses from real orders
   const savedAddresses = orders
     .map((o) => o.shipping_address)
-    .filter((addr): addr is NonNullable<typeof addr> => !!addr && !!addr.line1)
+    .filter(
+      (addr): addr is Record<string, string> =>
+        typeof addr === "object" && addr !== null && Object.keys(addr).length > 0
+    )
     .filter(
       (addr, index, self) =>
-        index === self.findIndex((a) => a.line1 === addr.line1 && a.pincode === addr.pincode)
+        index === self.findIndex((a) => JSON.stringify(a) === JSON.stringify(addr))
     );
 
   // Compute total direct impact from real orders
@@ -253,17 +258,17 @@ export default function AccountPage() {
                   <Package className="w-8 h-8" />
                 </div>
                 <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">
-                  No orders placed yet
+                  {t("emptyOrders", "No orders placed yet")}
                 </h3>
                 <p className="text-stone-500 text-xs mb-6 leading-relaxed">
-                  When you order authentic handcrafted items, your orders and real-time tracking will appear right here.
+                  {t("emptyOrdersDesc", "When you order authentic handcrafted items, your orders and real-time tracking will appear right here.")}
                 </p>
                 <Link
                   href="/products"
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#C85A32] text-white text-xs font-semibold hover:bg-[#B34D28] transition shadow-sm"
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  <span>Explore Catalog</span>
+                  <span>{t("exploreCatalog", "Explore Catalog")}</span>
                 </Link>
               </div>
             ) : (
@@ -302,15 +307,15 @@ export default function AccountPage() {
                         <div className="flex items-center space-x-4">
                           <img
                             src={
-                              item.product?.images?.[0]?.url ||
+                              item.product_image_url ||
                               "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800"
                             }
-                            alt={item.product?.title_en || "Craft"}
+                            alt={item.product_title || "Craft"}
                             className="w-14 h-14 rounded-xl object-cover bg-stone-100"
                           />
                           <div>
                             <h4 className="font-serif font-bold text-stone-900 text-sm">
-                              {item.product?.title_en || "Handcrafted Product"}
+                              {item.product_title || "Handcrafted Product"}
                             </h4>
                             <p className="text-xs text-stone-500">
                               Qty: {item.quantity} • ₹{item.unit_price?.toLocaleString("en-IN")} each
@@ -397,16 +402,16 @@ export default function AccountPage() {
               <div className="bg-white rounded-3xl p-10 border border-stone-200/80 shadow-sm text-center max-w-md mx-auto">
                 <Heart className="w-12 h-12 text-stone-300 mx-auto mb-3" />
                 <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">
-                  Your Wishlist is Empty
+                  {t("emptyWishlist", "Your Wishlist is Empty")}
                 </h3>
                 <p className="text-stone-500 text-xs max-w-sm mx-auto mb-5 leading-relaxed">
-                  Save handcrafted treasures while browsing so you can easily purchase them later.
+                  {t("emptyWishlistDesc", "Save handcrafted treasures while browsing so you can easily purchase them later.")}
                 </p>
                 <Link
                   href="/products"
                   className="inline-flex px-6 py-2.5 rounded-xl bg-[#C85A32] text-white text-xs font-semibold hover:bg-[#B34D28] transition"
                 >
-                  Explore Catalog
+                  {t("exploreCatalog", "Explore Catalog")}
                 </Link>
               </div>
             ) : (

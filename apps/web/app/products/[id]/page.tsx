@@ -27,7 +27,6 @@ import {
   Product,
   ProductTranslation,
   submitB2BInquiry,
-  SAMPLE_PRODUCTS,
 } from "@/lib/api";
 import { useCart } from "@/lib/cart-context";
 
@@ -107,13 +106,40 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const { addToCart } = useCart();
   const [addedNotice, setAddedNotice] = useState(false);
 
+  const [notFound, setNotFound] = useState(false);
+
   useEffect(() => {
     async function loadProduct() {
-      const p = await fetchProductById(productId);
-      setProduct(p || SAMPLE_PRODUCTS[0]);
+      try {
+        const p = await fetchProductById(productId);
+        if (p) {
+          setProduct(p);
+        } else {
+          setNotFound(true);
+        }
+      } catch (_) {
+        setNotFound(true);
+      }
     }
     loadProduct();
   }, [productId]);
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center p-6 text-center">
+        <h2 className="font-serif text-2xl font-bold text-stone-900 mb-2">Product Not Found</h2>
+        <p className="text-stone-500 text-sm max-w-sm mb-6">
+          This handcrafted creation may have been sold out, unpublished, or does not exist.
+        </p>
+        <Link
+          href="/products"
+          className="px-6 py-2.5 bg-[#C85A32] text-white rounded-xl text-sm font-semibold hover:bg-[#B34D28] transition"
+        >
+          Explore Other Crafts
+        </Link>
+      </div>
+    );
+  }
 
   if (!product) {
     return (

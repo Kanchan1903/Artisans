@@ -6,8 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Eye, EyeOff, Lock, User, Mail, Phone,
   Loader2, CheckCircle, ShieldCheck, Sparkles, ArrowRight,
+  Globe, ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 
 async function persistTokenCookie(token: string, remember: boolean) {
   try {
@@ -24,8 +26,10 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
   const { isLoggedIn, isLoading, loginWithPassword, registerWithPassword, token } = useAuth();
+  const { locale, setLocale, t, languages } = useLanguage();
 
   const [tab, setTab] = useState<"signin" | "signup">("signin");
+  const [showLangMenu, setShowLangMenu] = useState(false);
 
   // Sign In fields
   const [identifier, setIdentifier] = useState("");
@@ -39,7 +43,7 @@ function LoginContent() {
   const [signupPassword, setSignupPassword] = useState("");
   const [showSignupPassword, setShowSignupPassword] = useState(false);
 
-  // Remember Me checkbox — unchecked by default (as required)
+  // Remember Me checkbox — unchecked by default
   const [rememberMe, setRememberMe] = useState(false);
 
   // UI state
@@ -119,6 +123,8 @@ function LoginContent() {
     }
   };
 
+  const activeLang = languages.find((l) => l.code === locale) || languages[0];
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center">
@@ -128,13 +134,51 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FAF7F2] via-[#F3EFE6] to-[#EAE2D6] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Top Banner */}
-      <div className="fixed top-0 inset-x-0 bg-[#2C3E6B] text-white text-xs py-2 px-4 text-center font-medium z-10 shadow-sm">
-        🛡️ Direct from Rural Artisans • 100% Fair Wage Guarantee • Authentic Handcrafted GI Crafts
+    <div className="relative min-h-screen bg-gradient-to-br from-[#FAF7F2] via-[#F3EFE6] to-[#EAE2D6] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* 12-Language Switcher floating in top-right */}
+      <div className="absolute top-5 right-5 z-20">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowLangMenu(!showLangMenu)}
+            className="flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-[#E5DDD0] rounded-full px-3.5 py-1.5 text-xs font-semibold text-[#262220] hover:border-[#C85A32] shadow-sm transition"
+            title="Change Language / भाषा बदलें"
+          >
+            <Globe className="w-3.5 h-3.5 text-[#2C3E6B]" />
+            <span>{activeLang.native}</span>
+            <ChevronDown className={`w-3 h-3 text-stone-400 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
+          </button>
+
+          {showLangMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden z-50 py-2 max-h-80 overflow-y-auto">
+                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-stone-400 tracking-wider border-b border-stone-100">
+                  Select Language (12 Indian Languages)
+                </div>
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setLocale(lang.code);
+                      setShowLangMenu(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-xs flex items-center justify-between hover:bg-[#FBECE6] transition ${
+                      locale === lang.code ? "bg-[#FBECE6]/60 text-[#C85A32] font-bold" : "text-stone-700"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{lang.native}</span>
+                    <span className="text-[11px] text-stone-400 font-sans">{lang.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md mt-6">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Brand */}
         <div className="text-center mb-6">
           <Link href="/" className="inline-flex flex-col items-center gap-2">
@@ -164,7 +208,7 @@ function LoginContent() {
                   : "text-stone-500 hover:text-stone-700"
               }`}
             >
-              Sign In
+              {t("signIn", "Sign In")}
             </button>
             <button
               type="button"
@@ -175,7 +219,7 @@ function LoginContent() {
                   : "text-stone-500 hover:text-stone-700"
               }`}
             >
-              Create Account
+              {t("createAccount", "Create Account")}
             </button>
           </div>
 
@@ -184,14 +228,14 @@ function LoginContent() {
             {tab === "signin" && (
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
-                  <h2 className="font-serif text-xl font-bold text-stone-900">Welcome Back</h2>
-                  <p className="text-stone-500 text-xs mt-1">Sign in with your name, email, or mobile number</p>
+                  <h2 className="font-serif text-xl font-bold text-stone-900">{t("welcomeBack", "Welcome Back")}</h2>
+                  <p className="text-stone-500 text-xs mt-1">{t("welcomeBackSub", "Sign in with your name, email, or mobile number")}</p>
                 </div>
 
                 {/* Name / Email / Phone */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                    Name / Email / Mobile Number
+                    {t("nameEmailPhone", "Name / Email / Mobile Number")}
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -211,7 +255,7 @@ function LoginContent() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-semibold text-stone-700">
-                      Password
+                      {t("password", "Password")}
                     </label>
                   </div>
                   <div className="relative">
@@ -244,7 +288,7 @@ function LoginContent() {
                     className="w-4 h-4 accent-[#C85A32] rounded cursor-pointer"
                   />
                   <span className="text-xs text-stone-600 font-medium select-none">
-                    Remember me on this browser
+                    {t("rememberMe", "Remember me on this browser")}
                   </span>
                 </label>
 
@@ -260,9 +304,9 @@ function LoginContent() {
                   className="w-full py-3.5 px-6 bg-[#C85A32] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#B34D28] disabled:opacity-60 disabled:cursor-not-allowed transition shadow-md shadow-[#C85A32]/20 text-sm"
                 >
                   {submitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t("signIn", "Sign In")}...</>
                   ) : (
-                    <>Sign In <ArrowRight className="w-4 h-4" /></>
+                    <>{t("signIn", "Sign In")} <ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
               </form>
@@ -272,14 +316,14 @@ function LoginContent() {
             {tab === "signup" && (
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div>
-                  <h2 className="font-serif text-xl font-bold text-stone-900">Create an Account</h2>
+                  <h2 className="font-serif text-xl font-bold text-stone-900">{t("createAccount", "Create an Account")}</h2>
                   <p className="text-stone-500 text-xs mt-1">Join as a buyer to shop authentic handmade crafts</p>
                 </div>
 
                 {/* Full Name */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                    Full Name <span className="text-red-500">*</span>
+                    {t("fullName", "Full Name")} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -298,7 +342,7 @@ function LoginContent() {
                 {/* Mobile Number */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                    Mobile Number <span className="text-red-500">*</span>
+                    {t("phone", "Mobile Number")} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -318,7 +362,7 @@ function LoginContent() {
                 {/* Email (optional) */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                    Email Address <span className="text-stone-400 font-normal">(optional)</span>
+                    {t("email", "Email Address (Optional)")}
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -336,7 +380,7 @@ function LoginContent() {
                 {/* Password */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                    Password <span className="text-red-500">*</span> <span className="text-stone-400 font-normal">(min 6 chars)</span>
+                    {t("password", "Password")} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -344,7 +388,7 @@ function LoginContent() {
                       type={showSignupPassword ? "text" : "password"}
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="Minimum 6 characters"
                       autoComplete="new-password"
                       required
                       minLength={6}
@@ -369,7 +413,7 @@ function LoginContent() {
                     className="w-4 h-4 accent-[#C85A32] rounded cursor-pointer"
                   />
                   <span className="text-xs text-stone-600 font-medium select-none">
-                    Remember me on this browser
+                    {t("rememberMe", "Remember me on this browser")}
                   </span>
                 </label>
 
@@ -391,9 +435,9 @@ function LoginContent() {
                   className="w-full py-3.5 px-6 bg-[#C85A32] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#B34D28] disabled:opacity-60 disabled:cursor-not-allowed transition shadow-md shadow-[#C85A32]/20 text-sm"
                 >
                   {submitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Creating Account...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t("createAccount", "Creating Account")}...</>
                   ) : (
-                    <>Create Buyer Account <ArrowRight className="w-4 h-4" /></>
+                    <>{t("createAccount", "Create Buyer Account")} <ArrowRight className="w-4 h-4" /></>
                   )}
                 </button>
               </form>

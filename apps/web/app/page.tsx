@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Sparkles, ArrowRight, ShieldCheck, Heart, MapPin, Eye, ShoppingBag, LayoutDashboard } from "lucide-react";
+import { Sparkles, ArrowRight, ShieldCheck, Heart, MapPin, ShoppingBag } from "lucide-react";
 import { fetchProducts, fetchCategories, fetchArtisans, Product, Category, ArtisanPublic, API_BASE_URL } from "@/lib/api";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 
 export default function HomePage() {
   const { addToCart } = useCart();
-  const { isLoggedIn, isArtisan, user } = useAuth();
+  const { isLoggedIn } = useAuth();
+  const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [artisans, setArtisans] = useState<ArtisanPublic[]>([]);
@@ -28,7 +30,7 @@ export default function HomePage() {
     }
     loadData();
 
-    // Listen to real-time Server-Sent Events (SSE) from the FastAPI backend!
+    // Listen to real-time Server-Sent Events (SSE) from the FastAPI backend
     try {
       const eventSource = new EventSource(`${API_BASE_URL}/events/stream`);
       eventSource.addEventListener("product_published", (e: any) => {
@@ -61,17 +63,15 @@ export default function HomePage() {
             <div className="lg:col-span-7 space-y-6">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C85A32]/10 border border-[#C85A32]/20 text-[#C85A32] text-xs font-bold uppercase tracking-wider">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>AI Voice + Photo Digitization for Indian Artisans</span>
+                <span>{t("heroBadge", "AI Voice + Photo Digitization for Indian Artisans")}</span>
               </div>
 
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-black text-[#262220] leading-[1.1] tracking-tight">
-                Authentic Crafts Direct from Rural{" "}
-                <span className="text-[#C85A32]">Master Artisans</span>
+                {t("heroTitle", "Authentic Crafts Direct from Rural Master Artisans")}
               </h1>
 
               <p className="text-lg text-[#6B645F] max-w-2xl leading-relaxed">
-                Rural artisans digitize their timeless creations in 12 Indian languages using only photo and voice.
-                Every purchase ensures statutory fair labor wages and zero middlemen exploitation.
+                {t("heroSubtitle", "Rural artisans digitize their timeless creations in 12 Indian languages using only photo and voice. Every purchase ensures statutory fair labor wages and zero middlemen.")}
               </p>
 
               <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -79,7 +79,7 @@ export default function HomePage() {
                   href="/products"
                   className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[#C85A32] hover:bg-[#9E3A19] text-white font-bold text-base shadow-lg shadow-[#C85A32]/25 transition transform hover:-translate-y-0.5"
                 >
-                  <span>Explore 2026 Collection</span>
+                  <span>{t("exploreCatalog", "Explore 2026 Collection")}</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
 
@@ -88,32 +88,31 @@ export default function HomePage() {
                     href="/account"
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white hover:bg-[#FAF7F2] border border-[#E5DDD0] text-[#2C3E6B] font-bold text-base transition"
                   >
-                    <span>My Account</span>
+                    <span>{t("myAccount", "My Account")}</span>
                   </Link>
                 ) : (
                   <Link
                     href="/login"
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white hover:bg-[#FAF7F2] border border-[#E5DDD0] text-[#2C3E6B] font-bold text-base transition"
                   >
-                    <span>Sign In</span>
+                    <span>{t("signIn", "Sign In")}</span>
                   </Link>
                 )}
               </div>
-
 
               {/* Trust Metrics */}
               <div className="grid grid-cols-3 gap-6 pt-6 border-t border-[#E5DDD0]">
                 <div>
                   <p className="font-serif text-2xl font-black text-[#2C3E6B]">12</p>
-                  <p className="text-xs text-[#6B645F] font-semibold">Indian Languages</p>
+                  <p className="text-xs text-[#6B645F] font-semibold">{t("indianLanguages", "Indian Languages")}</p>
                 </div>
                 <div>
                   <p className="font-serif text-2xl font-black text-[#C85A32]">100%</p>
-                  <p className="text-xs text-[#6B645F] font-semibold">Fair Wage Verified</p>
+                  <p className="text-xs text-[#6B645F] font-semibold">{t("fairWageVerified", "Fair Wage Verified")}</p>
                 </div>
                 <div>
                   <p className="font-serif text-2xl font-black text-[#E09F3E]">GI-Tag</p>
-                  <p className="text-xs text-[#6B645F] font-semibold">Heritage Authenticity</p>
+                  <p className="text-xs text-[#6B645F] font-semibold">{t("heritageAuthenticity", "Heritage Authenticity")}</p>
                 </div>
               </div>
             </div>
@@ -128,11 +127,11 @@ export default function HomePage() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6 text-white">
                   <div className="inline-block px-2.5 py-1 rounded bg-[#E09F3E] text-[#262220] font-bold text-xs uppercase mb-2">
-                    Warli Art • Maharashtra
+                    {t("warliTag", "Warli Art • Maharashtra")}
                   </div>
-                  <h3 className="font-serif font-bold text-xl">Harvest Dance Folk Canvas</h3>
+                  <h3 className="font-serif font-bold text-xl">{t("warliTitle", "Harvest Dance Folk Canvas")}</h3>
                   <p className="text-xs text-white/80 mt-1">
-                    Hand-painted using natural rice paste by Sunita Bai Sonawane, Palghar
+                    {t("warliDesc", "Hand-painted using natural rice paste by Sunita Bai Sonawane, Palghar")}
                   </p>
                 </div>
               </div>
@@ -145,11 +144,11 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-8">
           <div>
-            <h2 className="font-serif text-3xl font-black text-[#262220]">Shop by Craft Tradition</h2>
-            <p className="text-sm text-[#6B645F] mt-1">Centuries of indigenous Indian heritage passed down across generations</p>
+            <h2 className="font-serif text-3xl font-black text-[#262220]">{t("shopByCraftTradition", "Shop by Craft Tradition")}</h2>
+            <p className="text-sm text-[#6B645F] mt-1">{t("shopByCraftSubtitle", "Centuries of indigenous Indian heritage passed down across generations")}</p>
           </div>
           <Link href="/products" className="text-sm font-bold text-[#C85A32] hover:underline flex items-center gap-1">
-            <span>View All</span>
+            <span>{t("viewAll", "View All")}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -179,10 +178,10 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-[#2C3E6B] rounded-3xl p-8 sm:p-12 text-white">
           <div className="max-w-2xl mb-8">
-            <span className="text-[#E09F3E] text-xs uppercase font-bold tracking-wider">Meet The Makers</span>
-            <h2 className="font-serif text-3xl font-black text-white mt-1">Featured Master Artisans</h2>
+            <span className="text-[#E09F3E] text-xs uppercase font-bold tracking-wider">{t("meetMakers", "Meet The Makers")}</span>
+            <h2 className="font-serif text-3xl font-black text-white mt-1">{t("featuredArtisans", "Featured Master Artisans")}</h2>
             <p className="text-white/70 text-sm mt-2">
-              Every artisan on KalaSathi is verified with a "Made by" trust badge and authentic village origin.
+              {t("featuredArtisansSubtitle", "Every artisan on KalaSathi is verified with a 'Made by' trust badge and authentic village origin.")}
             </p>
           </div>
 
@@ -218,7 +217,7 @@ export default function HomePage() {
                   href={`/artisans/${art.id}`}
                   className="w-full py-2.5 px-4 rounded-xl bg-white text-[#2C3E6B] font-bold text-xs text-center hover:bg-[#FAF7F2] transition"
                 >
-                  View Artisan Story & Crafts ({art.product_count})
+                  {t("viewStory", "View Artisan Story & Crafts")} ({art.product_count})
                 </Link>
               </div>
             ))}
@@ -230,11 +229,11 @@ export default function HomePage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-8">
           <div>
-            <h2 className="font-serif text-3xl font-black text-[#262220]">Trending Handcrafted Creations</h2>
-            <p className="text-sm text-[#6B645F] mt-1">Freshly digitized from village workshops with AI Image Studio</p>
+            <h2 className="font-serif text-3xl font-black text-[#262220]">{t("trendingCrafts", "Trending Handcrafted Creations")}</h2>
+            <p className="text-sm text-[#6B645F] mt-1">{t("trendingSubtitle", "Freshly digitized from village workshops with AI Image Studio")}</p>
           </div>
           <Link href="/products" className="text-sm font-bold text-[#C85A32] hover:underline flex items-center gap-1">
-            <span>Explore Catalog</span>
+            <span>{t("exploreCatalog", "Explore Catalog")}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -245,71 +244,71 @@ export default function HomePage() {
               <Sparkles className="w-8 h-8" />
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">
-              No products published yet
+              {t("noProductsYet", "No products published yet")}
             </h3>
             <p className="text-stone-500 text-xs leading-relaxed">
-              Artisans will list their authentic handcrafted creations directly from the KalaSathi mobile app. Check back soon!
+              {t("noProductsDesc", "Artisans will list their authentic handcrafted creations directly from the KalaSathi mobile app. Check back soon!")}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {products.map((prod) => {
-            const primaryImg = prod.images?.[0]?.url || "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800";
-            return (
-              <div
-                key={prod.id}
-                className="bg-white rounded-2xl border border-[#E5DDD0] overflow-hidden hover:shadow-xl transition group flex flex-col justify-between"
-              >
-                <div>
-                  <Link href={`/products/${prod.id}`} className="block relative aspect-square bg-[#FAF7F2] overflow-hidden">
-                    <img
-                      src={primaryImg}
-                      alt={prod.title_en}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-md text-[11px] font-bold text-[#2C3E6B] shadow-sm">
-                      {prod.material || "Handmade"}
-                    </div>
-                  </Link>
-
-                  <div className="p-4 space-y-2">
-                    <Link href={`/products/${prod.id}`}>
-                      <h3 className="font-bold text-[#262220] text-base group-hover:text-[#C85A32] transition line-clamp-1">
-                        {prod.title_en}
-                      </h3>
-                      {prod.title_hi && (
-                        <p className="text-xs text-[#6B645F] line-clamp-1">{prod.title_hi}</p>
-                      )}
+            {products.map((prod) => {
+              const primaryImg = prod.images?.[0]?.url || "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800";
+              return (
+                <div
+                  key={prod.id}
+                  className="bg-white rounded-2xl border border-[#E5DDD0] overflow-hidden hover:shadow-xl transition group flex flex-col justify-between"
+                >
+                  <div>
+                    <Link href={`/products/${prod.id}`} className="block relative aspect-square bg-[#FAF7F2] overflow-hidden">
+                      <img
+                        src={primaryImg}
+                        alt={prod.title_en}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-md text-[11px] font-bold text-[#2C3E6B] shadow-sm">
+                        {prod.material || "Handmade"}
+                      </div>
                     </Link>
 
-                    {prod.artisan && (
-                      <div className="flex items-center gap-1.5 text-xs text-[#6B645F]">
-                        <span className="font-medium text-[#2C3E6B]">By {prod.artisan.name}</span>
-                        <span>•</span>
-                        <span>{prod.artisan.state}</span>
-                      </div>
-                    )}
+                    <div className="p-4 space-y-2">
+                      <Link href={`/products/${prod.id}`}>
+                        <h3 className="font-bold text-[#262220] text-base group-hover:text-[#C85A32] transition line-clamp-1">
+                          {prod.title_en}
+                        </h3>
+                        {prod.title_hi && (
+                          <p className="text-xs text-[#6B645F] line-clamp-1">{prod.title_hi}</p>
+                        )}
+                      </Link>
+
+                      {prod.artisan && (
+                        <div className="flex items-center gap-1.5 text-xs text-[#6B645F]">
+                          <span className="font-medium text-[#2C3E6B]">{t("byArtisan", "By")} {prod.artisan.name}</span>
+                          <span>•</span>
+                          <span>{prod.artisan.state}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 pt-0 border-t border-[#FAF7F2] flex items-center justify-between mt-2">
+                    <div>
+                      <span className="text-[11px] uppercase font-bold text-[#6B645F] block">{t("fairPrice", "Fair Price")}</span>
+                      <span className="text-xl font-black text-[#C85A32]">₹ {prod.price}</span>
+                    </div>
+
+                    <button
+                      onClick={() => addToCart(prod, 1)}
+                      className="p-2.5 rounded-xl bg-[#C85A32] hover:bg-[#9E3A19] text-white transition flex items-center justify-center shadow"
+                      title={t("addToCart", "Add to Cart")}
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-
-                <div className="p-4 pt-0 border-t border-[#FAF7F2] flex items-center justify-between mt-2">
-                  <div>
-                    <span className="text-[11px] uppercase font-bold text-[#6B645F] block">Fair Price</span>
-                    <span className="text-xl font-black text-[#C85A32]">₹ {prod.price}</span>
-                  </div>
-
-                  <button
-                    onClick={() => addToCart(prod, 1)}
-                    className="p-2.5 rounded-xl bg-[#C85A32] hover:bg-[#9E3A19] text-white transition flex items-center justify-center shadow"
-                    title="Add to Cart"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         )}
       </section>
 
@@ -321,9 +320,9 @@ export default function HomePage() {
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-[#262220]">Fair Wage Guaranteed</h3>
+              <h3 className="font-bold text-base text-[#262220]">{t("fairWageGuarantee", "Fair Wage Guaranteed")}</h3>
               <p className="text-xs text-[#6B645F] mt-1 leading-relaxed">
-                Our AI Pricing Assistant guarantees every artisan earns at least statutory hourly wages plus full material costs.
+                {t("fairWageDesc", "Our AI Pricing Assistant guarantees every artisan earns at least statutory hourly wages plus full material costs.")}
               </p>
             </div>
           </div>
@@ -333,9 +332,9 @@ export default function HomePage() {
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-[#262220]">12 Indian Languages</h3>
+              <h3 className="font-bold text-base text-[#262220]">{t("indianLanguages", "12 Indian Languages")}</h3>
               <p className="text-xs text-[#6B645F] mt-1 leading-relaxed">
-                Product descriptions are automatically cataloged and translated into 12 native Indian scripts.
+                {t("languagesCardDesc", "Product descriptions are automatically cataloged and translated into 12 native Indian scripts.")}
               </p>
             </div>
           </div>
@@ -345,9 +344,9 @@ export default function HomePage() {
               <Heart className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-[#262220]">Zero Middlemen Commission</h3>
+              <h3 className="font-bold text-base text-[#262220]">{t("zeroCommission", "Zero Middlemen Commission")}</h3>
               <p className="text-xs text-[#6B645F] mt-1 leading-relaxed">
-                Orders placed here directly notify the artisan on their mobile app for direct packing and shipping.
+                {t("zeroCommissionDesc", "Orders placed here directly notify the artisan on their mobile app for direct packing and shipping.")}
               </p>
             </div>
           </div>

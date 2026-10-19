@@ -15,6 +15,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { fetchOrderById } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 const ORDER_STEPS = [
   { id: "pending", label: "Order Placed", desc: "Sent to artisan's mobile device" },
@@ -26,17 +27,23 @@ const ORDER_STEPS = [
 
 export default function OrderTrackingPage({ params }: { params: { id: string } }) {
   const orderId = Number(params.id);
+  const { token } = useAuth();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadOrder() {
-      const data = await fetchOrderById(orderId);
-      setOrder(data);
-      setLoading(false);
+      try {
+        const data = await fetchOrderById(orderId, token || "");
+        setOrder(data);
+      } catch (_) {
+        setOrder(null);
+      } finally {
+        setLoading(false);
+      }
     }
     loadOrder();
-  }, [orderId]);
+  }, [orderId, token]);
 
   if (loading || !order) {
     return (

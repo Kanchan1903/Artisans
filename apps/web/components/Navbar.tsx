@@ -4,28 +4,28 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ShoppingBag, Search, Globe, ShieldCheck, User,
-  LogOut, ChevronDown, LayoutDashboard,
+  ShoppingBag,
+  Search,
+  Globe,
+  User,
+  LogOut,
+  ChevronDown,
+  LayoutDashboard,
 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
-import { SupportedLocale, UI_TRANSLATIONS } from "@/lib/i18n";
+import { useLanguage } from "@/lib/language-context";
+import { SupportedLocale } from "@/lib/i18n";
 
-export default function Navbar({
-  locale = "en",
-  onLocaleChange,
-}: {
-  locale?: SupportedLocale;
-  onLocaleChange?: (newLocale: SupportedLocale) => void;
-}) {
+export default function Navbar() {
   const router = useRouter();
   const { itemCount } = useCart();
   const { user, isLoggedIn, logout } = useAuth();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [currentLang, setCurrentLang] = useState<SupportedLocale>(locale);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const { locale, setLocale, t, languages } = useLanguage();
 
-  const t = UI_TRANSLATIONS[currentLang];
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,28 +34,19 @@ export default function Navbar({
     }
   };
 
-  const handleLanguageChange = (code: SupportedLocale) => {
-    setCurrentLang(code);
-    if (onLocaleChange) onLocaleChange(code);
-  };
-
   const handleLogout = () => {
     logout();
     setShowUserMenu(false);
     router.push("/login");
   };
 
+  const activeLang = languages.find((l) => l.code === locale) || languages[0];
+
   return (
     <header className="sticky top-0 z-50 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E5DDD0]">
-      {/* Top Notice Bar */}
-      <div className="bg-[#2C3E6B] text-white text-xs py-1.5 px-4 text-center font-medium flex items-center justify-center gap-2">
-        <ShieldCheck className="w-3.5 h-3.5 text-[#E09F3E]" />
-        <span>Direct from Rural Artisans • 100% Fair Wage Guarantee • Authentic Handcrafted GI Crafts</span>
-      </div>
-
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
+        <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
           <div className="w-10 h-10 rounded-xl bg-[#C85A32] flex items-center justify-center shadow-md shadow-[#C85A32]/25 group-hover:scale-105 transition-transform">
             <span className="text-white font-serif font-black text-2xl">क</span>
           </div>
@@ -75,7 +66,7 @@ export default function Navbar({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t.searchPlaceholder}
+            placeholder={t("searchPlaceholder", "Search handmade pottery, warli paintings, woodcraft...")}
             className="w-full pl-10 pr-4 py-2 bg-white border border-[#E5DDD0] rounded-full text-sm text-[#262220] placeholder-[#6B645F] focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent transition"
           />
           <Search className="w-4 h-4 text-[#6B645F] absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -83,18 +74,44 @@ export default function Navbar({
 
         {/* Navigation Actions */}
         <div className="flex items-center gap-3">
-          {/* Language Switcher */}
-          <div className="relative flex items-center bg-white border border-[#E5DDD0] rounded-full px-2.5 py-1 text-xs font-semibold text-[#262220]">
-            <Globe className="w-3.5 h-3.5 mr-1.5 text-[#2C3E6B]" />
-            <select
-              value={currentLang}
-              onChange={(e) => handleLanguageChange(e.target.value as SupportedLocale)}
-              className="bg-transparent focus:outline-none cursor-pointer pr-1"
+          {/* 12-Language Switcher Dropdown */}
+          <div className="relative">
+            <button
+              id="lang-select-btn"
+              onClick={() => setShowLangMenu(!showLangMenu)}
+              className="flex items-center gap-1.5 bg-white border border-[#E5DDD0] rounded-full px-3 py-1.5 text-xs font-semibold text-[#262220] hover:border-[#C85A32] transition shadow-sm"
+              title="Change Language / भाषा बदलें"
             >
-              <option value="en">English</option>
-              <option value="hi">हिन्दी</option>
-              <option value="mr">मराठी</option>
-            </select>
+              <Globe className="w-3.5 h-3.5 text-[#2C3E6B]" />
+              <span>{activeLang.native}</span>
+              <ChevronDown className={`w-3 h-3 text-stone-400 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
+            </button>
+
+            {showLangMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden z-50 py-2 max-h-96 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-stone-400 tracking-wider border-b border-stone-100">
+                    Select Language (12 Indian Languages)
+                  </div>
+                  {languages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        setLocale(lang.code);
+                        setShowLangMenu(false);
+                      }}
+                      className={`w-full px-4 py-2.5 text-left text-xs flex items-center justify-between hover:bg-[#FBECE6] transition ${
+                        locale === lang.code ? "bg-[#FBECE6]/60 text-[#C85A32] font-bold" : "text-stone-700"
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{lang.native}</span>
+                      <span className="text-[11px] text-stone-400 font-sans">{lang.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Explore Link */}
@@ -102,7 +119,7 @@ export default function Navbar({
             href="/products"
             className="hidden sm:inline-block text-sm font-semibold text-[#262220] hover:text-[#C85A32] transition"
           >
-            {t.exploreCrafts}
+            {t("exploreCrafts", "Explore Crafts")}
           </Link>
 
           {/* Auth Controls */}
@@ -123,8 +140,8 @@ export default function Navbar({
 
               {showUserMenu && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden z-20">
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden z-50">
                     <div className="px-4 py-3 border-b border-stone-100 bg-stone-50">
                       <p className="text-xs font-semibold text-stone-900 truncate">{user.name}</p>
                       <p className="text-[11px] text-stone-500">Buyer Account</p>
@@ -135,7 +152,7 @@ export default function Navbar({
                       className="flex items-center gap-2.5 px-4 py-3 text-sm text-stone-700 hover:bg-stone-50 transition"
                     >
                       <LayoutDashboard className="w-4 h-4 text-[#2C3E6B]" />
-                      My Account
+                      {t("myAccount", "My Account")}
                     </Link>
                     <Link
                       href="/account"
@@ -143,7 +160,7 @@ export default function Navbar({
                       className="flex items-center gap-2.5 px-4 py-3 text-sm text-stone-700 hover:bg-stone-50 transition border-t border-stone-100"
                     >
                       <ShoppingBag className="w-4 h-4 text-[#C85A32]" />
-                      My Orders
+                      {t("myOrders", "My Orders")}
                     </Link>
                     <button
                       id="logout-btn"
@@ -151,7 +168,7 @@ export default function Navbar({
                       className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition border-t border-stone-100"
                     >
                       <LogOut className="w-4 h-4" />
-                      Sign Out
+                      {t("signOut", "Sign Out")}
                     </button>
                   </div>
                 </>
@@ -165,14 +182,14 @@ export default function Navbar({
                 href="/login"
                 className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-[#262220] border border-[#E5DDD0] bg-white hover:border-[#C85A32] hover:text-[#C85A32] transition"
               >
-                Sign In
+                {t("signIn", "Sign In")}
               </Link>
               <Link
                 id="nav-signup"
-                href="/signup"
+                href="/login"
                 className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#C85A32] text-white hover:bg-[#B34D28] transition"
               >
-                Get Started
+                {t("createAccount", "Create Account")}
               </Link>
             </div>
           )}

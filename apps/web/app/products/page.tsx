@@ -9,12 +9,14 @@ import {
 } from "lucide-react";
 import { fetchProducts, fetchCategories, Product, Category } from "@/lib/api";
 import { useCart } from "@/lib/cart-context";
+import { useLanguage } from "@/lib/language-context";
 
 // ─── State: no SAMPLE_PRODUCTS ever used here ─────────────────────────────────
 
 type LoadState = "loading" | "ready" | "error";
 
 function ProductsContent() {
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") || searchParams.get("category_id") || "";
   const initialSearch = searchParams.get("q") || searchParams.get("search") || "";
@@ -176,7 +178,7 @@ function ProductsContent() {
           <Search className="w-5 h-5 text-stone-400 absolute left-4 top-3.5" />
           <input
             type="text"
-            placeholder="Search by craft technique, Warli, Madhubani, Terracotta, or artisan name..."
+            placeholder={t("searchPlaceholder", "Search handmade pottery, warli paintings, woodcraft...")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white rounded-xl border border-stone-200 shadow-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#C85A32] focus:border-transparent text-sm"
@@ -189,17 +191,17 @@ function ProductsContent() {
             <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-[#C85A32]" />
-                <h2 className="font-semibold text-stone-900 text-base">Filter Craft</h2>
+                <h2 className="font-semibold text-stone-900 text-base">{t("filterCraft", "Filter Craft")}</h2>
               </div>
               <button onClick={resetFilters} className="text-xs text-[#C85A32] hover:underline font-medium">
-                Reset All
+                {t("resetAll", "Reset All")}
               </button>
             </div>
 
             {/* Category */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
-                Craft Category
+                {t("craftCategory", "Craft Category")}
               </label>
               <div className="space-y-2">
                 <button
@@ -208,7 +210,7 @@ function ProductsContent() {
                     !selectedCategory ? "bg-[#C85A32]/10 text-[#C85A32] font-semibold" : "text-stone-600 hover:bg-stone-50"
                   }`}
                 >
-                  All Categories
+                  {t("allCategories", "All Categories")}
                 </button>
                 {categories.map((c) => (
                   <button
@@ -229,14 +231,14 @@ function ProductsContent() {
             {/* State */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
-                Origin State
+                {t("originState", "Origin State")}
               </label>
               <select
                 value={selectedState}
                 onChange={(e) => setSelectedState(e.target.value)}
                 className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#C85A32]"
               >
-                <option value="all">All States</option>
+                <option value="all">{t("allStates", "All States")}</option>
                 {states.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -244,7 +246,7 @@ function ProductsContent() {
             {/* Price */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-stone-500">Max Price</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-stone-500">{t("maxPrice", "Max Price")}</label>
                 <span className="text-sm font-semibold text-stone-900">
                   ₹{priceRange >= 10000 ? "Any" : priceRange.toLocaleString("en-IN")}
                 </span>
@@ -325,19 +327,19 @@ function ProductsContent() {
                   <Package className="w-10 h-10" />
                 </div>
                 <h3 className="font-serif text-xl font-bold text-stone-800 mb-2">
-                  {searchQuery || selectedCategory ? "No crafts match your filters" : "No products available yet"}
+                  {searchQuery || selectedCategory ? "No crafts match your filters" : t("noProductsYet", "No products available yet")}
                 </h3>
                 <p className="text-stone-500 text-sm max-w-md mx-auto mb-6">
                   {searchQuery || selectedCategory
                     ? "Try adjusting your search or filters."
-                    : "No products have been published by artisans yet. Check back soon!"}
+                    : t("noProductsDesc", "No products have been published by artisans yet. Check back soon!")}
                 </p>
                 {(searchQuery || selectedCategory || selectedState !== "all") && (
                   <button
                     onClick={resetFilters}
                     className="px-6 py-2.5 bg-[#C85A32] text-white rounded-xl text-sm font-medium hover:bg-[#B34D28] transition-colors shadow-sm"
                   >
-                    Clear All Filters
+                    {t("resetAll", "Clear All Filters")}
                   </button>
                 )}
               </div>
@@ -377,7 +379,7 @@ function ProductsContent() {
                             )}
                             {!inStock && (
                               <span className="absolute top-3 right-3 px-2 py-0.5 bg-stone-800/80 text-white text-[10px] font-bold rounded-full">
-                                Out of Stock
+                                {t("outOfStock", "Out of Stock")}
                               </span>
                             )}
                             <span className="absolute bottom-3 left-3 inline-flex items-center space-x-1 bg-stone-900/75 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] text-white font-medium">
@@ -394,7 +396,7 @@ function ProductsContent() {
                               {p.title_en}
                             </h3>
                             <p className="text-xs text-stone-500">
-                              By <span className="font-medium text-stone-700">{p.artisan?.name || "Master Artisan"}</span>
+                              {t("byArtisan", "By")} <span className="font-medium text-stone-700">{p.artisan?.name || "Master Artisan"}</span>
                             </p>
                             {inStock && p.stock <= 5 && (
                               <p className="text-[11px] text-amber-600 font-semibold mt-1">
@@ -406,7 +408,7 @@ function ProductsContent() {
 
                         <div className="px-4 sm:px-5 pb-5 pt-3 border-t border-stone-100 flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] uppercase text-stone-400 font-semibold block">Direct Fair Price</span>
+                            <span className="text-[10px] uppercase text-stone-400 font-semibold block">{t("directFairPrice", "Direct Fair Price")}</span>
                             <span className="text-lg font-bold text-stone-900">
                               ₹{p.price.toLocaleString("en-IN")}
                             </span>
@@ -423,9 +425,9 @@ function ProductsContent() {
                             }`}
                           >
                             {addedId === p.id ? (
-                              <><Check className="w-4 h-4" /><span>Added</span></>
+                              <><Check className="w-4 h-4" /><span>{t("added", "Added")}</span></>
                             ) : (
-                              <><ShoppingCart className="w-4 h-4" /><span>Add</span></>
+                              <><ShoppingCart className="w-4 h-4" /><span>{t("addToCart", "Add")}</span></>
                             )}
                           </button>
                         </div>

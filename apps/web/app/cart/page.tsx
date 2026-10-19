@@ -13,10 +13,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
+import { useLanguage } from "@/lib/language-context";
 
 export default function CartPage() {
   const router = useRouter();
   const { items, removeFromCart, updateQuantity, clearCart, totalPrice, totalItems } = useCart();
+  const { t } = useLanguage();
 
   if (items.length === 0) {
     return (
@@ -26,16 +28,16 @@ export default function CartPage() {
             <ShoppingBag className="w-10 h-10" />
           </div>
           <h2 className="font-serif text-2xl font-bold text-stone-900 mb-2">
-            Your Cart is Empty
+            {t("emptyCart", "Your Cart is Empty")}
           </h2>
           <p className="text-stone-600 text-sm mb-6">
-            Discover authentic Indian handicrafts made directly by marginalized village artisans.
+            {t("emptyCartDesc", "Discover authentic Indian handicrafts made directly by marginalized village artisans.")}
           </p>
           <Link
             href="/products"
             className="inline-flex items-center justify-center w-full py-3.5 px-6 rounded-xl bg-[#C85A32] text-white font-semibold text-sm hover:bg-[#B34D28] transition-colors shadow-sm"
           >
-            <span>Explore Handcrafted Catalog</span>
+            <span>{t("exploreCatalog", "Explore 2026 Collection")}</span>
             <ArrowRight className="w-4 h-4 ml-2" />
           </Link>
         </div>
@@ -49,10 +51,10 @@ export default function CartPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-serif text-3xl font-bold text-stone-900">
-              Shopping Cart ({totalItems} {totalItems === 1 ? "item" : "items"})
+              {t("shoppingCart", "Shopping Cart")} ({totalItems} {totalItems === 1 ? "item" : "items"})
             </h1>
             <p className="text-stone-500 text-sm mt-1">
-              Every purchase directly supports an artisan’s livelihood and preserves cultural heritage.
+              {t("heroSubtitle", "Every purchase directly supports an artisan’s livelihood and preserves cultural heritage.")}
             </p>
           </div>
           <button
@@ -60,7 +62,7 @@ export default function CartPage() {
             className="text-xs text-rose-600 hover:underline flex items-center space-x-1"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear Cart</span>
+            <span>{t("clearCart", "Clear Cart")}</span>
           </button>
         </div>
 
@@ -91,44 +93,38 @@ export default function CartPage() {
                       </Link>
                     </h3>
                     <p className="text-xs text-stone-500 mb-2">
-                      Artisan: <span className="font-medium text-stone-700">{product.artisan?.name}</span> ({product.artisan?.village}, {product.artisan?.state})
+                      {t("byArtisan", "By")}: <span className="font-medium text-stone-700">{product.artisan?.name}</span> ({product.artisan?.village}, {product.artisan?.state})
                     </p>
                     <span className="text-sm font-bold text-stone-900">
                       ₹{product.price.toLocaleString("en-IN")} each
                     </span>
                   </div>
 
-                  <div className="flex sm:flex-col items-center justify-between sm:items-end gap-3 w-full sm:w-auto">
-                    {/* Quantity controls */}
-                    <div className="flex items-center border border-stone-300 rounded-xl bg-stone-50 p-1">
+                  <div className="flex items-center gap-4">
+                    {/* Quantity Selector */}
+                    <div className="flex items-center border border-stone-200 rounded-lg overflow-hidden bg-stone-50">
                       <button
                         onClick={() => updateQuantity(product.id, quantity - 1)}
-                        className="w-7 h-7 flex items-center justify-center text-stone-600 hover:bg-white rounded-lg transition-colors"
+                        className="p-2 hover:bg-stone-200 text-stone-600 transition"
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="w-8 text-center text-xs font-bold text-stone-800">
-                        {quantity}
-                      </span>
+                      <span className="px-3 text-xs font-bold text-stone-900">{quantity}</span>
                       <button
                         onClick={() => updateQuantity(product.id, quantity + 1)}
-                        className="w-7 h-7 flex items-center justify-center text-stone-600 hover:bg-white rounded-lg transition-colors"
+                        className="p-2 hover:bg-stone-200 text-stone-600 transition"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-base font-extrabold text-stone-900 block">
-                        ₹{(product.price * quantity).toLocaleString("en-IN")}
-                      </span>
-                      <button
-                        onClick={() => removeFromCart(product.id)}
-                        className="text-[11px] text-stone-400 hover:text-rose-600 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => removeFromCart(product.id)}
+                      className="p-2 text-stone-400 hover:text-red-500 transition"
+                      title="Remove"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               );
@@ -139,7 +135,7 @@ export default function CartPage() {
           <div className="lg:col-span-4">
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200/80 shadow-sm sticky top-24 space-y-6">
               <h3 className="font-serif text-xl font-bold text-stone-900 border-b border-stone-100 pb-4">
-                Order Summary
+                {t("orderSummary", "Order Summary")}
               </h3>
 
               <div className="space-y-3 text-sm">
@@ -154,7 +150,7 @@ export default function CartPage() {
                   <span className="font-semibold text-emerald-600">FREE</span>
                 </div>
                 <div className="flex justify-between text-stone-600">
-                  <span>Fair Trade Guarantee</span>
+                  <span>{t("fairWageGuarantee", "Fair Wage Guaranteed")}</span>
                   <span className="font-semibold text-emerald-600">Included</span>
                 </div>
 
@@ -170,7 +166,7 @@ export default function CartPage() {
                 onClick={() => router.push("/checkout")}
                 className="w-full py-4 rounded-xl bg-[#C85A32] text-white font-semibold text-sm hover:bg-[#B34D28] transition-colors flex items-center justify-center space-x-2 shadow-sm"
               >
-                <span>Proceed to Secure Checkout</span>
+                <span>{t("proceedToCheckout", "Proceed to Secure Checkout")}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -185,7 +181,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                  <span>Direct Village Artisan Livelihood Impact</span>
+                  <span>{t("directArtisanImpact", "Direct Artisan Impact")}</span>
                 </div>
               </div>
             </div>

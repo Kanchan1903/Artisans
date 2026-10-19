@@ -21,7 +21,7 @@ import { createOrder } from "@/lib/api";
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, totalPrice, clearCart } = useCart();
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, token } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -47,27 +47,28 @@ export default function CheckoutPage() {
 
     try {
       const orderPayload = {
-        buyer_name: name,
-        buyer_email: email,
-        buyer_phone: phone,
-        shipping_address: `${street}, ${city}, ${state} - ${pincode}`,
-        payment_method: paymentMethod === "razorpay" ? "Razorpay (Test Mode)" : "Cash on Delivery",
-        payment_status: paymentMethod === "razorpay" ? "paid" : "pending",
         items: items.map((i) => ({
           product_id: i.product.id,
-          artisan_id: i.product.artisan_id || i.product.artisan?.id || 1,
           quantity: i.quantity,
-          unit_price: i.product.price,
         })),
-        total_amount: totalPrice,
+        shipping_address: {
+          name,
+          phone,
+          line1: street,
+          city,
+          state,
+          pincode,
+        },
+        payment_method: paymentMethod,
+        payment_id: paymentMethod === "razorpay" ? `pay_sim_${Date.now()}` : undefined,
       };
 
-      const result = await createOrder(orderPayload);
+      const result = await createOrder(orderPayload, token || "");
       clearCart();
-      const orderId = result.id || Math.floor(Math.random() * 9000) + 1000;
+      const orderId = result.id;
       router.push(`/orders/${orderId}`);
-    } catch (err) {
-      alert("Order could not be processed. Please try again.");
+    } catch (err: any) {
+      alert(err.message || "Order could not be processed. Please try again.");
       setIsSubmitting(false);
     }
   };

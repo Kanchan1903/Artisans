@@ -15,6 +15,7 @@ export interface AuthUser {
   user_id: number;
   name: string;
   phone: string;
+  email?: string | null;
   role: UserRole;
   language: string;
   artisan_id?: number | null;
@@ -154,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user_id: data.user_id,
       name: data.name || identifier,
       phone: data.phone || identifier,
+      email: data.email || null,
       role: data.role,
       language: data.language,
       artisan_id: data.artisan_id,
@@ -182,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user_id: data.user_id,
         name: data.name || name,
         phone: data.phone || phone,
+        email: data.email || email || null,
         role: data.role,
         language: data.language,
         artisan_id: null,

@@ -19,8 +19,6 @@ import {
   fetchProducts,
   ArtisanPublic,
   Product,
-  SAMPLE_ARTISANS,
-  SAMPLE_PRODUCTS,
 } from "@/lib/api";
 import { useCart } from "@/lib/cart-context";
 
@@ -40,16 +38,16 @@ export default function ArtisanProfilePage({ params }: { params: { id: string } 
       try {
         const [artisanData, productsData] = await Promise.all([
           fetchArtisanById(artisanId),
-          fetchProducts(),
+          fetchProducts({ size: 100 }),
         ]);
-        setArtisan(artisanData || SAMPLE_ARTISANS.find((a) => a.id === artisanId) || SAMPLE_ARTISANS[0]);
-        const artProds = (productsData.items.length > 0 ? productsData.items : SAMPLE_PRODUCTS).filter(
+        setArtisan(artisanData);
+        const artProds = productsData.items.filter(
           (p) => p.artisan_id === artisanId || p.artisan?.id === artisanId
         );
-        setProducts(artProds.length > 0 ? artProds : SAMPLE_PRODUCTS.slice(0, 2));
+        setProducts(artProds);
       } catch (err) {
-        setArtisan(SAMPLE_ARTISANS[0]);
-        setProducts(SAMPLE_PRODUCTS);
+        setArtisan(null);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -163,7 +161,15 @@ export default function ArtisanProfilePage({ params }: { params: { id: string } 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-stone-200/80 max-w-md mx-auto">
+              <h4 className="font-serif text-lg font-bold text-stone-900 mb-1">No Crafts Published Yet</h4>
+              <p className="text-stone-500 text-xs">
+                This artisan has not published any items yet. Products published via the mobile app will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {products.map((p) => {
               const primaryImg = p.images?.[0]?.url || "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800";
               return (
@@ -237,7 +243,8 @@ export default function ArtisanProfilePage({ params }: { params: { id: string } 
                 </Link>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

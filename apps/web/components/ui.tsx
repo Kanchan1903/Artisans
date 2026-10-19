@@ -204,7 +204,7 @@ export function ToastContainer() {
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
 export function ProductCard({ product }: { product: Product }) {
-  const { addItem } = useCart();
+  const { addToCart } = useCart();
   const [adding, setAdding] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
 
@@ -224,13 +224,7 @@ export function ProductCard({ product }: { product: Product }) {
     e.stopPropagation();
     if (!inStock || adding) return;
     setAdding(true);
-    addItem({
-      id: product.id,
-      title: product.title_en,
-      price: product.price,
-      image: primaryImage,
-      stock: product.stock,
-    });
+    addToCart(product, 1);
     toast.success(`"${product.title_en.slice(0, 30)}…" added to cart`);
     setTimeout(() => setAdding(false), 1000);
   };
@@ -327,16 +321,4 @@ export function StarRating({ rating, max = 5, size = "sm" }: { rating: number; m
       ))}
     </div>
   );
-}
-
-// ─── Cart Context interface alignment ─────────────────────────────────────────
-// This re-exports the addItem signature expected by ProductCard
-declare module "@/lib/cart-context" {
-  interface CartItem {
-    id: number;
-    title: string;
-    price: number;
-    image: string;
-    stock: number;
-  }
 }
