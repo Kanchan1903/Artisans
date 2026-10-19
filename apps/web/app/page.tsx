@@ -31,13 +31,13 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
 
-// Curated authentic craft photography for categories
+// Curated authentic craft photography for categories (stored locally for instant load & zero breakage)
 const CATEGORY_IMAGES: Record<string, string> = {
-  pottery: "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800&auto=format&fit=crop&q=80",
-  handloom: "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&auto=format&fit=crop&q=80",
-  jewelry: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=800&auto=format&fit=crop&q=80",
-  "folk-art": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800&auto=format&fit=crop&q=80",
-  woodcraft: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=80",
+  handloom: "/categories/handloom.jpg",
+  jewelry: "/categories/jewelry.jpg",
+  pottery: "/categories/pottery.jpg",
+  "folk-art": "/categories/folk-art.jpg",
+  woodcraft: "/categories/woodcraft.jpg",
 };
 
 export default function HomePage() {
