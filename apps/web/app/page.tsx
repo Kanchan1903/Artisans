@@ -83,27 +83,19 @@ export default function HomePage() {
                   <ArrowRight className="w-4 h-4" />
                 </Link>
 
-                {isLoggedIn && isArtisan ? (
-                  <Link
-                    href="/artisan/dashboard"
-                    className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white hover:bg-[#FAF7F2] border border-[#E5DDD0] text-[#2C3E6B] font-bold text-base transition"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    <span>Artisan Dashboard</span>
-                  </Link>
-                ) : isLoggedIn ? (
+                {isLoggedIn ? (
                   <Link
                     href="/account"
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white hover:bg-[#FAF7F2] border border-[#E5DDD0] text-[#2C3E6B] font-bold text-base transition"
                   >
-                    <span>My Orders</span>
+                    <span>My Account</span>
                   </Link>
                 ) : (
                   <Link
-                    href="/products?state=Maharashtra"
+                    href="/login"
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white hover:bg-[#FAF7F2] border border-[#E5DDD0] text-[#2C3E6B] font-bold text-base transition"
                   >
-                    <span>Warli &amp; Tribal Folk Art</span>
+                    <span>Sign In</span>
                   </Link>
                 )}
               </div>
@@ -247,7 +239,20 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {products.length === 0 ? (
+          <div className="bg-white rounded-3xl p-12 text-center border border-[#E5DDD0] max-w-lg mx-auto">
+            <div className="w-16 h-16 rounded-2xl bg-[#FAF7F2] flex items-center justify-center text-[#C85A32] mx-auto mb-4">
+              <Sparkles className="w-8 h-8" />
+            </div>
+            <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">
+              No products published yet
+            </h3>
+            <p className="text-stone-500 text-xs leading-relaxed">
+              Artisans will list their authentic handcrafted creations directly from the KalaSathi mobile app. Check back soon!
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {products.map((prod) => {
             const primaryImg = prod.images?.[0]?.url || "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800";
             return (
@@ -305,6 +310,7 @@ export default function HomePage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* ─── Fair Trade Impact Assurance ───────────────────────────────────── */}
