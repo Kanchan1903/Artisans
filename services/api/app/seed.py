@@ -348,14 +348,13 @@ async def seed():
 
     import app.database as db_mod
     async with db_mod.AsyncSessionLocal() as session:
-        # Check if already seeded
+        # Idempotency guard — if admin already exists, skip entirely.
+        # Products are NEVER seeded; they must come from real artisans via the mobile app.
         res = await session.execute(select(User).where(User.phone == "+919999999999"))
         if res.scalar_one_or_none():
-            logger.info("Database is already seeded. Resetting existing demo data...")
-            # Delete in reverse foreign key order for clean re-seed
-            for model in [Notification, Earning, Inquiry, Review, OrderItem, Order, ProductTranslation, ProductImage, Product, Category, ArtisanProfile, User]:
-                await session.execute(delete(model))
-            await session.commit()
+            logger.info("Database already seeded (admin user found). Skipping to preserve real data.")
+            logger.info("NOTE: Products are never seeded. Add them via the KalaSathi artisan mobile app.")
+            return
 
         # 1. Create Admin User
         admin_user = User(
@@ -433,173 +432,19 @@ async def seed():
             await session.flush()
             created_buyers.append(buyer)
 
-        # 5. Create 20 Products with 12-Language Translations & Images
-        created_products = []
-        for p_data in PRODUCTS_DATA:
-            artisan = created_artisans[p_data["artisan_idx"]]
-            cat_id = category_map[p_data["cat_slug"]]
-
-            product = Product(
-                artisan_id=artisan.id,
-                category_id=cat_id,
-                title_en=p_data["title_en"],
-                description_en=p_data["desc_en"],
-                title_hi=p_data["title_hi"],
-                description_hi=p_data["desc_hi"],
-                material=p_data["material"],
-                technique=p_data["technique"],
-                care_instructions=p_data["care"],
-                seo_keywords=["handicraft", p_data["cat_slug"], artisan.craft_type, "fair-trade", "bharat"],
-                price=p_data["price"],
-                stock=p_data["stock"],
-                status=ProductStatus.published,
-                voice_transcript=f"I crafted this with {p_data['material']} using our lineage {p_data['technique']}.",
-                ai_generated=True,
-                published_at=datetime.now(timezone.utc),
-            )
-            session.add(product)
-            await session.flush()
-            created_products.append(product)
-
-            # Add Primary Image
-            img = ProductImage(
-                product_id=product.id,
-                url=p_data["image"],
-                is_primary=True,
-                order_index=0,
-            )
-            session.add(img)
-
-            # Add all 12 language translations
-            for lang in LANGUAGES:
-                prefix = LANG_TITLE_PREFIX.get(lang, "")
-                if lang == "en":
-                    trans_title = p_data["title_en"]
-                    trans_desc = p_data["desc_en"]
-                elif lang == "hi":
-                    trans_title = p_data["title_hi"]
-                    trans_desc = p_data["desc_hi"]
-                elif lang == "mr":
-                    trans_title = f"{prefix}{p_data['title_hi']}"
-                    trans_desc = f"{p_data['desc_hi']} ही कला पारंपारिक कारागिरांनी हाताने साकारली आहे."
-                else:
-                    trans_title = f"{prefix}{p_data['title_en']}"
-                    trans_desc = f"{p_data['desc_en']} Authenticated Indian handicraft made by master rural artisans."
-
-                translation = ProductTranslation(
-                    product_id=product.id,
-                    language=lang,
-                    title=trans_title,
-                    description=trans_desc,
-                )
-                session.add(translation)
-
-        # 6. Create Sample Orders
-        sample_orders_data = [
-            {
-                "buyer": created_buyers[0],  # Pooja Kulkarni
-                "status": OrderStatus.accepted,
-                "address": {"name": "Pooja Kulkarni", "phone": "+91 98200 00001", "line1": "Flat 402, Lotus Towers, Baner", "city": "Pune", "state": "Maharashtra", "pincode": "411045"},
-                "payment_method": PaymentMethod.razorpay,
-                "items": [(created_products[0], 1), (created_products[3], 1)],  # Warli Canvas + Kulhad Set
-            },
-            {
-                "buyer": created_buyers[1],  # Rajesh Varma
-                "status": OrderStatus.packed,
-                "address": {"name": "Rajesh Varma", "phone": "+91 98200 00002", "line1": "12/4 Indiranagar 100ft Road", "city": "Bengaluru", "state": "Karnataka", "pincode": "560038"},
-                "payment_method": PaymentMethod.razorpay,
-                "items": [(created_products[7], 1)],  # Madhubani Tree of Life
-            },
-            {
-                "buyer": created_buyers[2],  # Ananya Deshpande
-                "status": OrderStatus.shipped,
-                "address": {"name": "Ananya Deshpande", "phone": "+91 98200 00003", "line1": "B-301 Sea Breeze Apt, Bandra West", "city": "Mumbai", "state": "Maharashtra", "pincode": "400050"},
-                "payment_method": PaymentMethod.cod,
-                "items": [(created_products[14], 1)],  # Channapatna Stacking Toy
-            },
-        ]
-
-        for o_info in sample_orders_data:
-            order_total = sum(p.price * qty for p, qty in o_info["items"])
-            order = Order(
-                buyer_id=o_info["buyer"].id,
-                status=o_info["status"],
-                total=order_total,
-                shipping_address=o_info["address"],
-                payment_method=o_info["payment_method"],
-                payment_id="pay_simulated_test_123" if o_info["payment_method"] == PaymentMethod.razorpay else None,
-            )
-            session.add(order)
-            await session.flush()
-
-            for p, qty in o_info["items"]:
-                item = OrderItem(
-                    order_id=order.id,
-                    product_id=p.id,
-                    artisan_id=p.artisan_id,
-                    quantity=qty,
-                    unit_price=p.price,
-                )
-                session.add(item)
-
-                # Create Earning record for the artisan
-                earning = Earning(
-                    artisan_id=p.artisan_id,
-                    order_item_id=item.id,
-                    amount=round(p.price * qty * 0.92, 2),  # 92% to artisan
-                    status=EarningStatus.settled,
-                    settled_at=datetime.now(timezone.utc),
-                )
-                session.add(earning)
-
-                # Send Notification to Artisan
-                artisan_user_res = await session.execute(
-                    select(User).join(ArtisanProfile, ArtisanProfile.user_id == User.id).where(ArtisanProfile.id == p.artisan_id)
-                )
-                artisan_user = artisan_user_res.scalar_one_or_none()
-                if artisan_user:
-                    notif = Notification(
-                        user_id=artisan_user.id,
-                        type="new_order",
-                        title="New Order Received! / नवीन ऑर्डर मिळाली!",
-                        body=f"Buyer placed order for '{p.title_en}' (₹{p.price:.0f}). Please accept in the app.",
-                        data={"order_id": order.id, "product_id": p.id},
-                    )
-                    session.add(notif)
-
-        # 7. Add Verified Reviews
-        reviews_data = [
-            (created_products[0].id, created_buyers[0].id, 5.0, "Breathtaking Warli canvas! Authentic rice flour paste and earthy texture."),
-            (created_products[7].id, created_buyers[1].id, 5.0, "Superb Madhubani Kachni detailing. Sturdy packaging and came with artisan bio card."),
-            (created_products[14].id, created_buyers[2].id, 5.0, "Safe wooden toy for my 2-year old. Beautiful vegetable lacquer colors without any harsh chemical smell."),
-        ]
-        for pid, bid, rating, comment in reviews_data:
-            rev = Review(product_id=pid, buyer_id=bid, rating=rating, comment=comment)
-            session.add(rev)
-
-        # 8. Add B2B Inquiry
-        inquiry = Inquiry(
-            product_id=created_products[0].id,
-            artisan_id=created_artisans[0].id,
-            buyer_name="Ananya Roy / Craftroots Exports",
-            buyer_email="ananya.roy@craftroots.com",
-            message_en="Looking to order 25 customized Warli canvas frames for corporate Diwali gifting.",
-            message_translated="कॉर्पोरेट दिवाळी भेटवस्तूसाठी २५ सानुकूलित वारली कॅनव्हास फ्रेम्स हव्या आहेत.",
-            is_b2b=True,
-            quantity_needed=25,
-            is_read=False,
-        )
-        session.add(inquiry)
+        # Steps 5-8 (Products, Orders, Reviews, Inquiries) are intentionally skipped.
+        # Products must be created by artisans via the KalaSathi mobile app.
+        # This ensures the website only shows real artisan-published products.
 
         await session.commit()
-        logger.info("Successfully seeded KalaSathi database:")
-        logger.info(f"- 1 Admin (+919999999999)")
-        logger.info(f"- {len(created_artisans)} Artisans (Warli, Madhubani, Channapatna)")
-        logger.info(f"- {len(created_buyers)} Buyers")
+        logger.info("Successfully seeded KalaSathi database (infrastructure only):")
+        logger.info("- 1 Admin (+919999999999)")
+        logger.info(f"- {len(created_artisans)} Demo Artisans (can log in via mobile app)")
+        logger.info(f"- {len(created_buyers)} Demo Buyers")
         logger.info(f"- {len(category_map)} Categories")
-        logger.info(f"- {len(created_products)} Products with full 12-language translations")
-        logger.info(f"- {len(sample_orders_data)} Orders and live notifications")
+        logger.info("- 0 Products (add real products via the artisan mobile app)")
 
 
 if __name__ == "__main__":
     asyncio.run(seed())
+
