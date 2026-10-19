@@ -14,7 +14,6 @@ import {
   Heart,
   Menu,
   X,
-  Gift,
   Sparkles,
   Layers,
   ArrowRight,
@@ -341,19 +340,10 @@ export default function Navbar() {
             {/* New Arrivals Link */}
             <Link
               href="/products?sort=newest"
-              className="hover:text-[#C85A32] transition flex items-center gap-1 py-1"
+              className="hover:text-[#C85A32] transition flex items-center gap-1.5 py-1"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#E09F3E]" />
               <span>{t("newArrivals", "New Arrivals")}</span>
-            </Link>
-
-            {/* Gifts Link */}
-            <Link
-              href="/products?search=gift"
-              className="hover:text-[#C85A32] transition flex items-center gap-1 py-1"
-            >
-              <Gift className="w-3.5 h-3.5 text-[#C85A32]" />
-              <span>{t("gifts", "Gifts")}</span>
             </Link>
           </div>
 
@@ -400,18 +390,6 @@ export default function Navbar() {
               <span className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
                 {t("newArrivals", "New Arrivals")}
-              </span>
-              <ArrowRight className="w-4 h-4 text-stone-400" />
-            </Link>
-
-            <Link
-              href="/products?search=gift"
-              onClick={() => setMobileMenuOpen(false)}
-              className="py-2 px-3 rounded-xl hover:bg-[#FAF7F2] transition flex items-center justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <Gift className="w-4 h-4 text-[#C85A32]" />
-                {t("gifts", "Gifts")}
               </span>
               <ArrowRight className="w-4 h-4 text-stone-400" />
             </Link>
