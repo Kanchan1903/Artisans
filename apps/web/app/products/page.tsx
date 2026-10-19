@@ -20,6 +20,7 @@ function ProductsContent() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") || searchParams.get("category_id") || "";
   const initialSearch = searchParams.get("q") || searchParams.get("search") || "";
+  const initialSort = searchParams.get("sort") || "newest";
 
   const [products, setProducts] = useState<Product[]>([]);
   const [totalFromApi, setTotalFromApi] = useState<number>(0);
@@ -32,7 +33,7 @@ function ProductsContent() {
   const [selectedState, setSelectedState] = useState<string>("all");
   const [priceRange, setPriceRange] = useState<number>(10000);
   const [searchQuery, setSearchQuery] = useState<string>(initialSearch);
-  const [sortBy, setSortBy] = useState<string>("newest");
+  const [sortBy, setSortBy] = useState<string>(initialSort);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -97,6 +98,15 @@ function ProductsContent() {
     return () => clearTimeout(t);
   }, [searchQuery]);
   useEffect(() => { loadData(true); }, []); // initial load
+
+  useEffect(() => {
+    const cat = searchParams.get("category") || searchParams.get("category_id") || "";
+    const q = searchParams.get("q") || searchParams.get("search") || "";
+    const s = searchParams.get("sort") || "newest";
+    setSelectedCategory(cat);
+    setSearchQuery(q);
+    setSortBy(s);
+  }, [searchParams]);
 
   // Client-side sort only (server does filter)
   const displayedProducts = useMemo(() => {

@@ -45,6 +45,16 @@ export default function AccountPage() {
     }
   }, [isLoading, isLoggedIn, router]);
 
+  // Set active tab from query string (e.g. ?tab=wishlist)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const tabParam = new URLSearchParams(window.location.search).get("tab");
+      if (tabParam === "wishlist" || tabParam === "addresses" || tabParam === "orders") {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
+
   // Load real orders from backend
   useEffect(() => {
     if (!token) return;
