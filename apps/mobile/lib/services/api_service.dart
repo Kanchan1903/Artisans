@@ -3,10 +3,15 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const Duration timeoutDuration = Duration(milliseconds: 1000);
+  static const Duration timeoutDuration = Duration(seconds: 10);
 
-  // Use 10.0.2.2 for Android emulator or localhost for web/desktop/iOS simulator
+  static const String _customApiUrl = String.fromEnvironment('API_URL');
+  static const String _customAiUrl = String.fromEnvironment('AI_URL');
+
+  // Use custom API_URL if passed (e.g. --dart-define=API_URL=http://192.168.1.9:8000/api/v1)
+  // Otherwise 10.0.2.2 for Android emulator or localhost for web/desktop
   static String get apiBaseUrl {
+    if (_customApiUrl.isNotEmpty) return _customApiUrl;
     if (kIsWeb) return 'http://localhost:8000/api/v1';
     return defaultTargetPlatform == TargetPlatform.android
         ? 'http://10.0.2.2:8000/api/v1'
@@ -14,6 +19,7 @@ class ApiService {
   }
 
   static String get aiBaseUrl {
+    if (_customAiUrl.isNotEmpty) return _customAiUrl;
     if (kIsWeb) return 'http://localhost:8001/ai';
     return defaultTargetPlatform == TargetPlatform.android
         ? 'http://10.0.2.2:8001/ai'
