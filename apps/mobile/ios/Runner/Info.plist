@@ -24,6 +24,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo of your handmade product.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Listen while you describe your handmade product.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Convert your spoken product description into text for your review.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a product photo from your photo library.</string>
 	<key>LSRequiresIPhoneOS</key>

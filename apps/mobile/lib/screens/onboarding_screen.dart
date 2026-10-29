@@ -7,7 +7,10 @@ import 'package:kalasathi_mobile/screens/language_picker_screen.dart';
 import 'package:kalasathi_mobile/widgets/voice_help_fab.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.initialPhone, this.popOnSuccess = false});
+
+  final String? initialPhone;
+  final bool popOnSuccess;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -19,7 +22,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _obscurePassword = true;
 
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _identifierController = TextEditingController(text: "+919800000001");
+  late final TextEditingController _identifierController =
+      TextEditingController(text: widget.initialPhone ?? "+919800000001");
   final TextEditingController _passwordController = TextEditingController(text: "kalasathi123");
 
   String? _lastLanguage;
@@ -86,14 +90,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _isLoading = false;
     });
 
-    if (success && mounted) {
+    if (success && mounted && widget.popOnSuccess) {
+      Navigator.pop(context);
+    } else if (success && mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else if (mounted) {
       setState(() {
-        _errorMessage = "Authentication failed. Please check details or use Demo Login.";
+        _errorMessage = auth.lastAuthError ??
+            "Authentication failed. Please check details or use Demo Login.";
       });
     }
   }

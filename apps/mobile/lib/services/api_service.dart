@@ -46,6 +46,16 @@ class ApiService {
     return Exception(error.toString());
   }
 
+  static String _responseError(http.Response response, String fallback) {
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map<String, dynamic> && body['detail'] != null) {
+        return body['detail'].toString();
+      }
+    } catch (_) {}
+    return '$fallback (${response.statusCode})';
+  }
+
   // ─── Authentication ─────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> sendOtp(String phone) async {
@@ -60,9 +70,13 @@ class ApiService {
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
-    } catch (_) {}
-    // Offline / Mock fallback
-    return {'message': 'OTP sent', 'mock_code': '123456'};
+      throw Exception(_responseError(res, 'Could not send verification code'));
+    } catch (error) {
+      if (error is Exception && error.toString().startsWith('Exception:')) {
+        rethrow;
+      }
+      throw _serverConnectionError(error);
+    }
   }
 
   static Future<Map<String, dynamic>> verifyOtp({
@@ -88,17 +102,13 @@ class ApiService {
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
-    } catch (_) {}
-    // Offline / Mock fallback
-    return {
-      'access_token': 'mock_token_artisan_${phone.replaceAll('+', '')}',
-      'user_id': 1,
-      'role': 'artisan',
-      'name': name ?? 'Artisan User',
-      'language': language,
-      'is_artisan': true,
-      'artisan_id': 1,
-    };
+      throw Exception(_responseError(res, 'Could not verify sign-in'));
+    } catch (error) {
+      if (error is Exception && error.toString().startsWith('Exception:')) {
+        rethrow;
+      }
+      throw _serverConnectionError(error);
+    }
   }
 
   static Future<Map<String, dynamic>?> getMyProfile(String token) async {
@@ -144,15 +154,18 @@ class ApiService {
 
     late final http.Response response;
     try {
-      final streamed = await request.send().timeout(const Duration(seconds: 60));
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 60));
       response = await http.Response.fromStream(streamed);
     } catch (error) {
       throw _serverConnectionError(error);
     }
     if (response.statusCode != 201) {
-      final body = jsonDecode(response.body);
-      throw Exception(
-          body['detail'] ?? 'Photo upload failed (${response.statusCode})');
+      final message = _responseError(response, 'Photo upload failed');
+      if (response.statusCode == 401) {
+        throw ApiAuthenticationException(message);
+      }
+      throw Exception(message);
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -178,6 +191,7 @@ class ApiService {
     required String productName,
     required String productCategory,
     int? productId,
+    String? uploadId,
   }) async {
     final request =
         http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/image-jobs'));
@@ -185,6 +199,9 @@ class ApiService {
     request.fields['product_name'] = productName;
     request.fields['product_category'] = productCategory;
     request.fields['generate_variations'] = 'true';
+    if (uploadId != null && uploadId.isNotEmpty) {
+      request.fields['upload_id'] = uploadId;
+    }
     if (productId != null) request.fields['product_id'] = productId.toString();
     request.files.add(http.MultipartFile.fromBytes(
       'file',
@@ -194,7 +211,8 @@ class ApiService {
     ));
     late final http.Response response;
     try {
-      final streamed = await request.send().timeout(const Duration(seconds: 45));
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 45));
       response = await http.Response.fromStream(streamed);
     } catch (error) {
       throw _serverConnectionError(error);
@@ -626,53 +644,34 @@ class ApiService {
         .toList();
   }
 
-  static Future<String> transcribeVoice({
-    List<int>? audioBytes,
-    String language = 'hi',
+  static Future<Map<String, dynamic>> translateProductDescription({
+    required String token,
+    required String transcript,
+    required String sourceLanguage,
+    int? productId,
   }) async {
-    try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/ai/transcribe'));
-      req.fields['language'] = language;
-      if (audioBytes != null) {
-        req.files.add(http.MultipartFile.fromBytes('file', audioBytes,
-            filename: 'voice.wav'));
-      }
-      final streamed = await req.send().timeout(aiTimeoutDuration);
-      final res = await http.Response.fromStream(streamed);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body)['transcript'] as String;
-      }
-    } catch (_) {}
-
-    // Resilient offline native transcripts across 12 languages
-    final sampleVoiceMap = {
-      'mr':
-          'हा हाताने बनवलेला वारली कलेचा कॅनव्हास आहे. यात तांदळाचे पीठ आणि डिंकाचा नैसर्गिक रंग वापरला आहे. ६ तास लागले आणि खर्च १५० रुपये आहे.',
-      'hi':
-          'यह हस्तनिर्मित मिट्टी का घड़ा है। इसे बनाने में गंगा किनारे की काली मिट्टी का उपयोग किया गया है। चार घंटे का समय लगा और अस्सी रुपये खर्च हुए।',
-      'en':
-          'This is a handmade terracotta earthen vase. Made using riverbed clay and fired in a traditional kiln. It took 5 hours and material cost was 100 rupees.',
-      'bn':
-          'এটি একটি হস্তনির্মিত মাটির তৈরি ফুলদানি। এতে প্রাকৃতিক নদীর পলিমাটি ব্যবহার করা হয়েছে। এটি তৈরি করতে ৫ ঘণ্টা সময় এবং ১০০ টাকা ব্যয় হয়েছে।',
-      'ta':
-          'இது கையால் செய்யப்பட்ட மண் குவளை. பாரம்பரிய களிமண் கொண்டு 4 மணி நேரத்தில் செய்யப்பட்டது. மூலப்பொருள் செலவு ரூபாய் 90.',
-      'te':
-          'ఇది చేతితో తయారు చేసిన మట్టి కూజా. సహజసిద్ధమైన నల్లమట్టితో 5 గంటల్లో రూపొందించబడింది. ఖర్చు 100 రూపాయలు.',
-      'kn':
-          'ಇದು ಕೈಯಿಂದ ತಯಾರಿಸಿದ ಚನ್ನಪಟ್ಟಣ ಮರದ ಆಟಿಕೆ. ನೈಸರ್ಗಿಕ ತರಕಾರಿ ಬಣ್ಣಗಳನ್ನು ಬಳಸಿ 4 ಗಂಟೆಗಳಲ್ಲಿ ತಯಾರಿಸಲಾಗಿದೆ. ವೆಚ್ಚ 120 ರೂಪಾಯಿ.',
-      'ml':
-          'ഇത് കൈകൊണ്ട് നിർമ്മിച്ച കളിമൺ പാത്രമാണ്. പ്രകൃതിദത്ത കളിമണ്ണ് ഉപയോഗിച്ച് 4 മണിക്കൂർ കൊണ്ട് നിർമ്മിച്ചത്. ചെലവ് 90 രൂപ.',
-      'gu':
-          'આ હાથથી બનાવેલો માટીનો કૂંજો છે. પરંપરાગત માટીકામથી 5 કલાકમાં તૈયાર થયો છે. ખર્ચ આશरे 110 રૂપિયા થયો છે.',
-      'pa':
-          'ਇਹ ਹੱਥੀਂ ਤਿਆਰ ਕੀਤਾ ਗਿਆ ਮਿੱਟੀ ਦਾ ਭਾਂਡਾ ਹੈ। ਇਸ ਨੂੰ ਬਣਾਉਣ ਵਿੱਚ 4 ਘੰਟੇ ਲੱਗੇ ਅਤੇ ਸਮੱਗਰੀ ਦਾ ਖਰਚਾ 90 ਰੁਪਏ ਹੈ।',
-      'or':
-          'ଏହା ଏକ ହସ୍ତନିର୍ମିତ ପିତ୍ତଳ ଢୋକ୍ରା ମୂର୍ତ୍ତି। ଏହା ତିଆରି କରିବାକୁ ୬ ଘଣ୍ଟା ଲାଗିଛି ଏବଂ ଖର୍ଚ୍ଚ ୧୫୦ ଟଙ୍କା ହୋଇଛି।',
-      'as':
-          'এইটো এটা হাতেৰে তৈয়াৰী বাঁহ আৰু বেতৰ বাচন। তৈয়াৰ কৰিবলৈ ৫ ঘণ্টা সময় লাগিল আৰু খৰচ ১০০ টকা হ’ল।',
-    };
-    return sampleVoiceMap[language] ?? sampleVoiceMap['hi']!;
+    final response = await http
+        .post(
+          Uri.parse('$apiBaseUrl/products/translate-description'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'product_id': productId,
+            'source_language': sourceLanguage,
+            'transcript': transcript,
+            'target_language': 'en',
+          }),
+        )
+        .timeout(const Duration(seconds: 35));
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200 || data['success'] != true) {
+      throw Exception(data['error'] ??
+          data['detail'] ??
+          'Translation is unavailable. Your transcript has been kept.');
+    }
+    return data;
   }
 
   static Future<String?> synthesizeVoice({
@@ -909,4 +908,13 @@ class ApiService {
       'warning': warn,
     };
   }
+}
+
+class ApiAuthenticationException implements Exception {
+  const ApiAuthenticationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

@@ -1,7 +1,7 @@
 """Image processing job records produced by the CrewAI workflow."""
 import enum
 from datetime import datetime
-from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, JSON, func
+from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, JSON, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -19,6 +19,9 @@ class ImageProcessingJob(Base):
     """Persists CrewAI image-processing inputs, status, variants, and artisan selection."""
 
     __tablename__ = "image_processing_jobs"
+    __table_args__ = (
+        UniqueConstraint("artisan_id", "idempotency_key", name="uq_image_job_artisan_idempotency"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     artisan_id: Mapped[int] = mapped_column(Integer, ForeignKey("artisan_profiles.id"), nullable=False, index=True)
@@ -28,6 +31,7 @@ class ImageProcessingJob(Base):
 
     product_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     product_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     status: Mapped[str] = mapped_column(String(40), default=ImageJobStatus.queued.value, index=True)
     segmentation_status: Mapped[str | None] = mapped_column(String(40), nullable=True)

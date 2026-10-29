@@ -58,6 +58,7 @@ class Product(Base):
 
     # AI metadata
     voice_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    voice_language: Mapped[str | None] = mapped_column(String(5), nullable=True)
     ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
 
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

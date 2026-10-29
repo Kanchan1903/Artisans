@@ -8,6 +8,7 @@ class AuthProvider extends ChangeNotifier {
   String? _authToken;
   Map<String, dynamic>? _artisanProfile;
   bool _isLoading = false;
+  String? _lastAuthError;
 
   String get selectedLanguage => _selectedLanguage;
   String? get authToken => _authToken;
@@ -15,9 +16,10 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? get artisanProfile => _artisanProfile;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _authToken != null;
+  String? get lastAuthError => _lastAuthError;
 
   String getArtisanName(AppLocalizations l10n) {
-    final name = _artisanProfile?['name']?.toString()?.trim() ?? '';
+    final name = _artisanProfile?['name']?.toString().trim() ?? '';
     if (name.isEmpty ||
         name.contains('?') ||
         name == 'सुनीता बाई सोनवणे' ||
@@ -54,16 +56,18 @@ class AuthProvider extends ChangeNotifier {
 
   Future<String?> sendOtp(String phone) async {
     _isLoading = true;
+    _lastAuthError = null;
     notifyListeners();
     try {
       final res = await ApiService.sendOtp(phone);
       _isLoading = false;
       notifyListeners();
       return res['mock_code'] as String?;
-    } catch (_) {
+    } catch (error) {
+      _lastAuthError = error.toString().replaceFirst('Exception: ', '');
       _isLoading = false;
       notifyListeners();
-      return '123456';
+      return null;
     }
   }
 
@@ -73,6 +77,7 @@ class AuthProvider extends ChangeNotifier {
     String? name,
   }) async {
     _isLoading = true;
+    _lastAuthError = null;
     notifyListeners();
     try {
       final res = await ApiService.verifyOtp(
@@ -93,7 +98,8 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (error) {
+      _lastAuthError = error.toString().replaceFirst('Exception: ', '');
       _isLoading = false;
       notifyListeners();
       return false;

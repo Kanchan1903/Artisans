@@ -315,10 +315,22 @@ async def create_and_kickoff_job(
     product_name: str | None,
     product_category: str | None,
     product_id: int | None,
+    idempotency_key: str | None = None,
     generate_variations: bool = True,
     client: CrewAIClient | None = None,
 ) -> ImageProcessingJob:
     client = client or crewai_client
+    if idempotency_key:
+        existing_result = await db.execute(
+            select(ImageProcessingJob).where(
+                ImageProcessingJob.artisan_id == artisan_id,
+                ImageProcessingJob.idempotency_key == idempotency_key,
+            )
+        )
+        existing_job = existing_result.scalar_one_or_none()
+        if existing_job is not None:
+            return existing_job
+
     job_id = str(uuid.uuid4())
     photo_url = await storage.upload_file(file_bytes, filename=filename, content_type=content_type)
     now = datetime.now(timezone.utc)
@@ -328,6 +340,7 @@ async def create_and_kickoff_job(
         product_id=product_id,
         product_name=product_name,
         product_category=product_category,
+        idempotency_key=idempotency_key,
         status=ImageJobStatus.queued.value,
         segmentation_status="pending",
         original_photo_url=photo_url,
@@ -534,8 +547,9 @@ async def apply_variant_selection(job: ImageProcessingJob, variant_ids: list[str
     # Persist selection to MongoDB
     try:
         await update_job_selection_mongo(job.id, job.artisan_id, unique)
-    except Exception:
-        pass
+    except Exception as exc:
+        if settings.MONGODB_REQUIRED:
+            raise RuntimeError("Image selection could not be saved") from exc
 
 
 def selected_variant_records(job: ImageProcessingJob) -> list[dict[str, Any]]:

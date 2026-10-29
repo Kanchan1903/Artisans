@@ -500,6 +500,40 @@ async def test_artisan_ownership_and_authorization(client: AsyncClient, monkeypa
     assert res_unauth.status_code in (401, 403)
 
 
+@pytest.mark.asyncio
+async def test_duplicate_image_job_upload_id_reuses_job_and_kickoff(client: AsyncClient, monkeypatch):
+    token = await get_artisan_token(client, "+919900000093", "Idempotent Image Artisan")
+    headers = {"Authorization": f"Bearer {token}"}
+    kickoff_calls = 0
+
+    async def mock_kickoff(self, inputs):
+        nonlocal kickoff_calls
+        kickoff_calls += 1
+        return "kickoff_idempotent_image"
+
+    async def mock_get_status(self, kickoff_id):
+        return {"status": "running"}
+
+    monkeypatch.setattr(CrewAIClient, "is_configured", lambda self: True)
+    monkeypatch.setattr(CrewAIClient, "kickoff", mock_kickoff)
+    monkeypatch.setattr(CrewAIClient, "get_status", mock_get_status)
+    first = await client.post(
+        "/api/image-jobs",
+        headers=headers,
+        files={"file": ("craft.jpg", dummy_image_bytes(), "image/jpeg")},
+        data={"upload_id": "photo_capture_123"},
+    )
+    second = await client.post(
+        "/api/image-jobs",
+        headers=headers,
+        files={"file": ("craft.jpg", dummy_image_bytes(), "image/jpeg")},
+        data={"upload_id": "photo_capture_123"},
+    )
+    assert first.status_code == second.status_code == 201
+    assert first.json()["job_id"] == second.json()["job_id"]
+    assert kickoff_calls == 1
+
+
 # ─── Test 10: Selection of Exactly Three Variants ─────────────────────────────
 
 @pytest.mark.asyncio

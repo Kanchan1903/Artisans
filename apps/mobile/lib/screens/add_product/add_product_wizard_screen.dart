@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:kalasathi_mobile/l10n/app_localizations.dart';
 import 'package:kalasathi_mobile/providers/auth_provider.dart';
 import 'package:kalasathi_mobile/providers/product_wizard_provider.dart';
+import 'package:kalasathi_mobile/screens/onboarding_screen.dart';
 import 'package:kalasathi_mobile/services/voice_guidance_service.dart';
 import 'package:kalasathi_mobile/theme/app_theme.dart';
 import 'package:kalasathi_mobile/widgets/voice_help_fab.dart';
@@ -17,19 +18,28 @@ class AddProductWizardScreen extends StatefulWidget {
 
 class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   late final TextEditingController _customPriceCtrl;
+  late final TextEditingController _englishDescriptionCtrl;
+  final FocusNode _englishDescriptionFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _customPriceCtrl = TextEditingController();
+    _englishDescriptionCtrl = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ProductWizardProvider>(context, listen: false).resetWizard();
+      final wizard = Provider.of<ProductWizardProvider>(context, listen: false);
+      final language =
+          Provider.of<AuthProvider>(context, listen: false).selectedLanguage;
+      wizard.resetWizard();
+      wizard.loadSpeechLocales(preferredLanguage: language);
     });
   }
 
   @override
   void dispose() {
     _customPriceCtrl.dispose();
+    _englishDescriptionCtrl.dispose();
+    _englishDescriptionFocus.dispose();
     super.dispose();
   }
 
@@ -38,6 +48,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     final l10n = AppLocalizations.of(context);
     final wizard = Provider.of<ProductWizardProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
+    if (!_englishDescriptionFocus.hasFocus &&
+        _englishDescriptionCtrl.text != wizard.descriptionEn) {
+      _englishDescriptionCtrl.text = wizard.descriptionEn;
+    }
 
     final stepTitles = [
       l10n.translate('stepCamera'),
@@ -462,7 +476,29 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 Expanded(
                     child: Text(wizard.photoUploadError!,
                         style: TextStyle(color: Colors.red.shade800))),
-                if (wizard.canRetryPhotoUpload)
+                if (wizard.canRetryPhotoUpload &&
+                    wizard.photoUploadRequiresAuthentication)
+                  TextButton(
+                    onPressed: wizard.isUploadingPhoto
+                        ? null
+                        : () async {
+                            final phone =
+                                auth.artisanProfile?['phone']?.toString();
+                            await auth.logout();
+                            if (!mounted) return;
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => OnboardingScreen(
+                                  initialPhone: phone,
+                                  popOnSuccess: true,
+                                ),
+                              ),
+                            );
+                          },
+                    child: const Text('Sign in again'),
+                  )
+                else if (wizard.canRetryPhotoUpload)
                   TextButton(
                     onPressed: wizard.isUploadingPhoto
                         ? null
@@ -1305,11 +1341,37 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         const SizedBox(height: 24),
 
         // Big Accessible Mic Button (min 56dp, 110dp circle)
+        if (wizard.speechLocales.isNotEmpty)
+          DropdownButton<String>(
+            value: wizard.speechLocales.any((locale) =>
+                    locale.localeId.toLowerCase().split(RegExp('[-_]')).first ==
+                    wizard.voiceLanguage)
+                ? wizard.voiceLanguage
+                : wizard.speechLocales.first.localeId
+                    .toLowerCase()
+                    .split(RegExp('[-_]'))
+                    .first,
+            items: wizard.speechLocales
+                .map((locale) => DropdownMenuItem<String>(
+                      value: locale.localeId
+                          .toLowerCase()
+                          .split(RegExp('[-_]'))
+                          .first,
+                      child: Text('${locale.name} (${locale.localeId})'),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) wizard.setVoiceLanguage(value);
+            },
+          ),
         GestureDetector(
           onTap: () async {
-            wizard.toggleRecording();
-            if (!wizard.isRecording) {
-              await wizard.processVoiceNote(auth.selectedLanguage);
+            if (wizard.isRecording) {
+              await wizard.stopSpeechRecognition();
+              await wizard.processVoiceNote(auth.selectedLanguage,
+                  token: auth.authToken ?? '');
+            } else {
+              await wizard.startSpeechRecognition();
             }
           },
           child: Container(
@@ -1352,6 +1414,37 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
         ),
         const SizedBox(height: 20),
+
+        if (wizard.speechError != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              border: Border.all(color: Colors.red.shade200),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(wizard.speechError!,
+                      style: TextStyle(color: Colors.red.shade800)),
+                ),
+                if (wizard.voiceTranscript.trim().isNotEmpty)
+                  TextButton(
+                    onPressed: wizard.isProcessingAI
+                        ? null
+                        : () => wizard.processVoiceNote(
+                              auth.selectedLanguage,
+                              token: auth.authToken ?? '',
+                            ),
+                    child: const Text('Retry'),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
 
         if (wizard.isProcessingAI)
           Padding(
@@ -1438,6 +1531,52 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       fontSize: 15,
                       fontStyle: FontStyle.italic,
                       color: AppTheme.textCharcoal),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderWarm),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('English product description',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textCharcoal)),
+                if (wizard.descriptionNeedsReview) ...[
+                  const SizedBox(height: 6),
+                  const Text('Please review this translation carefully.',
+                      style: TextStyle(color: Colors.deepOrange)),
+                ],
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _englishDescriptionCtrl,
+                  focusNode: _englishDescriptionFocus,
+                  minLines: 3,
+                  maxLines: 6,
+                  onChanged: wizard.updateEnglishDescription,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Review and edit the English description',
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: wizard.englishDescriptionConfirmed,
+                  onChanged: (value) =>
+                      wizard.confirmEnglishDescription(value ?? false),
+                  title: const Text(
+                      'I confirm this English description is accurate.'),
+                  controlAffinity: ListTileControlAffinity.leading,
                 ),
               ],
             ),
@@ -1699,15 +1838,20 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     ),
                   ),
                   onPressed: () async {
-                    await wizard.saveAsDraft(auth.authToken ?? '');
+                    final saved =
+                        await wizard.saveAsDraft(auth.authToken ?? '');
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          auth.selectedLanguage == 'mr'
-                              ? "उत्पादनाचा मसुदा यशस्वीपणे जतन केला!"
-                              : "उत्पाद ड्राफ्ट सफलतापूर्वक सहेजा गया!",
+                          !saved
+                              ? 'Confirm the English description before saving this draft.'
+                              : auth.selectedLanguage == 'mr'
+                                  ? "उत्पादनाचा मसुदा यशस्वीपणे जतन केला!"
+                                  : "उत्पाद ड्राफ्ट सफलतापूर्वक सहेजा गया!",
                         ),
-                        backgroundColor: AppTheme.terracotta,
+                        backgroundColor:
+                            saved ? AppTheme.terracotta : Colors.red.shade700,
                         duration: const Duration(seconds: 2),
                       ),
                     );
@@ -1748,22 +1892,51 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             },
           ),
         ] else ...[
-          // Sample Voice Note Helper Button for instant test/demo
+          // Manual entry is available when device speech recognition is absent.
           OutlinedButton.icon(
-            icon: const Icon(Icons.auto_fix_high_rounded),
-            label: Text(auth.selectedLanguage == 'mr'
-                ? "नमुना आवाज वापरा"
-                : "नमूना आवाज का उपयोग करें"),
+            icon: const Icon(Icons.edit_note_rounded),
+            label: const Text('Enter description by typing'),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             ),
-            onPressed: () async {
-              await wizard.processVoiceNote(auth.selectedLanguage);
-            },
+            onPressed: () => _showManualTranscriptDialog(context, wizard, auth),
           ),
         ],
       ],
     );
+  }
+
+  void _showManualTranscriptDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter product description'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          decoration: const InputDecoration(
+              border: OutlineInputBorder(), hintText: 'Describe your product'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isEmpty) return;
+              wizard.setVoiceLanguage(auth.selectedLanguage);
+              wizard.updateVoiceTranscript(text);
+              Navigator.pop(ctx);
+              await wizard.processVoiceNote(auth.selectedLanguage,
+                  token: auth.authToken ?? '');
+            },
+            child: const Text('Translate'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   Widget _buildSpecChip({
@@ -1821,7 +1994,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               wizard.updateVoiceTranscript(controller.text);
-              await wizard.processVoiceNote(auth.selectedLanguage);
+              await wizard.processVoiceNote(auth.selectedLanguage,
+                  token: auth.authToken ?? '');
             },
             child: const Text("जतन करा व पुन्हा तपासा"),
           ),
@@ -1878,7 +2052,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               final clarification =
                   "साहित्य: ${matCtrl.text.trim()}, पद्धत: ${techCtrl.text.trim()}";
               await wizard.processVoiceNote(auth.selectedLanguage,
-                  clarification: clarification);
+                  token: auth.authToken ?? '', clarification: clarification);
             },
             child: const Text("पूर्ण करा"),
           ),

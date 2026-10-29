@@ -5,6 +5,25 @@ from app.models.product import ProductStatus
 from app.schemas.artisan import ArtisanPublicOut
 
 
+VOICE_LANGUAGES = {"en", "hi", "mr", "gu", "ta", "te", "bn", "kn", "ml", "pa", "or", "as"}
+
+
+class ProductDescriptionTranslationIn(BaseModel):
+    product_id: int | None = Field(default=None, ge=1)
+    source_language: str = Field(..., min_length=2, max_length=5)
+    transcript: str = Field(..., min_length=2, max_length=10000)
+    target_language: str = Field(default="en", min_length=2, max_length=5)
+
+
+class ProductDescriptionTranslationOut(BaseModel):
+    success: bool
+    source_language: str
+    original_transcript: str
+    english_description: str | None = None
+    requires_review: bool = True
+    error: str | None = None
+
+
 class CategoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,6 +81,7 @@ class ProductCreate(BaseModel):
     stock: int = Field(default=1, ge=0)
     status: ProductStatus = ProductStatus.published
     voice_transcript: str | None = None
+    voice_language: str | None = Field(default=None, min_length=2, max_length=5)
     ai_generated: bool = False
     images: list[ProductImageCreate] = []
     translations: list[ProductTranslationCreate] = []
@@ -77,6 +97,8 @@ class ProductUpdate(BaseModel):
     description_en: str | None = None
     title_hi: str | None = None
     description_hi: str | None = None
+    voice_transcript: str | None = None
+    voice_language: str | None = Field(default=None, min_length=2, max_length=5)
     material: str | None = None
     technique: str | None = None
     care_instructions: str | None = None
@@ -108,6 +130,7 @@ class ProductOut(BaseModel):
     stock: int
     status: ProductStatus
     voice_transcript: str | None = None
+    voice_language: str | None = None
     ai_generated: bool
     published_at: datetime | None = None
     idempotency_key: str | None = None

@@ -98,6 +98,44 @@ async def test_catalog_never_invents_missing_specs(ai_client: AsyncClient):
     assert catalog["material"] is None
     assert catalog["technique"] is None
     assert "material" in catalog["missing_fields"]
+
+
+@pytest.mark.asyncio
+async def test_product_description_translation_never_returns_a_mock(ai_client: AsyncClient):
+    from app.config import ai_settings
+
+    original_mock_mode = ai_settings.AI_MOCK_MODE
+    original_key = ai_settings.GEMINI_API_KEY
+    try:
+        ai_settings.AI_MOCK_MODE = True
+        ai_settings.GEMINI_API_KEY = ""
+        unavailable = await ai_client.post(
+            "/ai/product-description",
+            json={
+                "transcript": "हा मातीचा दिवा आहे",
+                "source_language": "mr",
+                "target_language": "en",
+            },
+        )
+        assert unavailable.status_code == 503
+        assert "not configured" in unavailable.json()["detail"]
+
+        english = await ai_client.post(
+            "/ai/product-description",
+            json={
+                "transcript": "A hand-painted clay lamp.",
+                "source_language": "en",
+                "target_language": "en",
+            },
+        )
+        assert english.status_code == 200
+        assert english.json() == {
+            "english_description": "A hand-painted clay lamp.",
+            "requires_review": False,
+        }
+    finally:
+        ai_settings.AI_MOCK_MODE = original_mock_mode
+        ai_settings.GEMINI_API_KEY = original_key
     assert "technique" in catalog["missing_fields"]
 
     # Localized clarification prompt in Marathi

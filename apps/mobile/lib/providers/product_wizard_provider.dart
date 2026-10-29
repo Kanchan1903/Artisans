@@ -3,16 +3,43 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:kalasathi_mobile/services/api_service.dart';
 import 'package:kalasathi_mobile/services/offline_storage_service.dart';
 
 class ProductWizardProvider extends ChangeNotifier {
   static const int maxProductPhotoBytes = 10 * 1024 * 1024;
+  static const Set<String> _translationLanguages = {
+    'en',
+    'hi',
+    'mr',
+    'gu',
+    'ta',
+    'te',
+    'bn',
+    'kn',
+    'ml',
+    'pa',
+    'or',
+    'as'
+  };
 
   final ImagePicker _picker = ImagePicker();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechInitialized = false;
+  bool _speechAvailable = false;
+  bool _isStartingSpeech = false;
+  final List<stt.LocaleName> _speechLocales = [];
+  String? _speechError;
+  String _voiceLanguage = 'en';
+  bool _descriptionNeedsReview = false;
+  bool _descriptionManuallyEdited = false;
+  bool _englishDescriptionConfirmed = false;
   int _currentStep = 0;
   bool _isProcessingAI = false;
   String? _imageJobId;
+  int _imageJobAttempt = 0;
   String? _imageJobStatus;
   String? _imageJobError;
   String? _imageProcessingMode;
@@ -21,6 +48,7 @@ class ProductWizardProvider extends ChangeNotifier {
   final List<Uint8List> _photos = [];
   bool _isUploadingPhoto = false;
   String? _photoUploadError;
+  bool _photoUploadRequiresAuthentication = false;
   String? _photoUploadId;
   String? _attachedPhotoUploadId;
   String? _photoFileName;
@@ -102,6 +130,12 @@ class ProductWizardProvider extends ChangeNotifier {
       .toList();
   String get voiceTranscript => _voiceTranscript;
   bool get isRecording => _isRecording;
+  bool get speechAvailable => _speechAvailable;
+  String? get speechError => _speechError;
+  String get voiceLanguage => _voiceLanguage;
+  bool get descriptionNeedsReview => _descriptionNeedsReview;
+  bool get englishDescriptionConfirmed => _englishDescriptionConfirmed;
+  List<stt.LocaleName> get speechLocales => List.unmodifiable(_speechLocales);
   String get titleEn => _titleEn;
   String get titleHi => _titleHi;
   String get shortDescriptionEn => _shortDescriptionEn;
@@ -119,6 +153,8 @@ class ProductWizardProvider extends ChangeNotifier {
   bool get isDraftSaved => _isDraftSaved;
   bool get isUploadingPhoto => _isUploadingPhoto;
   String? get photoUploadError => _photoUploadError;
+  bool get photoUploadRequiresAuthentication =>
+      _photoUploadRequiresAuthentication;
   bool get canRetryPhotoUpload =>
       _photoUploadId != null && _photoContentType != null;
   bool get isCurrentPhotoUploaded =>
@@ -231,6 +267,7 @@ class ProductWizardProvider extends ChangeNotifier {
       }
       _isUploadingPhoto = true;
       _photoUploadError = null;
+      _photoUploadRequiresAuthentication = false;
       notifyListeners();
       try {
         for (final uploadId in uploadIds) {
@@ -332,6 +369,7 @@ class ProductWizardProvider extends ChangeNotifier {
     _photoContentType = imageType.$2;
     _photoUploadId = _newPhotoUploadId();
     _photoUploadError = null;
+    _photoUploadRequiresAuthentication = false;
     _lastCameraError = null;
     notifyListeners();
 
@@ -422,6 +460,7 @@ class ProductWizardProvider extends ChangeNotifier {
       _attachedPhotoUploadId = _photoUploadId;
       _photoUploadError = null;
     } catch (error) {
+      _photoUploadRequiresAuthentication = error is ApiAuthenticationException;
       _photoUploadError = error.toString().replaceFirst('Exception: ', '');
     }
     notifyListeners();
@@ -457,6 +496,7 @@ class ProductWizardProvider extends ChangeNotifier {
       _imageVariations.clear();
       _selectedVariationIds.clear();
       _imageJobId = null;
+      _imageJobAttempt++;
     }
 
     _isProcessingAI = true;
@@ -474,6 +514,9 @@ class ProductWizardProvider extends ChangeNotifier {
         current = await ApiService.startImageJob(
           token: token,
           imageBytes: _photos[0],
+          uploadId: _photoUploadId == null
+              ? null
+              : '${_photoUploadId}_${_imageJobAttempt}',
           productName: _titleEn.isNotEmpty ? _titleEn : 'Handcrafted product',
           productCategory: _categorySlug,
         );
@@ -532,7 +575,10 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   Future<void> retryImageJob(String token) async {
-    if (_imageJobStatus == 'failed') _imageJobId = null;
+    if (_imageJobStatus == 'failed') {
+      _imageJobId = null;
+      _imageJobAttempt++;
+    }
     if (_imageJobStatus == 'retake_required') return;
     await processPhotoInAIStudio(token: token);
   }
@@ -596,8 +642,116 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   // ─── Voice Recording & Catalog Step ────────────────────────────────────────
-  void toggleRecording() {
-    _isRecording = !_isRecording;
+  Future<void> loadSpeechLocales({String? preferredLanguage}) async {
+    _speechError = null;
+    try {
+      if (!_speechInitialized) {
+        _speechAvailable = await _speech.initialize(
+          onStatus: (status) {
+            _isRecording = status == 'listening';
+            notifyListeners();
+          },
+          onError: (error) {
+            _isRecording = false;
+            _speechError = error.errorMsg;
+            notifyListeners();
+          },
+        );
+        _speechInitialized = true;
+      }
+      final installed =
+          _speechAvailable ? await _speech.locales() : const <stt.LocaleName>[];
+      final availableCodes = <String>{};
+      _speechLocales
+        ..clear()
+        ..addAll(installed.where((locale) {
+          final code =
+              locale.localeId.toLowerCase().split(RegExp('[-_]')).first;
+          return _translationLanguages.contains(code) &&
+              availableCodes.add(code);
+        }));
+      if (preferredLanguage != null) {
+        if (_translationLanguages.contains(preferredLanguage.toLowerCase())) {
+          _voiceLanguage = preferredLanguage.toLowerCase();
+        }
+        final match = _speechLocales.where((locale) =>
+            locale.localeId.toLowerCase().split(RegExp('[-_]')).first ==
+            preferredLanguage.toLowerCase());
+        if (match.isNotEmpty) _voiceLanguage = preferredLanguage;
+      }
+      if (_speechLocales.isNotEmpty &&
+          !_speechLocales.any((locale) =>
+              locale.localeId.toLowerCase().split(RegExp('[-_]')).first ==
+              _voiceLanguage)) {
+        _voiceLanguage = _speechLocales.first.localeId
+            .toLowerCase()
+            .split(RegExp('[-_]'))
+            .first;
+      }
+      if (!_speechAvailable) {
+        _speechError = 'Speech recognition is unavailable on this device.';
+      } else if (_speechLocales.isEmpty) {
+        _speechError = 'No speech languages are installed on this device.';
+      }
+    } catch (_) {
+      _speechAvailable = false;
+      _speechError = 'Microphone or speech recognition permission was denied.';
+    }
+    notifyListeners();
+  }
+
+  void setVoiceLanguage(String language) {
+    _voiceLanguage = language;
+    notifyListeners();
+  }
+
+  Future<void> startSpeechRecognition() async {
+    if (_isStartingSpeech || _isRecording || _isProcessingAI) return;
+    if (!_speechInitialized) await loadSpeechLocales();
+    if (!_speechAvailable) return;
+    final locale = _speechLocales.where((item) =>
+        item.localeId.toLowerCase().split(RegExp('[-_]')).first ==
+        _voiceLanguage);
+    if (locale.isEmpty) {
+      _speechError = 'That language is not available for speech recognition.';
+      notifyListeners();
+      return;
+    }
+    _speechError = null;
+    _voiceTranscript = '';
+    _isStartingSpeech = true;
+    notifyListeners();
+    try {
+      await _speech.listen(
+        listenOptions: stt.SpeechListenOptions(
+          localeId: locale.first.localeId,
+          partialResults: true,
+        ),
+        onResult: (SpeechRecognitionResult result) {
+          _voiceTranscript = result.recognizedWords;
+          notifyListeners();
+        },
+      );
+      _isRecording = _speech.isListening;
+    } catch (_) {
+      _speechError =
+          'Microphone permission was denied or speech recognition failed.';
+      _isRecording = false;
+    } finally {
+      _isStartingSpeech = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopSpeechRecognition() async {
+    await _speech.stop();
+    _isRecording = false;
+    notifyListeners();
+  }
+
+  Future<void> cancelSpeechRecognition() async {
+    await _speech.cancel();
+    _isRecording = false;
     notifyListeners();
   }
 
@@ -630,19 +784,43 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   Future<void> processVoiceNote(String language,
-      {String? clarification}) async {
+      {required String token, String? clarification}) async {
+    if (_isProcessingAI) return;
+    final transcript = _voiceTranscript.trim();
+    if (transcript.isEmpty) {
+      _speechError =
+          'No speech was recognized. Please try again or edit the transcript.';
+      notifyListeners();
+      return;
+    }
     _isProcessingAI = true;
+    _speechError = null;
     notifyListeners();
 
-    // 1. Transcribe voice note if not already provided
-    if (_voiceTranscript.isEmpty) {
-      _voiceTranscript = await ApiService.transcribeVoice(language: language);
+    try {
+      final translated = await ApiService.translateProductDescription(
+        token: token,
+        transcript: transcript,
+        sourceLanguage: _voiceLanguage,
+        productId: _draftProductId,
+      );
+      _descriptionEn = translated['english_description'] as String? ?? '';
+      _descriptionNeedsReview = translated['requires_review'] == true;
+      _descriptionManuallyEdited = false;
+      _englishDescriptionConfirmed = false;
+    } catch (error) {
+      _speechError = error.toString().replaceFirst('Exception: ', '');
+      _isProcessingAI = false;
+      notifyListeners();
+      return;
     }
 
-    // 2. Generate structured catalog + 12-language translations with strict missing specs detection
+    // Existing catalog enrichment can populate structured fields. Its fallback
+    // text is never allowed to replace the faithfully translated description.
+    final translatedDescription = _descriptionEn;
     final catalog = await ApiService.catalogProduct(
-      transcript: _voiceTranscript,
-      language: language,
+      transcript: transcript,
+      language: _voiceLanguage,
       imageBase64: _enhancedImageBase64,
       clarification: clarification,
     );
@@ -651,7 +829,7 @@ class ProductWizardProvider extends ChangeNotifier {
     _titleHi = catalog['title_hi'] ?? 'हस्तशिल्प';
     _shortDescriptionEn = catalog['short_description_en'] ?? '';
     _shortDescriptionHi = catalog['short_description_hi'] ?? '';
-    _descriptionEn = catalog['description_en'] ?? '';
+    _descriptionEn = translatedDescription;
     _descriptionHi = catalog['description_hi'] ?? '';
     _material = catalog['material'] ?? '';
     _technique = catalog['technique'] ?? '';
@@ -665,6 +843,21 @@ class ProductWizardProvider extends ChangeNotifier {
       _translations = (catalog['translations'] as List)
           .map((e) => e as Map<String, dynamic>)
           .toList();
+    }
+    final englishTranslation =
+        _translations.indexWhere((item) => item['language'] == 'en');
+    final englishRow = <String, dynamic>{
+      'language': 'en',
+      'title': _titleEn,
+      'description': translatedDescription,
+    };
+    if (englishTranslation >= 0) {
+      _translations[englishTranslation] = {
+        ..._translations[englishTranslation],
+        ...englishRow,
+      };
+    } else {
+      _translations.add(englishRow);
     }
 
     _missingFields = (catalog['missing_fields'] as List?)
@@ -685,10 +878,41 @@ class ProductWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateEnglishDescription(String value) {
+    _descriptionEn = value;
+    _descriptionManuallyEdited = true;
+    _descriptionNeedsReview = false;
+    _englishDescriptionConfirmed = false;
+    final english =
+        _translations.indexWhere((item) => item['language'] == 'en');
+    if (english >= 0) {
+      _translations[english] = {
+        ..._translations[english],
+        'description': value,
+      };
+    }
+    notifyListeners();
+  }
+
+  void confirmEnglishDescription(bool confirmed) {
+    _englishDescriptionConfirmed =
+        confirmed && _descriptionEn.trim().isNotEmpty;
+    notifyListeners();
+  }
+
+  bool get descriptionManuallyEdited => _descriptionManuallyEdited;
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    super.dispose();
+  }
+
   Future<void> resolveMissingSpecification({
     required String field,
     required String value,
     required String language,
+    required String token,
   }) async {
     if (field == 'material') _material = value;
     if (field == 'technique') _technique = value;
@@ -698,7 +922,8 @@ class ProductWizardProvider extends ChangeNotifier {
     }
 
     // Re-catalog with updated clarification
-    await processVoiceNote(language, clarification: '$field: $value');
+    await processVoiceNote(language,
+        token: token, clarification: '$field: $value');
   }
 
   String getListingSummaryForSpeech(String language) {
@@ -799,6 +1024,10 @@ class ProductWizardProvider extends ChangeNotifier {
 
   // ─── Save as Draft ─────────────────────────────────────────────────────────
   Future<bool> saveAsDraft(String token) async {
+    if (_voiceTranscript.trim().isNotEmpty &&
+        (!_englishDescriptionConfirmed || _descriptionEn.trim().isEmpty)) {
+      return false;
+    }
     final selectedImgs = selectedVariations.isNotEmpty
         ? selectedVariations
             .asMap()
@@ -824,6 +1053,7 @@ class ProductWizardProvider extends ChangeNotifier {
       'status': 'draft',
       'category_slug': _categorySlug,
       'voice_transcript': _voiceTranscript,
+      'voice_language': _voiceLanguage,
       'ai_generated': true,
       'draft_product_id': _draftProductId,
       'idempotency_key':
@@ -906,6 +1136,7 @@ class ProductWizardProvider extends ChangeNotifier {
         'status': 'published',
         'category_slug': _categorySlug,
         'voice_transcript': _voiceTranscript,
+        'voice_language': _voiceLanguage,
         'ai_generated': true,
         'image_job_id': _imageJobId,
         'selected_variant_ids': selectedVariations
@@ -959,11 +1190,17 @@ class ProductWizardProvider extends ChangeNotifier {
     _enhancedImageBase64 = null;
     _imageVariations.clear();
     _imageJobId = null;
+    _imageJobAttempt = 0;
     _imageJobStatus = null;
     _imageJobError = null;
     _imageProcessingMode = null;
     _selectedVariationIds.clear();
     _voiceTranscript = "";
+    _voiceLanguage = 'en';
+    _speechError = null;
+    _descriptionNeedsReview = false;
+    _descriptionManuallyEdited = false;
+    _englishDescriptionConfirmed = false;
     _draftProductId = null;
     _publishError = null;
     _inventoryStock = 5;

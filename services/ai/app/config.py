@@ -13,6 +13,7 @@ class AISettings(BaseSettings):
 
     # Gemini
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.8-flash"
 
     # Bhashini / ULCA
     BHASHINI_API_KEY: str = ""

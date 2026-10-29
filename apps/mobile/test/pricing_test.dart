@@ -10,7 +10,9 @@ void main() {
   });
 
   group('Intelligent Product Pricing Workflow Tests', () {
-    test('1. Calculates transparent cost breakdown with fair living wage defaults', () async {
+    test(
+        '1. Calculates transparent cost breakdown with fair living wage defaults',
+        () async {
       final wizard = ProductWizardProvider();
 
       // Recalculate with known artisan input
@@ -62,7 +64,8 @@ void main() {
       expect(wizard.acceptedPrice, equals(wizard.suggestedPrice));
     });
 
-    test('3. Custom price override above cost floor is valid with no warning', () async {
+    test('3. Custom price override above cost floor is valid with no warning',
+        () async {
       final wizard = ProductWizardProvider();
       await wizard.recalculatePricing(
         materialCost: 200.0,
@@ -78,7 +81,9 @@ void main() {
       expect(wizard.priceOverrideWarning, isNull);
     });
 
-    test('4. Custom price override below cost floor displays a financial loss warning', () async {
+    test(
+        '4. Custom price override below cost floor displays a financial loss warning',
+        () async {
       final wizard = ProductWizardProvider();
       await wizard.recalculatePricing(
         materialCost: 300.0,
@@ -102,7 +107,8 @@ void main() {
       );
     });
 
-    test('5. Editing costs recalculates floor and suggested prices dynamically', () async {
+    test('5. Editing costs recalculates floor and suggested prices dynamically',
+        () async {
       final wizard = ProductWizardProvider();
       await wizard.recalculatePricing(
         materialCost: 100.0,
@@ -124,10 +130,14 @@ void main() {
       expect(wizard.laborHours, equals(8.0));
     });
 
-    test('6. Pricing connects to product draft and retains accepted price', () async {
+    test('6. Pricing connects to product draft and retains accepted price',
+        () async {
       final wizard = ProductWizardProvider();
-      wizard.updateVoiceTranscript("सुंदर हस्तनिर्मित मातीचा वारली नक्षीकाम केलेला घडा.");
-      await wizard.processVoiceNote('mr');
+      wizard.updateVoiceTranscript(
+          "सुंदर हस्तनिर्मित मातीचा वारली नक्षीकाम केलेला घडा.");
+      wizard.setVoiceLanguage('mr');
+      wizard.updateEnglishDescription('A handmade clay vessel.');
+      wizard.confirmEnglishDescription(true);
 
       await wizard.recalculatePricing(
         materialCost: 180.0,

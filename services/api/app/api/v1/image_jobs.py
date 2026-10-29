@@ -54,12 +54,15 @@ async def start_image_job(
     product_name: str = Form(""),
     product_category: str = Form(""),
     product_id: int | None = Form(None),
+    upload_id: str | None = Form(None),
     generate_variations: bool = Form(True),
     artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
     db: AsyncSession = Depends(get_db),
 ):
     """Validate and store the original, create its job, and start the backend CrewAI workflow."""
     user, profile = artisan_tuple
+    if upload_id is not None and (not upload_id.strip() or len(upload_id) > 100):
+        raise HTTPException(status_code=400, detail="Invalid upload ID")
     if file.content_type not in SUPPORTED_IMAGE_TYPES:
         raise HTTPException(status_code=415, detail="Upload a JPEG, PNG, or WebP image")
     file_bytes = await file.read(MAX_IMAGE_BYTES + 1)
@@ -94,6 +97,7 @@ async def start_image_job(
             product_name=product_name or None,
             product_category=product_category or None,
             product_id=product_id,
+            idempotency_key=upload_id.strip() if upload_id else None,
             generate_variations=generate_variations,
         )
     except RuntimeError as exc:
@@ -183,6 +187,9 @@ async def put_image_variant_selection(
         await db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail="Image selection could not be saved") from exc
     return _to_out(job)
 
 

@@ -1,5 +1,6 @@
 """Product router: Catalog browsing, filters, search, artisan CRUD, stock updates."""
 import io
+import httpx
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from sqlalchemy import select, func, or_
@@ -21,7 +22,11 @@ from app.schemas.product import (
     ReviewCreate,
     ReviewOut,
     ProductImageCreate,
+    ProductDescriptionTranslationIn,
+    ProductDescriptionTranslationOut,
+    VOICE_LANGUAGES,
 )
+from app.config import settings
 from app.core.dependencies import get_current_artisan, get_optional_user, get_current_user
 from app.models.user import UserRole
 from app.utils.storage import storage
@@ -29,6 +34,65 @@ from app.utils.events import event_broker
 from app.utils.image_jobs import apply_variant_selection, get_job_for_artisan, selected_variant_records
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+
+@router.post("/translate-description", response_model=ProductDescriptionTranslationOut)
+async def translate_product_description(
+    payload: ProductDescriptionTranslationIn,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Translate artisan-provided speech only; the caller must confirm edits before saving."""
+    _, profile = artisan_tuple
+    source = payload.source_language.lower()
+    target = payload.target_language.lower()
+    transcript = payload.transcript.strip()
+    if source not in VOICE_LANGUAGES:
+        raise HTTPException(status_code=400, detail="Source language is not supported")
+    if target != "en":
+        raise HTTPException(status_code=400, detail="Only English product descriptions are supported")
+    if len(transcript) < 2:
+        raise HTTPException(status_code=422, detail="Please speak or enter a clearer description")
+    if payload.product_id is not None:
+        result = await db.execute(
+            select(Product).where(
+                Product.id == payload.product_id,
+                Product.artisan_id == profile.id,
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Product not found for this artisan")
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            response = await client.post(
+                f"{settings.AI_SERVICE_URL.rstrip('/')}/ai/product-description",
+                json={
+                    "source_language": source,
+                    "target_language": target,
+                    "transcript": transcript,
+                },
+            )
+        response.raise_for_status()
+        result = response.json()
+        description = result.get("english_description")
+        if not isinstance(description, str) or not description.strip():
+            raise ValueError("Missing translation")
+        return ProductDescriptionTranslationOut(
+            success=True,
+            source_language=source,
+            original_transcript=transcript,
+            english_description=description.strip(),
+            requires_review=bool(result.get("requires_review", True)),
+        )
+    except (httpx.HTTPError, ValueError, TypeError):
+        return ProductDescriptionTranslationOut(
+            success=False,
+            source_language=source,
+            original_transcript=transcript,
+            requires_review=True,
+            error="Translation is temporarily unavailable. Your transcript is preserved; retry or edit it.",
+        )
 
 async def _sync_product_to_mongo(prod: Product, image_job_id: str | None = None) -> None:
     from app.mongodb import save_product_mongo
@@ -487,6 +551,7 @@ async def create_product(
             draft_prod.stock = payload.stock
             draft_prod.status = payload.status
             draft_prod.voice_transcript = payload.voice_transcript
+            draft_prod.voice_language = payload.voice_language
             draft_prod.ai_generated = payload.ai_generated
             if payload.idempotency_key:
                 draft_prod.idempotency_key = payload.idempotency_key
@@ -564,6 +629,7 @@ async def create_product(
         stock=payload.stock,
         status=payload.status,
         voice_transcript=payload.voice_transcript,
+        voice_language=payload.voice_language,
         ai_generated=payload.ai_generated,
         published_at=now if payload.status == ProductStatus.published else None,
         idempotency_key=payload.idempotency_key,
