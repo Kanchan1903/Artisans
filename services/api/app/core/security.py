@@ -4,7 +4,8 @@ import string
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 
 from app.config import settings
@@ -43,7 +44,7 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return payload
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 
