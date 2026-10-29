@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -12,8 +13,8 @@ class ApiService {
 
   static String _activeApiBaseUrl = '';
 
-  // Use custom API_URL if passed (e.g. --dart-define=API_URL=http://192.168.1.9:8000/api/v1)
-  // Otherwise 127.0.0.1 for adb reverse on physical device, with auto-fallback to wifi / 10.0.2.2
+  // On a physical phone, 127.0.0.1 points to the phone itself. Pass API_URL
+  // for Wi-Fi testing or use `adb reverse tcp:8000 tcp:8000` over USB.
   static String get apiBaseUrl {
     if (_customApiUrl.isNotEmpty) return _customApiUrl;
     if (_activeApiBaseUrl.isNotEmpty) return _activeApiBaseUrl;
@@ -31,6 +32,18 @@ class ApiService {
     return defaultTargetPlatform == TargetPlatform.android
         ? 'http://10.0.2.2:8001/ai'
         : 'http://localhost:8001/ai';
+  }
+
+  static Exception _serverConnectionError(Object error) {
+    if (error is http.ClientException || error is TimeoutException) {
+      return Exception(
+        'Cannot reach the KalaSathi API at $apiBaseUrl. Start the backend. '
+        'For a physical phone on Wi-Fi, run Flutter with '
+        '--dart-define=API_URL=http://<laptop-ip>:8000/api/v1; '
+        'over USB, run `adb reverse tcp:8000 tcp:8000`.',
+      );
+    }
+    return Exception(error.toString());
   }
 
   // ─── Authentication ─────────────────────────────────────────────────────────
@@ -128,8 +141,13 @@ class ApiService {
       contentType: MediaType.parse(contentType),
     ));
 
-    final streamed = await request.send().timeout(const Duration(seconds: 60));
-    final response = await http.Response.fromStream(streamed);
+    late final http.Response response;
+    try {
+      final streamed = await request.send().timeout(const Duration(seconds: 60));
+      response = await http.Response.fromStream(streamed);
+    } catch (error) {
+      throw _serverConnectionError(error);
+    }
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       throw Exception(
@@ -173,8 +191,13 @@ class ApiService {
       filename: 'craft.jpg',
       contentType: MediaType('image', 'jpeg'),
     ));
-    final streamed = await request.send().timeout(const Duration(seconds: 45));
-    final response = await http.Response.fromStream(streamed);
+    late final http.Response response;
+    try {
+      final streamed = await request.send().timeout(const Duration(seconds: 45));
+      response = await http.Response.fromStream(streamed);
+    } catch (error) {
+      throw _serverConnectionError(error);
+    }
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       throw Exception(

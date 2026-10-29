@@ -173,6 +173,24 @@ flutter pub get
 flutter run
 ```
 
+#### Connect a physical Android phone to the local API
+
+The default `127.0.0.1` address refers to the phone itself when Flutter runs on a physical device. Start the API and its required services first (`docker compose up -d postgres redis mongo minio api` from the repository root), then use either:
+
+- **USB:** `adb reverse tcp:8000 tcp:8000`, then run `flutter run`.
+- **Same Wi-Fi:** run `flutter run --dart-define=API_URL=http://<laptop-ip>:8000/api/v1`. Find the laptop's Wi-Fi IPv4 address with `ipconfig`; allow port 8000 through the laptop firewall for the private network if prompted.
+
+#### Enable real CrewAI image processing
+
+Set these values in the repository-root `.env` file, which is read by Docker Compose:
+
+```env
+AI_MOCK_MODE=false
+CREWAI_BEARER_TOKEN=<your CrewAI AMP bearer token>
+```
+
+Keep the token on the backend; never put it in Flutter or a `--dart-define`. CrewAI must be able to fetch the uploaded original image. Use a publicly reachable **HTTPS** `MINIO_PUBLIC_URL` (or configure `PUBLIC_API_URL` to serve the image over HTTPS), and configure the storage service/proxy so the returned image URL can be fetched from the public internet. Localhost, private LAN, and plain HTTP image URLs are rejected by the workflow. With mock mode enabled or the CrewAI token missing, real image processing will not run.
+
 ### One-command Docker setup (optional)
 
 ```bash
