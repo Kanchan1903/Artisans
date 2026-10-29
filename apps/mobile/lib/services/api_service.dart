@@ -80,6 +80,7 @@ class ApiService {
               'phone': phone,
               'code': code,
               'name': name,
+              'role': 'artisan',
               'language': language,
             }),
           )
