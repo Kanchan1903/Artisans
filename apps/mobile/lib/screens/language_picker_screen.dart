@@ -97,7 +97,7 @@ class LanguagePickerScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  childAspectRatio: 1.5,
+                  childAspectRatio: 1.35,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                 ),
@@ -143,7 +143,7 @@ class LanguagePickerScreen extends StatelessWidget {
                             )
                           ],
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,12 +151,16 @@ class LanguagePickerScreen extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  lang['native']!,
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected ? Colors.white : AppTheme.textCharcoal,
+                                Expanded(
+                                  child: Text(
+                                    lang['native']!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected ? Colors.white : AppTheme.textCharcoal,
+                                    ),
                                   ),
                                 ),
                                 if (isSelected)
@@ -170,6 +174,8 @@ class LanguagePickerScreen extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               "${lang['name']!} (${lang['region']!})",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,

@@ -49,18 +49,37 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppTheme.terracotta))
             : _products.isEmpty
-                ? const Center(child: Text("कोणतेही उत्पादन जोडलेले नाही."))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.inventory_2_outlined, size: 60, color: Color(0xFFC84B31)),
+                          const SizedBox(height: 16),
+                          Text(
+                            l10n.translate('noProductsYet'),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.all(20),
                     itemCount: _products.length,
                     itemBuilder: (context, index) {
                       final prod = _products[index];
-                      final title = prod['title_hi'] ?? prod['title_en'] ?? 'उत्पादन';
-                      final price = (prod['price'] as num?)?.toDouble() ?? 500.0;
-                      int stock = (prod['stock'] as num?)?.toInt() ?? 5;
+                      final title = prod['title_${Provider.of<AuthProvider>(context, listen: false).selectedLanguage}'] ??
+                          prod['title_hi'] ??
+                          prod['title_en'] ??
+                          'उत्पादन';
+                      final price = (prod['price'] as num?)?.toDouble() ?? 0.0;
+                      int stock = (prod['stock'] as num?)?.toInt() ?? 1;
                       final imgUrl = prod['images'] != null && (prod['images'] as List).isNotEmpty
-                          ? prod['images'][0]['url'] as String
-                          : 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600';
+                          ? prod['images'][0]['url'] as String?
+                          : null;
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -81,18 +100,25 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(14),
-                              child: Image.network(
-                                imgUrl,
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 80,
-                                  height: 80,
-                                  color: AppTheme.terracottaLight,
-                                  child: const Icon(Icons.image, color: AppTheme.terracotta),
-                                ),
-                              ),
+                              child: imgUrl != null && imgUrl.startsWith('http')
+                                  ? Image.network(
+                                      imgUrl,
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Image.asset(
+                                        'assets/images/prod_pottery.jpg',
+                                        width: 80,
+                                        height: 80,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Image.asset(
+                                      'assets/images/prod_pottery.jpg',
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
                             ),
                             const SizedBox(width: 16),
                             Expanded(

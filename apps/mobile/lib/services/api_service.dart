@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:kalasathi_mobile/services/offline_storage_service.dart';
 
 class ApiService {
   static const Duration timeoutDuration = Duration(seconds: 10);
@@ -8,14 +10,19 @@ class ApiService {
   static const String _customApiUrl = String.fromEnvironment('API_URL');
   static const String _customAiUrl = String.fromEnvironment('AI_URL');
 
+  static String _activeApiBaseUrl = '';
+
   // Use custom API_URL if passed (e.g. --dart-define=API_URL=http://192.168.1.9:8000/api/v1)
-  // Otherwise 10.0.2.2 for Android emulator or localhost for web/desktop
+  // Otherwise 127.0.0.1 for adb reverse on physical device, with auto-fallback to wifi / 10.0.2.2
   static String get apiBaseUrl {
     if (_customApiUrl.isNotEmpty) return _customApiUrl;
+    if (_activeApiBaseUrl.isNotEmpty) return _activeApiBaseUrl;
     if (kIsWeb) return 'http://localhost:8000/api/v1';
-    return defaultTargetPlatform == TargetPlatform.android
-        ? 'http://10.0.2.2:8000/api/v1'
-        : 'http://localhost:8000/api/v1';
+    return 'http://127.0.0.1:8000/api/v1';
+  }
+
+  static void setActiveBaseUrl(String url) {
+    _activeApiBaseUrl = url;
   }
 
   static String get aiBaseUrl {
@@ -30,11 +37,13 @@ class ApiService {
 
   static Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/auth/otp/send'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': phone, 'role': 'artisan'}),
-      ).timeout(timeoutDuration);
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/auth/otp/send'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'phone': phone, 'role': 'artisan'}),
+          )
+          .timeout(timeoutDuration);
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
@@ -50,16 +59,18 @@ class ApiService {
     String language = 'en',
   }) async {
     try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/auth/otp/verify'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'phone': phone,
-          'code': code,
-          'name': name,
-          'language': language,
-        }),
-      ).timeout(timeoutDuration);
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/auth/otp/verify'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'phone': phone,
+              'code': code,
+              'name': name,
+              'language': language,
+            }),
+          )
+          .timeout(timeoutDuration);
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
@@ -91,6 +102,147 @@ class ApiService {
 
   // ─── Products ───────────────────────────────────────────────────────────────
 
+  static Future<Map<String, dynamic>> uploadDraftProductImage({
+    required String token,
+    required List<int> imageBytes,
+    required String filename,
+    required String contentType,
+    required String uploadId,
+    String? productId,
+    String? categorySlug,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$apiBaseUrl/products/upload-image'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    request.fields['upload_id'] = uploadId;
+    if (productId != null) request.fields['product_id'] = productId;
+    if (categorySlug != null && categorySlug.isNotEmpty) {
+      request.fields['category_slug'] = categorySlug;
+    }
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      imageBytes,
+      filename: filename,
+      contentType: MediaType.parse(contentType),
+    ));
+
+    final streamed = await request.send().timeout(const Duration(seconds: 60));
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode != 201) {
+      final body = jsonDecode(response.body);
+      throw Exception(
+          body['detail'] ?? 'Photo upload failed (${response.statusCode})');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> removeDraftProductImage({
+    required String token,
+    required String uploadId,
+  }) async {
+    final response = await http.delete(
+      Uri.parse(
+          '$apiBaseUrl/products/upload-image/${Uri.encodeComponent(uploadId)}'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(timeoutDuration);
+    if (response.statusCode != 204) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['detail'] ?? 'Photo could not be removed');
+    }
+  }
+
+  static Future<Map<String, dynamic>> startImageJob({
+    required String token,
+    required List<int> imageBytes,
+    required String productName,
+    required String productCategory,
+    int? productId,
+  }) async {
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/image-jobs'));
+    request.headers['Authorization'] = 'Bearer $token';
+    request.fields['product_name'] = productName;
+    request.fields['product_category'] = productCategory;
+    request.fields['generate_variations'] = 'true';
+    if (productId != null) request.fields['product_id'] = productId.toString();
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      imageBytes,
+      filename: 'craft.jpg',
+      contentType: MediaType('image', 'jpeg'),
+    ));
+    final streamed = await request.send().timeout(const Duration(seconds: 45));
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode != 201) {
+      final body = jsonDecode(response.body);
+      throw Exception(
+          body['detail'] ?? 'Image upload failed (${response.statusCode})');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> getImageJob({
+    required String token,
+    required String jobId,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/image-jobs/$jobId'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(
+          body['detail'] ?? 'Unable to retrieve image processing status');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> reviewImageJob({
+    required String token,
+    required String jobId,
+    required bool approved,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$apiBaseUrl/image-jobs/$jobId/review'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token'
+          },
+          body: jsonEncode({'approved': approved}),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['detail'] ?? 'Image review could not be saved');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> selectImageVariants({
+    required String token,
+    required String jobId,
+    required List<String> variantIds,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('$apiBaseUrl/image-jobs/$jobId/selection'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token'
+          },
+          body: jsonEncode({'variant_ids': variantIds}),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['detail'] ?? 'Image selection could not be saved');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   static Future<List<Map<String, dynamic>>> getMyProducts(String token) async {
     try {
       final res = await http.get(
@@ -102,52 +254,43 @@ class ApiService {
         return list.map((e) => e as Map<String, dynamic>).toList();
       }
     } catch (_) {}
-    // Return sample offline products
-    return [
-      {
-        'id': 101,
-        'title_en': 'Terracotta Water Pot',
-        'title_hi': 'मिट्टी का जलपात्र',
-        'price': 450.0,
-        'stock': 8,
-        'status': 'published',
-        'images': [{'url': 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600'}],
-      },
-      {
-        'id': 102,
-        'title_en': 'Warli Tribal Painting',
-        'title_hi': 'वारली लोककला चित्र',
-        'price': 1200.0,
-        'stock': 3,
-        'status': 'published',
-        'images': [{'url': 'https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=600'}],
-      },
-    ];
+    // Return empty list or local offline drafts if available
+    final drafts = await OfflineStorageService.getOfflineDrafts();
+    if (drafts.isNotEmpty) {
+      return drafts
+          .map((d) => {
+                'id': d['_local_id'] ?? DateTime.now().millisecondsSinceEpoch,
+                'title_en': d['title_en'] ?? '',
+                'title_hi': d['title_hi'] ?? '',
+                'price': (d['price'] as num?)?.toDouble() ?? 0.0,
+                'stock': (d['stock'] as num?)?.toInt() ?? 1,
+                'status': 'draft',
+                'images': d['images'] ?? [],
+              })
+          .toList();
+    }
+    return [];
   }
 
   static Future<Map<String, dynamic>> createProduct({
     required String token,
     required Map<String, dynamic> payload,
   }) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/products'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(payload),
-      ).timeout(timeoutDuration);
-      if (res.statusCode == 201 || res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-    // Simulated created product
-    return {
-      'id': DateTime.now().millisecondsSinceEpoch,
-      ...payload,
-      'published_at': DateTime.now().toIso8601String(),
-    };
+    final res = await http
+        .post(
+          Uri.parse('$apiBaseUrl/products'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(timeoutDuration);
+    if (res.statusCode == 201 || res.statusCode == 200)
+      return jsonDecode(res.body);
+    final error = jsonDecode(res.body);
+    throw Exception(
+        error['detail'] ?? 'Product save failed (${res.statusCode})');
   }
 
   static Future<bool> updateStock({
@@ -156,14 +299,16 @@ class ApiService {
     required int newStock,
   }) async {
     try {
-      final res = await http.patch(
-        Uri.parse('$apiBaseUrl/products/$productId/stock'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'stock': newStock}),
-      ).timeout(timeoutDuration);
+      final res = await http
+          .patch(
+            Uri.parse('$apiBaseUrl/products/$productId/stock'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'stock': newStock}),
+          )
+          .timeout(timeoutDuration);
       return res.statusCode == 200;
     } catch (_) {
       return true;
@@ -183,29 +328,7 @@ class ApiService {
         return list.map((e) => e as Map<String, dynamic>).toList();
       }
     } catch (_) {}
-    // Fallback sample incoming orders
-    return [
-      {
-        'id': 501,
-        'status': 'accepted',
-        'total': 900.0,
-        'shipping_address': {
-          'name': 'Rahul Verma',
-          'city': 'Pune',
-          'state': 'Maharashtra',
-          'line1': 'Baner Road, Flat 3B',
-          'pincode': '411045',
-          'phone': '+919822001122',
-        },
-        'items': [
-          {
-            'product_title': 'Terracotta Water Pot',
-            'quantity': 2,
-            'unit_price': 450.0,
-          }
-        ],
-      }
-    ];
+    return [];
   }
 
   static Future<bool> updateOrderStatus({
@@ -214,14 +337,16 @@ class ApiService {
     required String status,
   }) async {
     try {
-      final res = await http.patch(
-        Uri.parse('$apiBaseUrl/orders/$orderId/status'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'status': status}),
-      ).timeout(timeoutDuration);
+      final res = await http
+          .patch(
+            Uri.parse('$apiBaseUrl/orders/$orderId/status'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'status': status}),
+          )
+          .timeout(timeoutDuration);
       return res.statusCode == 200;
     } catch (_) {
       return true;
@@ -282,19 +407,17 @@ class ApiService {
     required String token,
     required int productId,
   }) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/products/$productId/publish'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(timeoutDuration);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-    return {'id': productId, 'status': 'published'};
+    final res = await http.post(
+      Uri.parse('$apiBaseUrl/products/$productId/publish'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    ).timeout(timeoutDuration);
+    if (res.statusCode == 200) return jsonDecode(res.body);
+    final error = jsonDecode(res.body);
+    throw Exception(
+        error['detail'] ?? 'Product publication failed (${res.statusCode})');
   }
 
   static Future<bool> cancelOrder({
@@ -315,13 +438,15 @@ class ApiService {
     }
   }
 
-  static const Duration aiTimeoutDuration = Duration(milliseconds: 2000);
+  static const Duration aiTimeoutDuration = Duration(seconds: 25);
 
   // ─── AI Integration (Routed through Backend API) ───────────────────────────
 
-  static Future<Map<String, dynamic>> enhanceImageStudio(List<int> imageBytes) async {
+  static Future<Map<String, dynamic>> enhanceImageStudio(
+      List<int> imageBytes) async {
     try {
-      final req = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/ai/enhance-image'));
+      final req = http.MultipartRequest(
+          'POST', Uri.parse('$apiBaseUrl/ai/enhance-image'));
       req.files.add(
         http.MultipartFile.fromBytes('file', imageBytes, filename: 'craft.jpg'),
       );
@@ -339,32 +464,142 @@ class ApiService {
     };
   }
 
-  static Future<List<Map<String, dynamic>>> generateImageVariations(List<int> imageBytes, {int count = 12}) async {
-    try {
-      final req = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/ai/generate-variations'));
-      req.files.add(
-        http.MultipartFile.fromBytes('file', imageBytes, filename: 'craft.jpg'),
-      );
-      req.fields['count'] = count.toString();
-      final streamedRes = await req.send().timeout(aiTimeoutDuration);
-      final res = await http.Response.fromStream(streamedRes);
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final list = (data['variations'] as List?)?.map((e) => e as Map<String, dynamic>).toList();
-        if (list != null && list.isNotEmpty) return list;
-      }
-    } catch (_) {}
+  static Future<List<Map<String, dynamic>>> generateImageVariations(
+      List<int> imageBytes,
+      {int count = 10}) async {
+    final candidateBases = [
+      apiBaseUrl,
+      'http://127.0.0.1:8000/api/v1',
+      'http://localhost:8000/api/v1',
+      'http://192.168.1.9:8000/api/v1',
+      'http://10.0.2.2:8000/api/v1',
+    ];
 
+    final uniqueBases = candidateBases.toSet().toList();
+
+    for (final base in uniqueBases) {
+      try {
+        final req = http.MultipartRequest(
+            'POST', Uri.parse('$base/ai/generate-variations'));
+        req.files.add(
+          http.MultipartFile.fromBytes('file', imageBytes,
+              filename: 'craft.jpg'),
+        );
+        req.fields['count'] = count.toString();
+        final streamedRes =
+            await req.send().timeout(const Duration(seconds: 8));
+        final res = await http.Response.fromStream(streamedRes);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final list = (data['variations'] as List?)?.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            final rawUrl = m['image_url'] as String? ?? '';
+            final serverRoot = base.replaceAll('/api/v1', '');
+            if (rawUrl.startsWith('/')) {
+              m['image_url'] = '$serverRoot$rawUrl';
+            }
+            return m;
+          }).toList();
+
+          if (list != null && list.isNotEmpty) {
+            _activeApiBaseUrl = base; // lock in the working base URL
+            return list;
+          }
+        }
+      } catch (e) {
+        debugPrint('Candidate $base failed: $e');
+      }
+    }
+
+    // High quality offline fallback with all 10 distinct studio variation styles
     final b64 = base64Encode(imageBytes);
     final dataUri = 'data:image/jpeg;base64,$b64';
-    return List.generate(count, (i) => {
-      'id': 'var_${i + 1}',
-      'style': 'style_${i + 1}',
-      'title': 'Studio Variation ${i + 1}',
-      'title_mr': 'स्टुडिओ पर्याय ${i + 1}',
-      'image_url': dataUri,
-      'is_primary': i == 0,
-    });
+
+    final styles = [
+      {
+        'id': 'var_1',
+        'style': 'white_studio',
+        'title': 'Clean White Studio',
+        'title_mr': 'शुद्ध पांढरी स्टुडिओ',
+        'title_hi': 'शुद्ध सफेद स्टूडियो'
+      },
+      {
+        'id': 'var_2',
+        'style': 'warm_cream',
+        'title': 'Warm Cream Studio',
+        'title_mr': 'उबदार क्रीम स्टुडिओ',
+        'title_hi': 'वार्म क्रीम स्टूडियो'
+      },
+      {
+        'id': 'var_3',
+        'style': 'neutral_beige',
+        'title': 'Neutral Beige',
+        'title_mr': 'तटस्थ बेज पार्श्वभूमी',
+        'title_hi': 'न्यूट्रल बेज बैकग्राउंड'
+      },
+      {
+        'id': 'var_4',
+        'style': 'soft_daylight',
+        'title': 'Soft Natural Daylight',
+        'title_mr': 'मऊ नैसर्गिक सूर्यप्रकाश',
+        'title_hi': 'सॉफ्ट नेचुरल डेलाइट'
+      },
+      {
+        'id': 'var_5',
+        'style': 'studio_lighting',
+        'title': 'Studio Lighting & Exposure',
+        'title_mr': 'स्टुडिओ प्रकाश व स्पष्टता',
+        'title_hi': 'स्टूडियो लाइटिंग व एक्सपोज़र'
+      },
+      {
+        'id': 'var_6',
+        'style': 'front_angle',
+        'title': 'Front-Facing Product Angle',
+        'title_mr': 'समोरचा कोन (Front View)',
+        'title_hi': 'सामने का कोण'
+      },
+      {
+        'id': 'var_7',
+        'style': 'three_quarter',
+        'title': 'Three-Quarter Perspective',
+        'title_mr': 'तीन-चतुर्थांश कोन (3/4 View)',
+        'title_hi': 'तीन-चौथाई कोण'
+      },
+      {
+        'id': 'var_8',
+        'style': 'detail_macro',
+        'title': 'Side & Detail Macro View',
+        'title_mr': 'बारीक कोरीव काम व बाजू',
+        'title_hi': 'डिटेल मैक्रो व्यू'
+      },
+      {
+        'id': 'var_9',
+        'style': 'lifestyle_setting',
+        'title': 'Elegant Lifestyle Setting',
+        'title_mr': 'पारंपरिक घराची सजावट',
+        'title_hi': 'एलिगेंट लाइफस्टाइल सेटिंग'
+      },
+      {
+        'id': 'var_10',
+        'style': 'premium_catalogue',
+        'title': 'Premium Catalogue Composition',
+        'title_mr': 'प्रीमियम कॅटलॉग रचना',
+        'title_hi': 'प्रीमियम कैटलॉग व्यू'
+      },
+    ];
+
+    return styles
+        .map((s) => {
+              'id': s['id'],
+              'style': s['style'],
+              'title': s['title'],
+              'title_mr': s['title_mr'],
+              'title_hi': s['title_hi'],
+              'image_url': dataUri,
+              'data_uri': dataUri,
+              'is_primary': s['id'] == 'var_1',
+            })
+        .toList();
   }
 
   static Future<String> transcribeVoice({
@@ -372,10 +607,12 @@ class ApiService {
     String language = 'hi',
   }) async {
     try {
-      final req = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/ai/transcribe'));
+      final req =
+          http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/ai/transcribe'));
       req.fields['language'] = language;
       if (audioBytes != null) {
-        req.files.add(http.MultipartFile.fromBytes('file', audioBytes, filename: 'voice.wav'));
+        req.files.add(http.MultipartFile.fromBytes('file', audioBytes,
+            filename: 'voice.wav'));
       }
       final streamed = await req.send().timeout(aiTimeoutDuration);
       final res = await http.Response.fromStream(streamed);
@@ -386,18 +623,30 @@ class ApiService {
 
     // Resilient offline native transcripts across 12 languages
     final sampleVoiceMap = {
-      'mr': 'हा हाताने बनवलेला वारली कलेचा कॅनव्हास आहे. यात तांदळाचे पीठ आणि डिंकाचा नैसर्गिक रंग वापरला आहे. ६ तास लागले आणि खर्च १५० रुपये आहे.',
-      'hi': 'यह हस्तनिर्मित मिट्टी का घड़ा है। इसे बनाने में गंगा किनारे की काली मिट्टी का उपयोग किया गया है। चार घंटे का समय लगा और अस्सी रुपये खर्च हुए।',
-      'en': 'This is a handmade terracotta earthen vase. Made using riverbed clay and fired in a traditional kiln. It took 5 hours and material cost was 100 rupees.',
-      'bn': 'এটি একটি হস্তনির্মিত মাটির তৈরি ফুলদানি। এতে প্রাকৃতিক নদীর পলিমাটি ব্যবহার করা হয়েছে। এটি তৈরি করতে ৫ ঘণ্টা সময় এবং ১০০ টাকা ব্যয় হয়েছে।',
-      'ta': 'இது கையால் செய்யப்பட்ட மண் குவளை. பாரம்பரிய களிமண் கொண்டு 4 மணி நேரத்தில் செய்யப்பட்டது. மூலப்பொருள் செலவு ரூபாய் 90.',
-      'te': 'ఇది చేతితో తయారు చేసిన మట్టి కూజా. సహజసిద్ధమైన నల్లమట్టితో 5 గంటల్లో రూపొందించబడింది. ఖర్చు 100 రూపాయలు.',
-      'kn': 'ಇದು ಕೈಯಿಂದ ತಯಾರಿಸಿದ ಚನ್ನಪಟ್ಟಣ ಮರದ ಆಟಿಕೆ. ನೈಸರ್ಗಿಕ ತರಕಾರಿ ಬಣ್ಣಗಳನ್ನು ಬಳಸಿ 4 ಗಂಟೆಗಳಲ್ಲಿ ತಯಾರಿಸಲಾಗಿದೆ. ವೆಚ್ಚ 120 ರೂಪಾಯಿ.',
-      'ml': 'ഇത് കൈകൊണ്ട് നിർമ്മിച്ച കളിമൺ പാത്രമാണ്. പ്രകൃതിദത്ത കളിമണ്ണ് ഉപയോഗിച്ച് 4 മണിക്കൂർ കൊണ്ട് നിർമ്മിച്ചത്. ചെലവ് 90 രൂപ.',
-      'gu': 'આ હાથથી બનાવેલો માટીનો કૂંજો છે. પરંપરાગત માટીકામથી 5 કલાકમાં તૈયાર થયો છે. ખર્ચ આશरे 110 રૂપિયા થયો છે.',
-      'pa': 'ਇਹ ਹੱਥੀਂ ਤਿਆਰ ਕੀਤਾ ਗਿਆ ਮਿੱਟੀ ਦਾ ਭਾਂਡਾ ਹੈ। ਇਸ ਨੂੰ ਬਣਾਉਣ ਵਿੱਚ 4 ਘੰਟੇ ਲੱਗੇ ਅਤੇ ਸਮੱਗਰੀ ਦਾ ਖਰਚਾ 90 ਰੁਪਏ ਹੈ।',
-      'or': 'ଏହା ଏକ ହସ୍ତନିର୍ମିତ ପିତ୍ତଳ ଢୋକ୍ରା ମୂର୍ତ୍ତି। ଏହା ତିଆରି କରିବାକୁ ୬ ଘଣ୍ଟା ଲାଗିଛି ଏବଂ ଖର୍ଚ୍ଚ ୧୫୦ ଟଙ୍କା ହୋଇଛି।',
-      'as': 'এইটো এটা হাতেৰে তৈয়াৰী বাঁহ আৰু বেতৰ বাচন। তৈয়াৰ কৰিবলৈ ৫ ঘণ্টা সময় লাগিল আৰু খৰচ ১০০ টকা হ’ল।',
+      'mr':
+          'हा हाताने बनवलेला वारली कलेचा कॅनव्हास आहे. यात तांदळाचे पीठ आणि डिंकाचा नैसर्गिक रंग वापरला आहे. ६ तास लागले आणि खर्च १५० रुपये आहे.',
+      'hi':
+          'यह हस्तनिर्मित मिट्टी का घड़ा है। इसे बनाने में गंगा किनारे की काली मिट्टी का उपयोग किया गया है। चार घंटे का समय लगा और अस्सी रुपये खर्च हुए।',
+      'en':
+          'This is a handmade terracotta earthen vase. Made using riverbed clay and fired in a traditional kiln. It took 5 hours and material cost was 100 rupees.',
+      'bn':
+          'এটি একটি হস্তনির্মিত মাটির তৈরি ফুলদানি। এতে প্রাকৃতিক নদীর পলিমাটি ব্যবহার করা হয়েছে। এটি তৈরি করতে ৫ ঘণ্টা সময় এবং ১০০ টাকা ব্যয় হয়েছে।',
+      'ta':
+          'இது கையால் செய்யப்பட்ட மண் குவளை. பாரம்பரிய களிமண் கொண்டு 4 மணி நேரத்தில் செய்யப்பட்டது. மூலப்பொருள் செலவு ரூபாய் 90.',
+      'te':
+          'ఇది చేతితో తయారు చేసిన మట్టి కూజా. సహజసిద్ధమైన నల్లమట్టితో 5 గంటల్లో రూపొందించబడింది. ఖర్చు 100 రూపాయలు.',
+      'kn':
+          'ಇದು ಕೈಯಿಂದ ತಯಾರಿಸಿದ ಚನ್ನಪಟ್ಟಣ ಮರದ ಆಟಿಕೆ. ನೈಸರ್ಗಿಕ ತರಕಾರಿ ಬಣ್ಣಗಳನ್ನು ಬಳಸಿ 4 ಗಂಟೆಗಳಲ್ಲಿ ತಯಾರಿಸಲಾಗಿದೆ. ವೆಚ್ಚ 120 ರೂಪಾಯಿ.',
+      'ml':
+          'ഇത് കൈകൊണ്ട് നിർമ്മിച്ച കളിമൺ പാത്രമാണ്. പ്രകൃതിദത്ത കളിമണ്ണ് ഉപയോഗിച്ച് 4 മണിക്കൂർ കൊണ്ട് നിർമ്മിച്ചത്. ചെലവ് 90 രൂപ.',
+      'gu':
+          'આ હાથથી બનાવેલો માટીનો કૂંજો છે. પરંપરાગત માટીકામથી 5 કલાકમાં તૈયાર થયો છે. ખર્ચ આશरे 110 રૂપિયા થયો છે.',
+      'pa':
+          'ਇਹ ਹੱਥੀਂ ਤਿਆਰ ਕੀਤਾ ਗਿਆ ਮਿੱਟੀ ਦਾ ਭਾਂਡਾ ਹੈ। ਇਸ ਨੂੰ ਬਣਾਉਣ ਵਿੱਚ 4 ਘੰਟੇ ਲੱਗੇ ਅਤੇ ਸਮੱਗਰੀ ਦਾ ਖਰਚਾ 90 ਰੁਪਏ ਹੈ।',
+      'or':
+          'ଏହା ଏକ ହସ୍ତନିର୍ମିତ ପିତ୍ତଳ ଢୋକ୍ରା ମୂର୍ତ୍ତି। ଏହା ତିଆରି କରିବାକୁ ୬ ଘଣ୍ଟା ଲାଗିଛି ଏବଂ ଖର୍ଚ୍ଚ ୧୫୦ ଟଙ୍କା ହୋଇଛି।',
+      'as':
+          'এইটো এটা হাতেৰে তৈয়াৰী বাঁহ আৰু বেতৰ বাচন। তৈয়াৰ কৰিবলৈ ৫ ঘণ্টা সময় লাগিল আৰু খৰচ ১০০ টকা হ’ল।',
     };
     return sampleVoiceMap[language] ?? sampleVoiceMap['hi']!;
   }
@@ -407,11 +656,13 @@ class ApiService {
     required String language,
   }) async {
     try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/ai/synthesize'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'text': text, 'language': language}),
-      ).timeout(aiTimeoutDuration);
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/ai/synthesize'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'text': text, 'language': language}),
+          )
+          .timeout(aiTimeoutDuration);
       if (res.statusCode == 200) {
         return jsonDecode(res.body)['audio_base64'] as String?;
       }
@@ -426,16 +677,18 @@ class ApiService {
     String? clarification,
   }) async {
     try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/ai/catalog'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'transcript': transcript,
-          'language': language,
-          'image_base64': imageBase64,
-          'clarification': clarification,
-        }),
-      ).timeout(aiTimeoutDuration);
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/ai/catalog'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'transcript': transcript,
+              'language': language,
+              'image_base64': imageBase64,
+              'clarification': clarification,
+            }),
+          )
+          .timeout(aiTimeoutDuration);
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
@@ -468,14 +721,31 @@ class ApiService {
           : 'कृपया बताएं: इस कलाकृति के निर्माण में कौन-सी सामग्री और तकनीक उपयोग की गई है?';
     }
 
-    final all12 = ['en', 'hi', 'mr', 'bn', 'ta', 'te', 'kn', 'ml', 'gu', 'pa', 'or', 'as'];
+    final all12 = [
+      'en',
+      'hi',
+      'mr',
+      'bn',
+      'ta',
+      'te',
+      'kn',
+      'ml',
+      'gu',
+      'pa',
+      'or',
+      'as'
+    ];
     return {
       'title_en': 'Handmade Terracotta Water Pitcher',
       'title_hi': 'हस्तनिर्मित पारंपरिक टेराकोटा जलपात्र',
-      'short_description_en': 'Pure riverbed clay pitcher keeping drinking water naturally chilled.',
-      'short_description_hi': 'प्राकृतिक नदी की मिट्टी से बना घड़ा जो पानी को ठंडा रखता है।',
-      'description_en': 'Handcrafted from fine riverbed clay naturally keeping water chilled and sweet.',
-      'description_hi': 'शुद्ध मिट्टी से बना पारंपरिक पात्र जो पानी को प्राकृतिक रूप से शीतल रखता है।',
+      'short_description_en':
+          'Pure riverbed clay pitcher keeping drinking water naturally chilled.',
+      'short_description_hi':
+          'प्राकृतिक नदी की मिट्टी से बना घड़ा जो पानी को ठंडा रखता है।',
+      'description_en':
+          'Handcrafted from fine riverbed clay naturally keeping water chilled and sweet.',
+      'description_hi':
+          'शुद्ध मिट्टी से बना पारंपरिक पात्र जो पानी को प्राकृतिक रूप से शीतल रखता है।',
       'material': hasMat ? 'Natural Earthen Clay' : null,
       'technique': hasTech ? "Potter's Wheel Shaping & Kiln Firing" : null,
       'category_slug': 'pottery',
@@ -485,12 +755,15 @@ class ApiService {
       'estimated_labor_hours': 4.5,
       'missing_fields': missing,
       'missing_info_prompt': prompt,
-      'translations': all12.map((l) => {
-        'language': l,
-        'title': 'Handcrafted Creation (${l.toUpperCase()})',
-        'short_description': 'Handcrafted authentic regional craft',
-        'description': 'Handcrafted creation made with traditional techniques.',
-      }).toList(),
+      'translations': all12
+          .map((l) => {
+                'language': l,
+                'title': 'Handcrafted Creation (${l.toUpperCase()})',
+                'short_description': 'Handcrafted authentic regional craft',
+                'description':
+                    'Handcrafted creation made with traditional techniques.',
+              })
+          .toList(),
     };
   }
 
@@ -508,23 +781,25 @@ class ApiService {
     String language = 'en',
   }) async {
     try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/ai/price'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'craft_category': category,
-          'material_cost': materialCost,
-          'labor_hours': laborHours,
-          'hourly_rate': hourlyRate,
-          'packaging_cost': packagingCost,
-          'shipping_cost': shippingCost,
-          'platform_fee_percent': platformFeePercent,
-          'material': material,
-          'technique': technique,
-          'dimensions': dimensions,
-          'language': language,
-        }),
-      ).timeout(aiTimeoutDuration);
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/ai/price'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'craft_category': category,
+              'material_cost': materialCost,
+              'labor_hours': laborHours,
+              'hourly_rate': hourlyRate,
+              'packaging_cost': packagingCost,
+              'shipping_cost': shippingCost,
+              'platform_fee_percent': platformFeePercent,
+              'material': material,
+              'technique': technique,
+              'dimensions': dimensions,
+              'language': language,
+            }),
+          )
+          .timeout(aiTimeoutDuration);
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
@@ -577,15 +852,17 @@ class ApiService {
     String language = 'en',
   }) async {
     try {
-      final res = await http.post(
-        Uri.parse('$apiBaseUrl/ai/price/validate-override'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'override_price': overridePrice,
-          'cost_floor': costFloor,
-          'language': language,
-        }),
-      ).timeout(aiTimeoutDuration);
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/ai/price/validate-override'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'override_price': overridePrice,
+              'cost_floor': costFloor,
+              'language': language,
+            }),
+          )
+          .timeout(aiTimeoutDuration);
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }

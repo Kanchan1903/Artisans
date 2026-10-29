@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:kalasathi_mobile/providers/auth_provider.dart';
 import 'package:kalasathi_mobile/l10n/app_localizations.dart';
 import 'package:kalasathi_mobile/services/voice_guidance_service.dart';
 import 'package:kalasathi_mobile/theme/app_theme.dart';
@@ -10,6 +12,7 @@ class VoiceHelpFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Provider.of<AuthProvider>(context);
     final l10n = AppLocalizations.of(context);
     final text = customMessage ?? l10n.translate('helpHome');
 

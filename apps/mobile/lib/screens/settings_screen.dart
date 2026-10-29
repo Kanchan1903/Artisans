@@ -55,7 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     l10n.translate('selectLanguage'),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: Text("सध्याची भाषा: ${auth.selectedLanguage.toUpperCase()}"),
+                  subtitle: Text("${l10n.translate('currentLanguage')}: ${AppLocalizations.getLanguageNative(auth.selectedLanguage)}"),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
                   onTap: () {
                     Navigator.push(
@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text("बँक खाते क्रमांक (Bank Account):", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(l10n.translate('bankAccountNumber'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: _bankAccountController,
@@ -108,7 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text("IFSC कोड:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(l10n.translate('ifscCode'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: _ifscController,
@@ -123,8 +123,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Text(l10n.translate('save')),
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("बँक तपशील सुरक्षित जतन केले!"),
+                          SnackBar(
+                            content: Text(l10n.translate('bankDetailsSaved')),
                             backgroundColor: AppTheme.successGreen,
                           ),
                         );
@@ -138,7 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // Logout Button
               OutlinedButton.icon(
                 icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                label: const Text("लॉगआउट करा (Logout)", style: TextStyle(color: Colors.red)),
+                label: Text(l10n.translate('logout'), style: const TextStyle(color: Colors.red)),
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
                 onPressed: () async {
                   await auth.logout();

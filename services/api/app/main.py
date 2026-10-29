@@ -20,6 +20,12 @@ async def lifespan(app: FastAPI):
     # Ensure uploads directory exists
     uploads_path = Path("uploads")
     uploads_path.mkdir(parents=True, exist_ok=True)
+    # Ensure MongoDB indexes exist
+    try:
+        from app.mongodb import init_mongo_indexes
+        await init_mongo_indexes()
+    except Exception:
+        pass
     yield
 
 
@@ -32,14 +38,26 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS middleware with strict origin regex to allow localhost & explicit domains with credentials
+# CORS — allow all localhost ports (dev) plus any explicit production origins in settings.
+# NOTE: allow_origin_regex is intentionally removed; combining it with allow_credentials
+# causes Starlette to drop preflight responses on some versions.
+_cors_origins = list(settings.ALLOWED_ORIGINS)
+if settings.ENVIRONMENT.lower() != "production":
+    # In development, whitelist every common localhost port the browser might use
+    for _port in [3000, 3001, 4000, 5173, 8000, 8080, 19006]:
+        for _scheme in ("http", "https"):
+            for _host in ("localhost", "127.0.0.1"):
+                _o = f"{_scheme}://{_host}:{_port}"
+                if _o not in _cors_origins:
+                    _cors_origins.append(_o)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Static file serving for uploaded product images
@@ -49,6 +67,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # Include v1 API endpoints
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(api_router, prefix="/api")
 
 
 @app.get("/", tags=["Health"])

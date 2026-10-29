@@ -450,3 +450,167 @@ export const SAMPLE_PRODUCTS: Product[] = [
     artisan: SAMPLE_ARTISANS[1],
   },
 ];
+
+
+// ─── Image Processing Jobs & CrewAI Integration ──────────────────────────────
+
+export interface ImageVariant {
+  id: string;
+  variant_id?: string;
+  background: {
+    type?: string;
+    name?: string;
+    hex?: string;
+    label?: string;
+    [key: string]: any;
+  };
+  image_url: string | null;
+  storage_key?: string | null;
+  saved?: boolean;
+  status: string;
+}
+
+export interface ImageJob {
+  job_id: string;
+  artisan_id: string | number;
+  product_id?: string | number | null;
+  product_name?: string | null;
+  product_category?: string | null;
+  status: "queued" | "running" | "completed" | "failed" | "retake_required" | string;
+  segmentation_status?: string | null;
+  original_photo?: {
+    image_url: string | null;
+    storage_key: string | null;
+  };
+  cutout?: {
+    image_url: string | null;
+    storage_key: string | null;
+  };
+  original_photo_url?: string | null;
+  cutout_url?: string | null;
+  variants: ImageVariant[];
+  required_selection_count: number;
+  selected_variant_ids: string[];
+  error?: string | null;
+  errors?: string[];
+  warnings?: string[];
+  quality_warnings?: string[];
+  requires_review: boolean;
+  crewai_execution_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function createImageJob(
+  file: File,
+  productName: string,
+  productCategory: string,
+  token?: string
+): Promise<ImageJob> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("product_name", productName);
+  formData.append("product_category", productCategory);
+  formData.append("generate_variations", "true");
+
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}/image-jobs`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to create image job (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchImageJob(jobId: string, token?: string): Promise<ImageJob> {
+  const res = await fetch(`${API_BASE_URL}/image-jobs/${jobId}`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch image job (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchLatestImageJob(token?: string): Promise<ImageJob | null> {
+  const res = await fetch(`${API_BASE_URL}/image-jobs/latest`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function saveImageVariantSelection(
+  jobId: string,
+  variantIds: string[],
+  token?: string
+): Promise<ImageJob> {
+  const res = await fetch(`${API_BASE_URL}/image-jobs/${jobId}/selection`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({ variant_ids: variantIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to save selection (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchArtisanImageJobs(token?: string): Promise<ImageJob[]> {
+  const res = await fetch(`${API_BASE_URL}/artisans/me/image-jobs`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createProduct(
+  payload: {
+    title_en: string;
+    description_en?: string;
+    price: number;
+    stock: number;
+    category_id?: number;
+    image_job_id?: string;
+    selected_variant_ids?: string[];
+    images?: Array<{ url: string; is_primary?: boolean; order_index?: number }>;
+    status?: string;
+    translations?: Array<{ language: string; title: string; description: string }>;
+  },
+  token: string
+): Promise<Product> {
+  const res = await fetch(`${API_BASE_URL}/products`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to create product (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function publishProduct(productId: number | string, token: string): Promise<Product> {
+  const res = await fetch(`${API_BASE_URL}/products/${productId}/publish`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to publish product (${res.status})`);
+  }
+  return res.json();
+}

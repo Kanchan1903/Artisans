@@ -50,7 +50,7 @@ void main() {
       final wizard = ProductWizardProvider();
       wizard.addPhoto(Uint8List.fromList([10, 20, 30]));
 
-      await wizard.processPhotoInAIStudio();
+      await wizard.processPhotoInAIStudio(token: 'test_token');
       expect(wizard.imageVariations.isNotEmpty, isTrue);
       expect(wizard.selectedVariationIds.isNotEmpty, isTrue);
 

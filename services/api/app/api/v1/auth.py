@@ -23,6 +23,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # In-memory sliding-window rate limiter per phone number
 _OTP_SEND_HISTORY: dict[str, list[float]] = defaultdict(list)
 _OTP_FAILED_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
+_OTP_SEND_ROLES: dict[str, UserRole] = {}
 
 MAX_OTP_SEND_PER_WINDOW = 5
 OTP_SEND_WINDOW_SECONDS = 600  # 10 minutes
@@ -45,6 +46,7 @@ async def send_otp_endpoint(payload: OTPRequest, db: AsyncSession = Depends(get_
             detail="Too many OTP requests for this phone number. Please wait a few minutes before trying again.",
         )
     _OTP_SEND_HISTORY[phone].append(now)
+    _OTP_SEND_ROLES[phone] = payload.role
     # In development/mock mode, generate OTP (123456 is also always accepted for ease of testing)
     code = "123456" if phone.endswith("0000") else generate_otp(6)
 
@@ -123,8 +125,10 @@ async def verify_otp_endpoint(payload: OTPVerify, db: AsyncSession = Depends(get
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
+    send_role = _OTP_SEND_ROLES.pop(phone, None)
+    target_role = payload.role if payload.role != UserRole.buyer else (send_role or payload.role)
     if not user:
-        requested_role = payload.role if hasattr(payload, "role") else UserRole.buyer
+        requested_role = target_role
         user = User(
             phone=phone,
             name=payload.name or f"User {phone[-4:]}",
@@ -147,6 +151,8 @@ async def verify_otp_endpoint(payload: OTPVerify, db: AsyncSession = Depends(get
         await db.refresh(user)
     else:
         user.is_verified = True
+        if target_role == UserRole.artisan and user.role != UserRole.artisan:
+            user.role = UserRole.artisan
         if payload.name and not user.name:
             user.name = payload.name
         if payload.language:

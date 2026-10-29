@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kalasathi_mobile/l10n/app_localizations.dart';
 import 'package:kalasathi_mobile/services/api_service.dart';
 import 'package:kalasathi_mobile/services/offline_storage_service.dart';
 
@@ -15,13 +16,27 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _authToken != null;
 
+  String getArtisanName(AppLocalizations l10n) {
+    final name = _artisanProfile?['name']?.toString()?.trim() ?? '';
+    if (name.isEmpty ||
+        name.contains('?') ||
+        name == 'सुनीता बाई सोनवणे' ||
+        name == 'Sunita Bai Sonawane' ||
+        name == 'ಸುನೀತಾ ಬಾಯಿ ಸೋನವಣೆ' ||
+        name == 'Artisan User' ||
+        name == 'Default Artisan') {
+      return l10n.translate('artisanNameLocalized');
+    }
+    return name;
+  }
+
   AuthProvider() {
     _loadInitialState();
   }
 
   Future<void> _loadInitialState() async {
     final lang = await OfflineStorageService.getSelectedLanguage();
-    if (lang != null) {
+    if (lang != null && lang.isNotEmpty) {
       _selectedLanguage = lang;
     }
     _authToken = await OfflineStorageService.getAuthToken();
@@ -31,8 +46,10 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> setLanguage(String langCode) async {
     _selectedLanguage = langCode;
-    await OfflineStorageService.saveSelectedLanguage(langCode);
     notifyListeners();
+    try {
+      await OfflineStorageService.saveSelectedLanguage(langCode);
+    } catch (_) {}
   }
 
   Future<String?> sendOtp(String phone) async {

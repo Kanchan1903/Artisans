@@ -15,7 +15,7 @@ void main() {
     expect(wizard.currentStep, 1);
 
     // Step 2: AI Studio
-    await wizard.processPhotoInAIStudio();
+    await wizard.processPhotoInAIStudio(token: 'test_token');
     expect(wizard.enhancedImageBase64, isNotNull);
     wizard.nextStep();
     expect(wizard.currentStep, 2);

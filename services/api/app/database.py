@@ -59,6 +59,14 @@ async def init_db():
             connection.execute(text("ALTER TABLE orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'unpaid'"))
         except Exception:
             pass
+        try:
+            connection.execute(text("ALTER TABLE product_images ADD COLUMN upload_key VARCHAR(64)"))
+        except Exception:
+            pass
+        try:
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_product_images_upload_key ON product_images (upload_key)"))
+        except Exception:
+            pass
 
     try:
         async with engine.begin() as conn:

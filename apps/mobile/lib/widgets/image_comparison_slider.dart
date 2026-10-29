@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kalasathi_mobile/l10n/app_localizations.dart';
 import 'package:kalasathi_mobile/theme/app_theme.dart';
 
 class ImageComparisonSlider extends StatefulWidget {
@@ -20,6 +21,7 @@ class _ImageComparisonSliderState extends State<ImageComparisonSlider> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AspectRatio(
       aspectRatio: 1.0,
       child: LayoutBuilder(
@@ -112,8 +114,8 @@ class _ImageComparisonSliderState extends State<ImageComparisonSlider> {
                       color: Colors.black.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      "BEFORE (मूल फोटो)",
+                    child: Text(
+                      l10n.translate('before'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -131,8 +133,8 @@ class _ImageComparisonSliderState extends State<ImageComparisonSlider> {
                       color: AppTheme.terracotta,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      "AFTER (एआई स्टुडिओ)",
+                    child: Text(
+                      l10n.translate('after'),
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,

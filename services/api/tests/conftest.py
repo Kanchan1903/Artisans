@@ -2,12 +2,70 @@
 import asyncio
 import pytest
 import pytest_asyncio
+import httpx
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from app.database import Base, get_db
 from app.models.product import Category
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def mock_agent_image_downloads(monkeypatch):
+    """Return a valid in-memory JPEG for agent output URLs during API tests."""
+    from app.utils import image_jobs
+    from PIL import Image
+    import io
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), color="white").save(buffer, format="JPEG")
+    image_bytes = buffer.getvalue()
+
+    def handler(request):
+        return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=image_bytes)
+
+    monkeypatch.setattr(image_jobs, "image_output_transport_factory", lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr("app.utils.crewai_client.CrewAIClient.get_inputs", lambda self: _empty_inputs())
+
+    async def mock_storage_upload(file_bytes, filename, content_type="image/jpeg"):
+        return f"https://storage.example.test/uploads/{filename}"
+
+    monkeypatch.setattr("app.utils.storage.storage.upload_file", mock_storage_upload)
+    mongo_documents = {}
+
+    class FakeCollection:
+        async def update_one(self, query, update, upsert=False):
+            key_name, key_value = next(iter(query.items()))
+            document = mongo_documents.setdefault(key_value, {key_name: key_value})
+            document.update(update.get("$set", {}))
+            for key, value in update.get("$setOnInsert", {}).items():
+                document.setdefault(key, value)
+
+        async def find_one(self, query, projection=None):
+            key_name, key_value = next(iter(query.items()))
+            document = mongo_documents.get(key_value)
+            if document and all(document.get(key) == value for key, value in query.items()):
+                return dict(document)
+            return None
+
+        async def find_one_and_update(self, query, update, **kwargs):
+            key_name, key_value = next(iter(query.items()))
+            document = mongo_documents.get(key_value)
+            if document and all(document.get(key) == value for key, value in query.items()):
+                document.update(update.get("$set", {}))
+                return dict(document)
+            return None
+
+    class FakeDatabase:
+        def __getitem__(self, collection_name):
+            return FakeCollection()
+
+    monkeypatch.setattr("app.mongodb.get_mongo_database", lambda: FakeDatabase())
+
+
+async def _empty_inputs():
+    return []
 
 # Use in-memory SQLite for super-fast, isolated testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

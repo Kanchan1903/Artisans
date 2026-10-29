@@ -70,7 +70,11 @@ class Product(Base):
     # Relationships
     artisan: Mapped["ArtisanProfile"] = relationship(back_populates="products")  # type: ignore # noqa: F821
     category: Mapped["Category | None"] = relationship(back_populates="products")
-    images: Mapped[list["ProductImage"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    images: Mapped[list["ProductImage"]] = relationship(
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductImage.order_index",
+    )
     translations: Mapped[list["ProductTranslation"]] = relationship(back_populates="product", cascade="all, delete-orphan")
     order_items: Mapped[list["OrderItem"]] = relationship(back_populates="product")  # type: ignore # noqa: F821
     reviews: Mapped[list["Review"]] = relationship(back_populates="product")  # type: ignore # noqa: F821
@@ -86,6 +90,7 @@ class ProductImage(Base):
     url: Mapped[str] = mapped_column(Text, nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
+    upload_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
 
     product: Mapped["Product"] = relationship(back_populates="images")
 

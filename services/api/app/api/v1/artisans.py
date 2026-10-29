@@ -59,6 +59,31 @@ async def update_my_artisan_profile(
     return result.scalar_one()
 
 
+@router.get("/me/image-jobs")
+async def get_my_image_jobs(
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all image processing jobs for current artisan from MongoDB / SQL."""
+    user, profile = artisan_tuple
+    from app.mongodb import list_artisan_jobs_mongo
+    from app.models.image_job import ImageProcessingJob
+    from app.utils.image_jobs import job_to_dict
+
+    mongo_jobs = await list_artisan_jobs_mongo(profile.id)
+    if mongo_jobs:
+        return mongo_jobs
+
+    stmt = (
+        select(ImageProcessingJob)
+        .where(ImageProcessingJob.artisan_id == profile.id)
+        .order_by(ImageProcessingJob.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    jobs = result.scalars().all()
+    return [job_to_dict(j) for j in jobs]
+
+
 @router.get("", response_model=list[ArtisanPublicOut])
 async def list_public_artisans(
     craft_type: str | None = Query(None, description="Filter by craft category/type"),

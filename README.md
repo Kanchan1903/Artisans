@@ -200,6 +200,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES=10080
 DATABASE_URL=sqlite+aiosqlite:///./kalasathi.db
 # For PostgreSQL: postgresql+asyncpg://user:pass@localhost/kalasathi
 
+# MongoDB stores queryable image-job output JSON
+MONGODB_URI=mongodb://localhost:27017/kalasathi
+MONGODB_DB_NAME=kalasathi
+MONGODB_REQUIRED=true
+
 # Razorpay (payment gateway)
 RAZORPAY_KEY_ID=your_razorpay_key_id
 RAZORPAY_KEY_SECRET=your_razorpay_key_secret
@@ -212,6 +217,14 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
 
 > **Note:** In development mode, the backend returns the OTP directly in the API response (`mock_code` field). Use `123456` as a universal test OTP for any phone number.
+
+Start MongoDB before the API when `MONGODB_REQUIRED=true` (for example, `docker compose up mongo`). Direct local API runs use `mongodb://localhost:27017/kalasathi`; Docker Compose uses `MONGODB_URI_DOCKER` (default `mongodb://mongo:27017/kalasathi`). Image-job results are saved in the `image_jobs.output_json` document field and can be queried by `job_id`:
+
+```javascript
+db.image_jobs.findOne({ job_id: "<job-id>" }, { _id: 0, output_json: 1 })
+```
+
+The artisan API also exposes the same saved JSON at `GET /api/v1/image-jobs/{job_id}/output`. Apply SQL migrations with `cd services/api && alembic upgrade head`.
 
 ---
 

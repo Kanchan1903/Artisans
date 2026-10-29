@@ -49,6 +49,7 @@ class ProductTranslationOut(ProductTranslationBase):
 
 class ProductCreate(BaseModel):
     category_id: int | None = None
+    category_slug: str | None = Field(default=None, min_length=1, max_length=100)
     title_en: str = Field(..., min_length=2, max_length=255)
     description_en: str | None = None
     title_hi: str | None = None
@@ -66,6 +67,8 @@ class ProductCreate(BaseModel):
     translations: list[ProductTranslationCreate] = []
     idempotency_key: str | None = None
     draft_product_id: int | None = None
+    image_job_id: str | None = None
+    selected_variant_ids: list[str] | None = None
 
 
 class ProductUpdate(BaseModel):

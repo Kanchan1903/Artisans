@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     AI_SERVICE_URL: str = "http://localhost:8001"
     AI_MOCK_MODE: bool = True
 
+    # CrewAI AMP (product image processing). Token stays on the backend only.
+    CREWAI_API_BASE_URL: str = "https://karigarai-product-image-processing-agent-v1-4812b293.crewai.com"
+    CREWAI_BEARER_TOKEN: str = ""
+
+    # MongoDB
+    MONGODB_URI: str = "mongodb://localhost:27017/kalasathi"
+    MONGODB_DB_NAME: str = "kalasathi"
+    MONGODB_REQUIRED: bool = True
+
+    # Cloudinary (optional image storage fallback/alternative)
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
     # OTP
     OTP_PROVIDER: str = "mock"  # mock | twilio | msg91
     OTP_EXPIRE_MINUTES: int = 10

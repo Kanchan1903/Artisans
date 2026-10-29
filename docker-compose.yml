@@ -34,6 +34,20 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── MongoDB (queryable image-job output JSON) ───────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: kalasathi_mongodb
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ─── MinIO (S3-compatible object storage) ───────────────────────────────────
   minio:
     image: minio/minio:latest
@@ -67,6 +81,14 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin_secret}
       MINIO_BUCKET: ${MINIO_BUCKET:-kalasathi-media}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+      CREWAI_API_BASE_URL: ${CREWAI_API_BASE_URL:-https://karigarai-product-image-processing-agent-v1-4812b293.crewai.com}
+      CREWAI_BEARER_TOKEN: ${CREWAI_BEARER_TOKEN:-}
+      AI_MOCK_MODE: ${AI_MOCK_MODE:-true}
+      MONGODB_URI: ${MONGODB_URI_DOCKER:-mongodb://mongo:27017/kalasathi}
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-kalasathi}
+      MONGODB_REQUIRED: ${MONGODB_REQUIRED:-true}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change_me_in_production}
       JWT_ALGORITHM: HS256
       AI_SERVICE_URL: http://ai:8001
@@ -82,6 +104,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      mongo:
+        condition: service_healthy
     working_dir: /app
 
   # ─── AI Microservice ─────────────────────────────────────────────────────────
@@ -130,3 +154,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  mongodb_data:

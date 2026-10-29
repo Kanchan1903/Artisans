@@ -39,7 +39,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: "ताजे करा (Refresh)",
+            tooltip: "ताजे करा",
             onPressed: () {
               if (auth.authToken != null) {
                 orderProvider.fetchOrders(auth.authToken!);
@@ -157,7 +157,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               // Products in this Order
                               if (items.isNotEmpty) ...[
                                 const Text(
-                                  "ऑर्डर केलेल्या वस्तू (Items):",
+                                  "ऑर्डर केलेल्या वस्तू:",
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textMuted),
                                 ),
                                 const SizedBox(height: 6),
@@ -390,7 +390,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     } else if (currentStatus == 'shipped') {
       return ElevatedButton.icon(
         icon: const Icon(Icons.verified_rounded),
-        label: const Text("वितरित झाली म्हणून नोंदवा (Mark Delivered)"),
+        label: const Text("वितरित झाली म्हणून नोंदवा"),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.successGreen,
           minimumSize: const Size.fromHeight(50),
@@ -417,7 +417,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             Icon(Icons.check_circle_rounded, color: AppTheme.successGreen),
             SizedBox(width: 8),
             Text(
-              "यशस्वीरित्या वितरित (Delivered)",
+              "यशस्वीरित्या वितरित",
               style: TextStyle(color: AppTheme.successGreen, fontWeight: FontWeight.bold),
             ),
           ],
@@ -433,7 +433,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
         alignment: Alignment.center,
         child: Text(
-          "रद्द केलेली ऑर्डर (Cancelled & Refunded)",
+          "रद्द केलेली ऑर्डर",
           style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold),
         ),
       );
@@ -447,7 +447,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("ऑर्डर रद्द करायची आहे का?"),
-        content: const Text("ऑर्डर रद्द केल्यास ग्राहकाला पैसे परत मिळतील आणि वस्तू पुन्हा साठ्यात (Stock) जोडली जाईल."),
+        content: const Text("ऑर्डर रद्द केल्यास ग्राहकाला पैसे परत मिळतील आणि वस्तू पुन्हा साठ्यात जोडली जाईल."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:kalasathi_mobile/l10n/app_localizations.dart';
@@ -7,7 +6,6 @@ import 'package:kalasathi_mobile/providers/auth_provider.dart';
 import 'package:kalasathi_mobile/providers/product_wizard_provider.dart';
 import 'package:kalasathi_mobile/services/voice_guidance_service.dart';
 import 'package:kalasathi_mobile/theme/app_theme.dart';
-import 'package:kalasathi_mobile/widgets/image_comparison_slider.dart';
 import 'package:kalasathi_mobile/widgets/voice_help_fab.dart';
 
 class AddProductWizardScreen extends StatefulWidget {
@@ -43,18 +41,18 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
     final stepTitles = [
       l10n.translate('stepCamera'),
-      l10n.translate('stepStudio'),
       l10n.translate('stepVoice'),
+      l10n.translate('stepStudio'),
       l10n.translate('stepPricing'),
       l10n.translate('stepPublish'),
     ];
 
     final stepHelp = [
       l10n.translate('helpCamera'),
-      l10n.translate('helpStudio'),
       l10n.translate('helpVoice'),
+      l10n.translate('helpStudio'),
       l10n.translate('helpPricing'),
-      "एका टॅपमध्ये उत्पादन थेट वेबसाइटवर लाइव्ह करा.",
+      l10n.translate('helpPublish'),
     ];
 
     return Scaffold(
@@ -89,7 +87,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       height: 6,
                       decoration: BoxDecoration(
-                        color: isPassed ? AppTheme.terracotta : AppTheme.borderWarm,
+                        color: isPassed
+                            ? AppTheme.terracotta
+                            : AppTheme.borderWarm,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -102,7 +102,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             // ─── Step Content ────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                key: ValueKey('wizard_step_${wizard.currentStep}'),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: _buildStepContent(wizard, l10n, auth),
               ),
             ),
@@ -112,14 +114,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     );
   }
 
-  Widget _buildStepContent(ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
+  Widget _buildStepContent(
+      ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
     switch (wizard.currentStep) {
       case 0:
-        return _buildCameraStep(wizard, l10n);
+        return _buildCameraStep(wizard, l10n, auth);
       case 1:
-        return _buildStudioStep(wizard, l10n);
-      case 2:
         return _buildVoiceStep(wizard, l10n, auth);
+      case 2:
+        return _buildStudioStep(wizard, l10n, auth);
       case 3:
         return _buildPricingStep(wizard, l10n, auth);
       case 4:
@@ -130,124 +133,535 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   }
 
   // ─── Step 1: Smart Camera ──────────────────────────────────────────────────
-  Widget _buildCameraStep(ProductWizardProvider wizard, AppLocalizations l10n) {
+  Widget _buildCameraStep(
+      ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
+    final hasPhoto = wizard.photos.isNotEmpty;
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Camera Viewfinder Simulation with Smart Guidance Overlay
+        // Camera / Image Preview Card
         Container(
           width: double.infinity,
-          height: 340,
+          height: 270,
           decoration: BoxDecoration(
-            color: const Color(0xFF1F1D1B),
+            color: const Color(0xFF1E1C1A),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppTheme.terracotta, width: 2),
+            border: Border.all(
+              color: hasPhoto
+                  ? AppTheme.terracotta
+                  : AppTheme.terracotta.withOpacity(0.4),
+              width: 2.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
+            ],
           ),
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Framing guides
-              Container(
-                width: 240,
-                height: 240,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white30, width: 2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              // Simulated handicraft in frame
-              const Icon(
-                Icons.palette_rounded,
-                size: 110,
-                color: Color(0xFFC85A32),
-              ),
-              // Smart Camera Guidance Banner
-              Positioned(
-                top: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.75),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.turmeric, width: 1.5),
+              if (hasPhoto) ...[
+                // Captured photo preview
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Image.memory(
+                    wizard.photos.first,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.wb_sunny_rounded, color: AppTheme.turmeric, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.translate('guidanceGoodLight'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                ),
+                // Badge: Original Photo Verified
+                Positioned(
+                  top: 14,
+                  left: 14,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(20),
+                      border:
+                          Border.all(color: AppTheme.successGreen, width: 1.5),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: AppTheme.successGreen, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          "मूळ फोटो तयार (Original Photo)",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else ...[
+                // Professional Viewfinder Simulation
+                Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: AppTheme.turmeric.withOpacity(0.5), width: 1.5),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Stack(
+                    children: [
+                      // Framing corners
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                              left: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                              right: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                              left: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                              right: BorderSide(
+                                  color: AppTheme.turmeric, width: 3),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Center(
+                        child: Icon(Icons.photo_camera_rounded,
+                            size: 76, color: Color(0xFFC85A32)),
                       ),
                     ],
                   ),
                 ),
+                Positioned(
+                  bottom: 20,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      l10n.translate('cameraKeepInFrame'),
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Photography Guidance Card
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.turmericLight,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.turmeric.withOpacity(0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lightbulb_outline_rounded,
+                      color: AppTheme.turmericDark, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.translate('cameraGuidanceTitle'),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppTheme.textCharcoal),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 6),
+              Text(
+                l10n.translate('cameraGuidanceTips'),
+                style: TextStyle(
+                    fontSize: 12, height: 1.4, color: AppTheme.textMuted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Native Capture and Gallery Buttons
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.camera_alt_rounded, size: 22),
+                label: Text(hasPhoto
+                    ? l10n.translate('cameraRetake')
+                    : l10n.translate('capturePhoto')),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.terracotta,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: wizard.isUploadingPhoto
+                    ? null
+                    : () async {
+                        final success = await wizard.pickImageFromCamera(
+                            token: auth.authToken);
+                        if (!mounted) return;
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.translate('cameraCaptured')),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: AppTheme.successGreen,
+                            ),
+                          );
+                        } else {
+                          if (wizard.lastCameraError != null) {
+                            _showCameraPermissionDialog(
+                                context, wizard.lastCameraError!);
+                          } else if (wizard.photoUploadError != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(wizard.photoUploadError!)));
+                          }
+                        }
+                      },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.photo_library_rounded,
+                    size: 22, color: AppTheme.terracotta),
+                label: Text(
+                  hasPhoto
+                      ? l10n.translate('cameraChangeFromGallery')
+                      : l10n.translate('cameraChooseFromGallery'),
+                  style: const TextStyle(
+                      color: AppTheme.terracotta, fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side:
+                      const BorderSide(color: AppTheme.terracotta, width: 1.8),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: wizard.isUploadingPhoto
+                    ? null
+                    : () async {
+                        final success = await wizard.pickImageFromGallery(
+                            token: auth.authToken);
+                        if (!mounted) return;
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content:
+                                  Text(l10n.translate('cameraImageSelected')),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: AppTheme.successGreen,
+                            ),
+                          );
+                        } else {
+                          if (wizard.lastCameraError != null) {
+                            _showGalleryPermissionDialog(
+                                context, wizard.lastCameraError!);
+                          } else if (wizard.photoUploadError != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(wizard.photoUploadError!)));
+                          }
+                        }
+                      },
+              ),
+            ),
+          ],
+        ),
+
+        if (wizard.isUploadingPhoto) ...[
+          const SizedBox(height: 10),
+          const LinearProgressIndicator(color: AppTheme.terracotta),
+          const SizedBox(height: 6),
+          const Text('Uploading original photo to your draft…',
+              textAlign: TextAlign.center),
+        ],
+        if (wizard.photoUploadError != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                    child: Text(wizard.photoUploadError!,
+                        style: TextStyle(color: Colors.red.shade800))),
+                if (wizard.canRetryPhotoUpload)
+                  TextButton(
+                    onPressed: wizard.isUploadingPhoto
+                        ? null
+                        : () => wizard.retryPhotoUpload(auth.authToken),
+                    child: const Text('Retry'),
+                  ),
+              ],
+            ),
+          ),
+        ],
+
+        if (hasPhoto) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton.icon(
+              icon: const Icon(Icons.delete_outline_rounded,
+                  size: 18, color: Colors.redAccent),
+              label: Text(
+                l10n.translate('cameraRemovePhoto'),
+                style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold),
+              ),
+              onPressed: wizard.isUploadingPhoto
+                  ? null
+                  : () async {
+                      final removed =
+                          await wizard.clearPhotos(token: auth.authToken);
+                      if (!mounted) return;
+                      if (!removed && wizard.photoUploadError != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(wizard.photoUploadError!)));
+                      }
+                    },
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 12),
+
+        // Quick Preset Sample Craft selector
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.borderWarm),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.palette_outlined,
+                      size: 18, color: AppTheme.terracotta),
+                  SizedBox(width: 6),
+                  Text(
+                    l10n.translate('cameraTrySample'),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: AppTheme.textCharcoal),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  ActionChip(
+                    avatar: const Text("🏺"),
+                    label: Text(l10n.translate('craftPottery'),
+                        style: const TextStyle(fontSize: 12)),
+                    onPressed: () => wizard
+                        .loadSamplePhoto('assets/images/prod_pottery.jpg'),
+                  ),
+                  ActionChip(
+                    avatar: const Text("🧵"),
+                    label: Text(l10n.translate('craftHandloom'),
+                        style: const TextStyle(fontSize: 12)),
+                    onPressed: () => wizard
+                        .loadSamplePhoto('assets/images/prod_handloom.jpg'),
+                  ),
+                  ActionChip(
+                    avatar: const Text("💍"),
+                    label: Text(l10n.translate('craftJewelry'),
+                        style: const TextStyle(fontSize: 12)),
+                    onPressed: () => wizard
+                        .loadSamplePhoto('assets/images/prod_jewelry.jpg'),
+                  ),
+                  ActionChip(
+                    avatar: const Text("🪵"),
+                    label: Text(l10n.translate('craftWoodcraft'),
+                        style: const TextStyle(fontSize: 12)),
+                    onPressed: () => wizard
+                        .loadSamplePhoto('assets/images/prod_woodcraft.jpg'),
+                  ),
+                ],
               ),
             ],
           ),
         ),
         const SizedBox(height: 20),
 
-        // Photo count indicator
-        Text(
-          "${wizard.photos.length}/4 ${l10n.translate('photosTaken')}",
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textMuted),
-        ),
-        const SizedBox(height: 16),
-
-        // Shutter Button
+        // Continue to AI Studio Button (Enabled only if valid photo selected)
         ElevatedButton.icon(
-          icon: const Icon(Icons.camera_alt_rounded, size: 28),
-          label: Text(l10n.translate('capturePhoto')),
+          icon: const Icon(Icons.auto_awesome_rounded, size: 24),
+          label: Text(
+            !hasPhoto
+                ? l10n.translate('cameraTakeOrChooseFirst')
+                : !wizard.isCurrentPhotoUploaded
+                    ? 'Upload the original photo before continuing'
+                    : l10n.translate('cameraContinueDetails'),
+          ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.terracotta,
-            padding: const EdgeInsets.symmetric(vertical: 18),
+            backgroundColor: hasPhoto &&
+                    wizard.isCurrentPhotoUploaded &&
+                    !wizard.isUploadingPhoto
+                ? AppTheme.indigo
+                : Colors.grey.shade400,
+            minimumSize: const Size.fromHeight(56),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
-          onPressed: () {
-            // Add sample image bytes
-            wizard.addPhoto(Uint8List.fromList(List.filled(100, 255)));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("फोटो टिपला! (Photo captured successfully)"),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          },
+          onPressed: hasPhoto &&
+                  wizard.isCurrentPhotoUploaded &&
+                  !wizard.isUploadingPhoto
+              ? () {
+                  wizard.nextStep();
+                }
+              : null,
         ),
-        const SizedBox(height: 14),
-
-        if (wizard.photos.isNotEmpty)
-          ElevatedButton.icon(
-            icon: const Icon(Icons.arrow_forward_rounded, size: 24),
-            label: Text("${l10n.translate('continueBtn')} (${l10n.translate('stepStudio')})"),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.indigo),
-            onPressed: () async {
-              await wizard.processPhotoInAIStudio();
-              wizard.nextStep();
-            },
-          ),
+        const SizedBox(height: 100),
       ],
     );
   }
 
-  // ─── Step 2: AI Image Studio ───────────────────────────────────────────────
-  Widget _buildStudioStep(ProductWizardProvider wizard, AppLocalizations l10n) {
+  // ─── Step 2: AI Image Studio & 10 Variations Selection ────────────────────
+  Widget _buildStudioStep(
+      ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
     if (wizard.isProcessingAI) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 80),
+          padding: const EdgeInsets.symmetric(vertical: 70, horizontal: 20),
           child: Column(
             children: [
-              const CircularProgressIndicator(color: AppTheme.terracotta, strokeWidth: 4),
-              const SizedBox(height: 24),
-              const Text(
-                "एआय स्टुडिओ १०-१५ विविध आकर्षक पर्याय तयार करत आहे...\n(AI Studio is generating 10–15 studio variations...)",
+              const SizedBox(
+                width: 56,
+                height: 56,
+                child: CircularProgressIndicator(
+                    color: AppTheme.terracotta, strokeWidth: 4.5),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                wizard.imageJobStatus == 'uploading'
+                    ? "उत्पादनाचा फोटो सुरक्षितपणे अपलोड करत आहे..."
+                    : "एआय स्टुडिओ उत्पादनाचा फोटो प्रक्रिया करत आहे...",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textCharcoal),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                wizard.imageJobStatus == 'uploading'
+                    ? "Uploading your original product photo securely..."
+                    : "CrewAI is processing the original photo and preparing catalog backgrounds...",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppTheme.turmericLight,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.turmeric.withOpacity(0.4)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_rounded,
+                        color: AppTheme.turmericDark, size: 18),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "हस्तकलेचा मूळ आकार, रंग व नक्षी जतन केली जात आहे",
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textCharcoal),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -257,91 +671,168 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
     final variations = wizard.imageVariations;
     final selectedIds = wizard.selectedVariationIds;
+    final isExact3 =
+        selectedIds.length == 3 && wizard.imageJobStatus == 'completed';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Studio Step Banner
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.turmericLight,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.turmeric.withOpacity(0.5)),
+        if (wizard.imageJobError != null) ...[
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(wizard.imageJobError!,
+                    style: TextStyle(color: Colors.orange.shade900)),
+                if (wizard.imageJobStatus != 'retake_required' &&
+                    wizard.imageJobStatus != 'awaiting_review')
+                  TextButton.icon(
+                    onPressed: () => wizard.retryImageJob(auth.authToken ?? ''),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry image processing'),
+                  ),
+              ],
+            ),
           ),
-          child: Row(
+        ],
+        if (wizard.imageJobStatus == 'awaiting_review' &&
+            variations.length >= 3) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.verified_user_outlined),
+              label: const Text(
+                  'I reviewed these images; the original product is preserved'),
+              onPressed: () => wizard.approveImageReview(auth.authToken ?? ''),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        // Top Header Card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderWarm),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.auto_awesome_rounded, color: AppTheme.turmericDark, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "एआय स्टुडिओ: १२ व्यावसायिक पर्याय तयार",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textCharcoal),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "वेबसाइटवर अधिक विक्रीसाठी ३ ते ४ सर्वोत्तम चित्रे निवडा (${selectedIds.length}/4 निवडले)",
-                      style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                    ),
-                  ],
+              Text(
+                "Choose Your Best 3 Photos",
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textCharcoal,
+                  letterSpacing: -0.3,
                 ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                "तुमचे ३ सर्वोत्तम फोटो निवडा",
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.terracottaDark),
+              ),
+              SizedBox(height: 5),
+              Text(
+                "Review the processed product images, then select exactly three for your website catalog.",
+                style: TextStyle(
+                    fontSize: 12, color: AppTheme.textMuted, height: 1.3),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
-        // Selection Counter Pill
+        // Live Selection Counter & Actions Bar
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // Live Counter Pill: "X of 3 selected"
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: selectedIds.length >= 3 ? AppTheme.successGreenLight : AppTheme.terracottaLight,
+                color: isExact3
+                    ? AppTheme.successGreenLight
+                    : AppTheme.terracottaLight,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: selectedIds.length >= 3 ? AppTheme.successGreen : AppTheme.terracotta,
+                  color: isExact3 ? AppTheme.successGreen : AppTheme.terracotta,
+                  width: 1.5,
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    selectedIds.length >= 3 ? Icons.check_circle : Icons.photo_library_rounded,
-                    color: selectedIds.length >= 3 ? AppTheme.successGreen : AppTheme.terracotta,
+                    isExact3
+                        ? Icons.check_circle_rounded
+                        : Icons.photo_library_rounded,
+                    color:
+                        isExact3 ? AppTheme.successGreen : AppTheme.terracotta,
                     size: 18,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text(
-                    "निवडलेली चित्रे: ${selectedIds.length} / 4 (Selected)",
+                    isExact3
+                        ? "3 of 3 selected (३ पैकी ३ निवडले)"
+                        : "${selectedIds.length} of 3 selected (३ पैकी ${selectedIds.length} निवडले)",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: selectedIds.length >= 3 ? AppTheme.successGreen : AppTheme.terracotta,
+                      fontSize: 12,
+                      color: isExact3
+                          ? AppTheme.successGreen
+                          : AppTheme.terracottaDark,
                     ),
                   ),
                 ],
               ),
             ),
-            TextButton.icon(
-              icon: const Icon(Icons.volume_up_rounded, size: 18),
-              label: const Text("ऐका", style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () {
-                VoiceGuidanceService.speakPrompt(
-                  context,
-                  "एआयने तयार केलेल्या १२ फोटोंपैकी खरेदीदारांना आकर्षित करणारे ३ ते ४ फोटो निवडा.",
-                );
-              },
+
+            // Regenerate Images Button with confirmation
+            OutlinedButton.icon(
+              icon: const Icon(Icons.refresh_rounded,
+                  size: 16, color: AppTheme.indigo),
+              label: const Text(
+                "पुन्हा तयार करा",
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.indigo),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppTheme.indigo, width: 1.2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () =>
+                  _showRegenerateConfirmDialog(context, wizard, auth),
             ),
           ],
         ),
         const SizedBox(height: 14),
 
-        // Grid of 10-15 Variations
+        // Responsive Grid of 10 Variations
         if (variations.isNotEmpty)
           GridView.builder(
             shrinkWrap: true,
@@ -351,20 +842,39 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               crossAxisCount: 2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: 0.85,
+              childAspectRatio: 0.82,
             ),
             itemBuilder: (context, index) {
               final variation = variations[index];
               final varId = variation['id'] as String;
               final isSelected = selectedIds.contains(varId);
-              final isPrimary = selectedIds.isNotEmpty && selectedIds.first == varId;
-              final titleMr = variation['title_mr'] ?? variation['title'] ?? 'पर्याय ${index + 1}';
-              final imgUrl = variation['image_url'] as String? ?? '';
+              final isPrimary =
+                  selectedIds.isNotEmpty && selectedIds.first == varId;
+              final titleMr = variation['title_mr'] ??
+                  variation['title'] ??
+                  'पर्याय ${index + 1}';
+              final titleEn = variation['title'] ?? 'Variation ${index + 1}';
 
               return InkWell(
                 borderRadius: BorderRadius.circular(18),
                 onTap: () {
-                  wizard.toggleVariationSelection(varId);
+                  final allowed = wizard.toggleVariationSelection(varId);
+                  if (!allowed) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          "तुम्ही जास्तीत जास्त ३ फोटो निवडू शकता. कृपया आधी एक अनसिलेक्ट करा.\n(You can only select up to 3 photos. Please deselect one first.)",
+                        ),
+                        backgroundColor: AppTheme.terracotta,
+                        duration: const Duration(seconds: 2),
+                        action: SnackBarAction(
+                          label: "समजले",
+                          textColor: Colors.white,
+                          onPressed: () {},
+                        ),
+                      ),
+                    );
+                  }
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -372,12 +882,16 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: isSelected ? AppTheme.terracotta : AppTheme.borderWarm,
+                      color: isSelected
+                          ? AppTheme.terracotta
+                          : AppTheme.borderWarm,
                       width: isSelected ? 3.0 : 1.0,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: isSelected ? AppTheme.terracotta.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                        color: isSelected
+                            ? AppTheme.terracotta.withOpacity(0.2)
+                            : Colors.black.withOpacity(0.04),
                         blurRadius: isSelected ? 8 : 4,
                         offset: const Offset(0, 3),
                       )
@@ -391,10 +905,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                           fit: StackFit.expand,
                           children: [
                             ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                              child: _buildVariationThumbnail(imgUrl),
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(16)),
+                              child: _buildVariationThumbnail(variation),
                             ),
-                            // Top Right Selection Badge
+                            // Top Right Selection Badge / Checkbox
                             Positioned(
                               top: 8,
                               right: 8,
@@ -402,15 +917,20 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                                 width: 28,
                                 height: 28,
                                 decoration: BoxDecoration(
-                                  color: isSelected ? AppTheme.terracotta : Colors.white.withOpacity(0.85),
+                                  color: isSelected
+                                      ? AppTheme.terracotta
+                                      : Colors.white.withOpacity(0.9),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isSelected ? AppTheme.terracotta : AppTheme.textMuted,
+                                    color: isSelected
+                                        ? AppTheme.terracotta
+                                        : AppTheme.textMuted,
                                     width: 1.5,
                                   ),
                                 ),
                                 child: isSelected
-                                    ? const Icon(Icons.check, size: 18, color: Colors.white)
+                                    ? const Icon(Icons.check_rounded,
+                                        size: 18, color: Colors.white)
                                     : null,
                               ),
                             ),
@@ -420,33 +940,72 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                                 top: 8,
                                 left: 8,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: AppTheme.successGreen,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Text(
-                                    "मुख्य (Hero)",
-                                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    "मुख्य चित्र",
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ),
+                            // Zoom / Fullscreen Preview Icon
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    _showImagePreviewDialog(context, variation),
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.65),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.zoom_in_rounded,
+                                      size: 16, color: Colors.white),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       // Title caption
                       Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          titleMr,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                            color: isSelected ? AppTheme.terracottaDark : AppTheme.textCharcoal,
-                          ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 7),
+                        child: Column(
+                          children: [
+                            Text(
+                              titleMr,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w600,
+                                color: isSelected
+                                    ? AppTheme.terracottaDark
+                                    : AppTheme.textCharcoal,
+                              ),
+                            ),
+                            Text(
+                              titleEn,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 10, color: AppTheme.textMuted),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -456,46 +1015,264 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             },
           )
         else
-          // Fallback Comparison Slider if no variations loaded
-          Column(
-            children: [
-              ImageComparisonSlider(
-                beforeImage: const NetworkImage(
-                  "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600",
-                ),
-                afterImage: const NetworkImage(
-                  "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=600",
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+          // Fallback if variations failed
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Center(
+              child: Text("पर्याय लोड होत आहेत... (Loading variations...)"),
+            ),
           ),
 
         const SizedBox(height: 24),
 
+        // Continue Button: Strictly disabled until exactly 3 photos are selected
         ElevatedButton.icon(
           icon: const Icon(Icons.arrow_forward_rounded, size: 24),
-          label: Text("${l10n.translate('continueBtn')} (${l10n.translate('stepVoice')}) - ${selectedIds.length} निवडले"),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size.fromHeight(56),
+          label: Text(
+            isExact3
+                ? "पुढे जा: किंमत ठरवा (३ निवडले)"
+                : "पुढे जाण्यासाठी बरोबर ३ फोटो निवडा (${selectedIds.length}/3 निवडले)",
           ),
-          onPressed: () {
-            wizard.nextStep();
-          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isExact3 ? AppTheme.indigo : Colors.grey.shade400,
+            minimumSize: const Size.fromHeight(56),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          onPressed: isExact3
+              ? () async {
+                  final saved =
+                      await wizard.saveImageSelection(auth.authToken ?? '');
+                  if (saved) wizard.nextStep();
+                }
+              : null,
         ),
+        const SizedBox(height: 100),
       ],
     );
   }
 
-  Widget _buildVariationThumbnail(String url) {
+  void _showCameraPermissionDialog(BuildContext context, String error) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.camera_alt_outlined,
+                color: AppTheme.terracotta, size: 26),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "कॅमेरा परवानगी आवश्यक",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(error,
+                style: const TextStyle(
+                    fontSize: 13, height: 1.4, color: AppTheme.textCharcoal)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.turmericLight,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.turmeric.withOpacity(0.4)),
+              ),
+              child: const Text(
+                "पर्याय: आपण थेट 'गॅलरीतून निवडा' वापरू शकता किंवा खालील त्वरित नमुना हस्तकला निवडून सुरू करू शकता.",
+                style: TextStyle(fontSize: 12, color: AppTheme.textCharcoal),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.terracotta,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("समजले (OK)",
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGalleryPermissionDialog(BuildContext context, String error) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.photo_library_outlined,
+                color: AppTheme.terracotta, size: 26),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "गॅलरी परवानगी आवश्यक",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(error,
+                style: const TextStyle(
+                    fontSize: 13, height: 1.4, color: AppTheme.textCharcoal)),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.terracotta,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("समजले (OK)",
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRegenerateConfirmDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("नवीन पर्याय तयार करायचे का?"),
+        content: const Text(
+          "यामुळे सध्याचे पर्याय बदलतील आणि पुन्हा प्रक्रिया होईल.\n(This will replace the current options and process the photo again.)",
+        ),
+        actions: [
+          TextButton(
+            child: const Text("रद्द करा (Cancel)"),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          ElevatedButton(
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+            child: const Text("पुन्हा तयार करा (Regenerate)"),
+            onPressed: () {
+              Navigator.pop(ctx);
+              wizard.processPhotoInAIStudio(
+                  token: auth.authToken ?? '', forceRegenerate: true);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showImagePreviewDialog(
+      BuildContext context, Map<String, dynamic> variation) {
+    final titleMr = variation['title_mr'] ?? variation['title'] ?? 'पर्याय';
+    final titleEn = variation['title'] ?? '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+              child: SizedBox(
+                height: 320,
+                width: double.infinity,
+                child: _buildVariationThumbnail(variation),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Text(
+                    titleMr,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppTheme.textCharcoal),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (titleEn.isNotEmpty)
+                    Text(
+                      titleEn,
+                      style: const TextStyle(
+                          fontSize: 13, color: AppTheme.textMuted),
+                      textAlign: TextAlign.center,
+                    ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.terracotta),
+                    child: const Text("बंद करा (Close)"),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVariationThumbnail(dynamic variation) {
+    String url = '';
+    if (variation is Map) {
+      final dataUri = variation['data_uri'] as String? ?? '';
+      final imageUrl = variation['image_url'] as String? ?? '';
+      url = dataUri.isNotEmpty ? dataUri : imageUrl;
+    } else if (variation is String) {
+      url = variation;
+    }
+
     if (url.startsWith('data:image')) {
       try {
         final base64String = url.split(',').last;
         final bytes = base64Decode(base64String);
-        return Image.memory(bytes, fit: BoxFit.cover);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, err, stack) => Container(
+            color: AppTheme.backgroundSand,
+            child: const Icon(Icons.broken_image, color: AppTheme.textMuted),
+          ),
+        );
       } catch (_) {}
     } else if (url.startsWith('http')) {
-      return Image.network(url, fit: BoxFit.cover);
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (ctx, err, stack) =>
+            const Icon(Icons.broken_image, color: AppTheme.textMuted),
+      );
     }
     return Container(
       color: AppTheme.backgroundSand,
@@ -504,14 +1281,18 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   }
 
   // ─── Step 3: Regional-Language Voice Cataloging ───────────────────────────
-  Widget _buildVoiceStep(ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
+  Widget _buildVoiceStep(
+      ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           l10n.translate('voicePrompt'),
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textCharcoal),
+          style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textCharcoal),
         ),
         const SizedBox(height: 6),
         Text(
@@ -539,7 +1320,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: (wizard.isRecording ? Colors.red : AppTheme.terracotta).withOpacity(0.35),
+                  color: (wizard.isRecording ? Colors.red : AppTheme.terracotta)
+                      .withOpacity(0.35),
                   blurRadius: 24,
                   spreadRadius: 6,
                 )
@@ -555,10 +1337,14 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         const SizedBox(height: 16),
         Text(
           wizard.isRecording
-              ? (auth.selectedLanguage == 'mr' ? 'बोलत रहा... (ऐकत आहोत)' : 'बोलते रहें... (सुन रहे हैं)')
+              ? (auth.selectedLanguage == 'mr'
+                  ? 'बोलत रहा... (ऐकत आहोत)'
+                  : 'बोलते रहें... (सुन रहे हैं)')
               : (wizard.voiceTranscript.isEmpty
                   ? l10n.translate('startRecording')
-                  : (auth.selectedLanguage == 'mr' ? 'पुन्हा रेकॉर्ड करा (Tap to Re-record)' : 'फिर से रिकॉर्ड करें')),
+                  : (auth.selectedLanguage == 'mr'
+                      ? 'पुन्हा रेकॉर्ड करा (Tap to Re-record)'
+                      : 'फिर से रिकॉर्ड करें')),
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.bold,
@@ -572,13 +1358,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             padding: const EdgeInsets.symmetric(vertical: 30),
             child: Column(
               children: [
-                const CircularProgressIndicator(color: AppTheme.terracotta, strokeWidth: 3.5),
+                const CircularProgressIndicator(
+                    color: AppTheme.terracotta, strokeWidth: 3.5),
                 const SizedBox(height: 16),
                 Text(
                   auth.selectedLanguage == 'mr'
                       ? "आवाज समजून घेत आहे आणि १२ भाषांमध्ये अनुवाद करत आहे..."
                       : "आवाज से कैटलॉग तैयार हो रहा है और अनुवाद किया जा रहा है...",
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textMuted),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: AppTheme.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -601,28 +1389,40 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.record_voice_over_rounded, color: AppTheme.terracotta, size: 20),
+                        const Icon(Icons.record_voice_over_rounded,
+                            color: AppTheme.terracotta, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          auth.selectedLanguage == 'mr' ? "तुमचा मूळ आवाज (Transcript)" : "आपका बोला गया विवरण",
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+                          auth.selectedLanguage == 'mr'
+                              ? "तुमचा मूळ आवाज"
+                              : "आपका बोला गया विवरण",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.terracotta),
                         ),
                       ],
                     ),
                     Row(
                       children: [
                         IconButton(
-                          tooltip: "ऐका (Listen)",
-                          icon: const Icon(Icons.volume_up_rounded, color: AppTheme.indigo),
+                          tooltip: "ऐका",
+                          icon: const Icon(Icons.volume_up_rounded,
+                              color: AppTheme.indigo),
                           onPressed: () {
-                            VoiceGuidanceService.speakPrompt(context, wizard.voiceTranscript);
+                            VoiceGuidanceService.speakPrompt(
+                                context, wizard.voiceTranscript);
                           },
                         ),
                         TextButton.icon(
-                          icon: const Icon(Icons.edit_rounded, size: 16, color: AppTheme.terracotta),
+                          icon: const Icon(Icons.edit_rounded,
+                              size: 16, color: AppTheme.terracotta),
                           label: Text(
-                            auth.selectedLanguage == 'mr' ? "दुरुस्त करा" : "सुधारें",
-                            style: const TextStyle(color: AppTheme.terracotta, fontWeight: FontWeight.bold),
+                            auth.selectedLanguage == 'mr'
+                                ? "दुरुस्त करा"
+                                : "सुधारें",
+                            style: const TextStyle(
+                                color: AppTheme.terracotta,
+                                fontWeight: FontWeight.bold),
                           ),
                           onPressed: () {
                             _showEditTranscriptDialog(context, wizard, auth);
@@ -634,7 +1434,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 ),
                 Text(
                   "\"${wizard.voiceTranscript}\"",
-                  style: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: AppTheme.textCharcoal),
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontStyle: FontStyle.italic,
+                      color: AppTheme.textCharcoal),
                 ),
               ],
             ),
@@ -655,11 +1458,17 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: AppTheme.turmericDark, size: 22),
+                      const Icon(Icons.info_outline_rounded,
+                          color: AppTheme.turmericDark, size: 22),
                       const SizedBox(width: 8),
                       Text(
-                        auth.selectedLanguage == 'mr' ? "अपूर्ण माहिती (Missing Details)" : "आवश्यक विवरण बाकी है",
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.turmericDark, fontSize: 15),
+                        auth.selectedLanguage == 'mr'
+                            ? "अपूर्ण माहिती"
+                            : "आवश्यक विवरण बाकी है",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.turmericDark,
+                            fontSize: 15),
                       ),
                     ],
                   ),
@@ -667,9 +1476,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   Text(
                     wizard.missingInfoPrompt ??
                         (auth.selectedLanguage == 'mr'
-                            ? "कृपया हे शिल्प बनवण्यासाठी वापरलेले साहित्य (material) सांगा."
-                            : "कृपया इस शिल्प में प्रयुक्त सामग्री (material) बताएं।"),
-                    style: const TextStyle(fontSize: 14, color: AppTheme.textCharcoal, height: 1.3),
+                            ? "कृपया हे शिल्प बनवण्यासाठी वापरलेले साहित्य व पद्धत सांगा."
+                            : "कृपया इस शिल्प में प्रयुक्त सामग्री और तकनीक बताएं।"),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textCharcoal,
+                        height: 1.3),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -677,11 +1489,14 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     children: [
                       ElevatedButton.icon(
                         icon: const Icon(Icons.add_rounded, size: 18),
-                        label: Text(auth.selectedLanguage == 'mr' ? "माहिती जोडा (Add Details)" : "विवरण जोड़ें"),
+                        label: Text(auth.selectedLanguage == 'mr'
+                            ? "माहिती जोडा"
+                            : "विवरण जोड़ें"),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.turmericDark,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
                         ),
                         onPressed: () {
                           _showAddMissingInfoDialog(context, wizard, auth);
@@ -718,27 +1533,42 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        wizard.titleHi.isNotEmpty ? wizard.titleHi : wizard.titleEn,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textCharcoal),
+                        wizard.titleHi.isNotEmpty
+                            ? wizard.titleHi
+                            : wizard.titleEn,
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textCharcoal),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.edit_note_rounded, color: AppTheme.terracotta),
+                      icon: const Icon(Icons.edit_note_rounded,
+                          color: AppTheme.terracotta),
                       onPressed: () => _showEditListingDialog(context, wizard),
                     ),
                   ],
                 ),
                 Text(
                   wizard.titleEn,
-                  style: const TextStyle(fontSize: 13, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+                  style: const TextStyle(
+                      fontSize: 13,
+                      color: AppTheme.textMuted,
+                      fontStyle: FontStyle.italic),
                 ),
                 const SizedBox(height: 12),
 
                 // Short summary description
-                if (wizard.shortDescriptionHi.isNotEmpty || wizard.shortDescriptionEn.isNotEmpty) ...[
+                if (wizard.shortDescriptionHi.isNotEmpty ||
+                    wizard.shortDescriptionEn.isNotEmpty) ...[
                   Text(
-                    wizard.shortDescriptionHi.isNotEmpty ? wizard.shortDescriptionHi : wizard.shortDescriptionEn,
-                    style: const TextStyle(fontSize: 14, color: AppTheme.textCharcoal, fontWeight: FontWeight.w500),
+                    wizard.shortDescriptionHi.isNotEmpty
+                        ? wizard.shortDescriptionHi
+                        : wizard.shortDescriptionEn,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textCharcoal,
+                        fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -758,17 +1588,29 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       icon: Icons.layers_rounded,
                       label: wizard.material.isNotEmpty
                           ? wizard.material
-                          : (auth.selectedLanguage == 'mr' ? 'साहित्य बाकी' : 'सामग्री बाकी'),
-                      color: wizard.material.isNotEmpty ? Colors.blue.shade50 : Colors.red.shade50,
-                      textColor: wizard.material.isNotEmpty ? Colors.blue.shade800 : Colors.red.shade800,
+                          : (auth.selectedLanguage == 'mr'
+                              ? 'साहित्य बाकी'
+                              : 'सामग्री बाकी'),
+                      color: wizard.material.isNotEmpty
+                          ? Colors.blue.shade50
+                          : Colors.red.shade50,
+                      textColor: wizard.material.isNotEmpty
+                          ? Colors.blue.shade800
+                          : Colors.red.shade800,
                     ),
                     _buildSpecChip(
                       icon: Icons.brush_rounded,
                       label: wizard.technique.isNotEmpty
                           ? wizard.technique
-                          : (auth.selectedLanguage == 'mr' ? 'पद्धत बाकी' : 'तकनीक बाकी'),
-                      color: wizard.technique.isNotEmpty ? Colors.green.shade50 : Colors.orange.shade50,
-                      textColor: wizard.technique.isNotEmpty ? Colors.green.shade800 : Colors.orange.shade800,
+                          : (auth.selectedLanguage == 'mr'
+                              ? 'पद्धत बाकी'
+                              : 'तकनीक बाकी'),
+                      color: wizard.technique.isNotEmpty
+                          ? Colors.green.shade50
+                          : Colors.orange.shade50,
+                      textColor: wizard.technique.isNotEmpty
+                          ? Colors.green.shade800
+                          : Colors.orange.shade800,
                     ),
                   ],
                 ),
@@ -776,7 +1618,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
                 // 12-Language translations badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.purple.shade50,
                     borderRadius: BorderRadius.circular(8),
@@ -785,13 +1628,17 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.translate_rounded, size: 16, color: Colors.purple.shade700),
+                      Icon(Icons.translate_rounded,
+                          size: 16, color: Colors.purple.shade700),
                       const SizedBox(width: 6),
                       Text(
                         auth.selectedLanguage == 'mr'
                             ? "१२ भारतीय भाषांमध्ये अनुवादित (12 Languages Ready)"
                             : "12 भारतीय भाषाओं में अनुवाद तैयार है",
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple.shade800),
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple.shade800),
                       ),
                     ],
                   ),
@@ -805,7 +1652,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ElevatedButton.icon(
             icon: const Icon(Icons.volume_up_rounded, size: 24),
             label: Text(
-              auth.selectedLanguage == 'mr' ? "संपूर्ण माहिती मोठ्याने ऐका (Read Aloud)" : "पूरी जानकारी सुनें (Read Aloud)",
+              auth.selectedLanguage == 'mr'
+                  ? "संपूर्ण माहिती मोठ्याने ऐका"
+                  : "पूरी जानकारी सुनें",
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
@@ -814,27 +1663,38 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: () {
-              final spokenText = wizard.getListingSummaryForSpeech(auth.selectedLanguage);
+              final spokenText =
+                  wizard.getListingSummaryForSpeech(auth.selectedLanguage);
               VoiceGuidanceService.speakPrompt(context, spokenText);
             },
           ),
           const SizedBox(height: 12),
 
-          // ─── 5. Actions: Save as Draft, Preview, Continue to Pricing ─────
+          // ─── 5. Actions: Save as Draft, Preview, Continue to Image Studio ─
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
                   icon: Icon(
-                    wizard.isDraftSaved ? Icons.check_circle_rounded : Icons.save_as_rounded,
-                    color: wizard.isDraftSaved ? Colors.green : AppTheme.terracotta,
+                    wizard.isDraftSaved
+                        ? Icons.check_circle_rounded
+                        : Icons.save_as_rounded,
+                    color: wizard.isDraftSaved
+                        ? Colors.green
+                        : AppTheme.terracotta,
                   ),
                   label: Text(
                     wizard.isDraftSaved
-                        ? (auth.selectedLanguage == 'mr' ? 'मसुदा जतन केला' : 'ड्राफ्ट सहेजा')
-                        : (auth.selectedLanguage == 'mr' ? 'मसुदा जतन करा' : 'ड्राफ्ट सहेजें'),
+                        ? (auth.selectedLanguage == 'mr'
+                            ? 'मसुदा जतन केला'
+                            : 'ड्राफ्ट सहेजा')
+                        : (auth.selectedLanguage == 'mr'
+                            ? 'मसुदा जतन करा'
+                            : 'ड्राफ्ट सहेजें'),
                     style: TextStyle(
-                      color: wizard.isDraftSaved ? Colors.green : AppTheme.terracotta,
+                      color: wizard.isDraftSaved
+                          ? Colors.green
+                          : AppTheme.terracotta,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -844,7 +1704,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       SnackBar(
                         content: Text(
                           auth.selectedLanguage == 'mr'
-                              ? "उत्पादनाचा मसुदा यशस्वीपणे जतन केला! (Draft Saved)"
+                              ? "उत्पादनाचा मसुदा यशस्वीपणे जतन केला!"
                               : "उत्पाद ड्राफ्ट सफलतापूर्वक सहेजा गया!",
                         ),
                         backgroundColor: AppTheme.terracotta,
@@ -857,10 +1717,14 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.remove_red_eye_rounded, color: AppTheme.indigo),
+                  icon: const Icon(Icons.remove_red_eye_rounded,
+                      color: AppTheme.indigo),
                   label: Text(
-                    auth.selectedLanguage == 'mr' ? "पूर्वावलोकन" : "पूर्वावलोकन",
-                    style: const TextStyle(color: AppTheme.indigo, fontWeight: FontWeight.bold),
+                    auth.selectedLanguage == 'mr'
+                        ? "पूर्वावलोकन"
+                        : "पूर्वावलोकन",
+                    style: const TextStyle(
+                        color: AppTheme.indigo, fontWeight: FontWeight.bold),
                   ),
                   onPressed: () => _showPreviewDialog(context, wizard, auth),
                 ),
@@ -869,15 +1733,17 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Continue to Pricing button
+          // Continue to image studio
           ElevatedButton.icon(
             icon: const Icon(Icons.arrow_forward_rounded, size: 24),
-            label: Text("${l10n.translate('continueBtn')} (${l10n.translate('stepPricing')})"),
+            label: Text(
+                "${l10n.translate('continueBtn')} (${l10n.translate('stepStudio')})"),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.terracotta,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
             onPressed: () {
+              wizard.processPhotoInAIStudio(token: auth.authToken ?? '');
               wizard.nextStep();
             },
           ),
@@ -885,7 +1751,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           // Sample Voice Note Helper Button for instant test/demo
           OutlinedButton.icon(
             icon: const Icon(Icons.auto_fix_high_rounded),
-            label: Text(auth.selectedLanguage == 'mr' ? "नमुना आवाज वापरा (Use Sample Voice)" : "नमूना आवाज का उपयोग करें"),
+            label: Text(auth.selectedLanguage == 'mr'
+                ? "नमुना आवाज वापरा"
+                : "नमूना आवाज का उपयोग करें"),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             ),
@@ -917,19 +1785,23 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
           ),
         ],
       ),
     );
   }
 
-  void _showEditTranscriptDialog(BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+  void _showEditTranscriptDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
     final controller = TextEditingController(text: wizard.voiceTranscript);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(auth.selectedLanguage == 'mr' ? "मजकूर दुरुस्त करा" : "विवरण सुधारें"),
+        title: Text(auth.selectedLanguage == 'mr'
+            ? "मजकूर दुरुस्त करा"
+            : "विवरण सुधारें"),
         content: TextField(
           controller: controller,
           maxLines: 4,
@@ -941,10 +1813,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("रद्द करा (Cancel)"),
+            child: const Text("रद्द करा"),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
             onPressed: () async {
               Navigator.pop(ctx);
               wizard.updateVoiceTranscript(controller.text);
@@ -957,20 +1830,25 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     );
   }
 
-  void _showAddMissingInfoDialog(BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+  void _showAddMissingInfoDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
     final matCtrl = TextEditingController(text: wizard.material);
     final techCtrl = TextEditingController(text: wizard.technique);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(auth.selectedLanguage == 'mr' ? "साहित्य व पद्धत जोडा" : "सामग्री और तकनीक जोड़ें"),
+        title: Text(auth.selectedLanguage == 'mr'
+            ? "साहित्य व पद्धत जोडा"
+            : "सामग्री और तकनीक जोड़ें"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: matCtrl,
               decoration: InputDecoration(
-                labelText: auth.selectedLanguage == 'mr' ? "वापरलेले साहित्य (Material)" : "सामग्री (Material)",
+                labelText: auth.selectedLanguage == 'mr'
+                    ? "वापरलेले साहित्य"
+                    : "सामग्री",
                 hintText: "उदा. नैसर्गिक माती, तांदळाचे पीठ, लाकूड",
                 border: const OutlineInputBorder(),
               ),
@@ -979,7 +1857,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             TextField(
               controller: techCtrl,
               decoration: InputDecoration(
-                labelText: auth.selectedLanguage == 'mr' ? "कला पद्धत (Technique)" : "तकनीक (Technique)",
+                labelText:
+                    auth.selectedLanguage == 'mr' ? "कला पद्धत" : "तकनीक",
                 hintText: "उदा. चाकावर घडवलेले, वारली हाताने रंगवलेले",
                 border: const OutlineInputBorder(),
               ),
@@ -992,22 +1871,30 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             child: const Text("रद्द करा"),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
             onPressed: () async {
               Navigator.pop(ctx);
-              final clarification = "साहित्य: ${matCtrl.text.trim()}, पद्धत: ${techCtrl.text.trim()}";
-              await wizard.processVoiceNote(auth.selectedLanguage, clarification: clarification);
+              final clarification =
+                  "साहित्य: ${matCtrl.text.trim()}, पद्धत: ${techCtrl.text.trim()}";
+              await wizard.processVoiceNote(auth.selectedLanguage,
+                  clarification: clarification);
             },
-            child: const Text("पूर्ण करा (Apply)"),
+            child: const Text("पूर्ण करा"),
           ),
         ],
       ),
     );
   }
 
-  void _showEditListingDialog(BuildContext context, ProductWizardProvider wizard) {
-    final titleCtrl = TextEditingController(text: wizard.titleHi.isNotEmpty ? wizard.titleHi : wizard.titleEn);
-    final shortDescCtrl = TextEditingController(text: wizard.shortDescriptionHi.isNotEmpty ? wizard.shortDescriptionHi : wizard.shortDescriptionEn);
+  void _showEditListingDialog(
+      BuildContext context, ProductWizardProvider wizard) {
+    final titleCtrl = TextEditingController(
+        text: wizard.titleHi.isNotEmpty ? wizard.titleHi : wizard.titleEn);
+    final shortDescCtrl = TextEditingController(
+        text: wizard.shortDescriptionHi.isNotEmpty
+            ? wizard.shortDescriptionHi
+            : wizard.shortDescriptionEn);
     final matCtrl = TextEditingController(text: wizard.material);
 
     showDialog(
@@ -1020,26 +1907,32 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             children: [
               TextField(
                 controller: titleCtrl,
-                decoration: const InputDecoration(labelText: "शीर्षक (Title)", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: "शीर्षक", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: shortDescCtrl,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: "संक्षिप्त वर्णन (Short Description)", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: "संक्षिप्त वर्णन", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: matCtrl,
-                decoration: const InputDecoration(labelText: "साहित्य (Material)", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: "साहित्य", border: OutlineInputBorder()),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("रद्द करा")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("रद्द करा")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
             onPressed: () {
               wizard.updateField(
                 titleHi: titleCtrl.text.trim(),
@@ -1055,7 +1948,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     );
   }
 
-  void _showPreviewDialog(BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+  void _showPreviewDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -1071,10 +1965,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      "उत्पादन पूर्वावलोकन (Preview)",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+                      "उत्पादन पूर्वावलोकन",
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.terracotta),
                     ),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                    IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx)),
                   ],
                 ),
                 const Divider(),
@@ -1087,29 +1986,41 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     border: Border.all(color: AppTheme.borderWarm),
                   ),
                   child: const Center(
-                    child: Icon(Icons.palette_rounded, size: 70, color: AppTheme.terracotta),
+                    child: Icon(Icons.palette_rounded,
+                        size: 70, color: AppTheme.terracotta),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   wizard.titleHi.isNotEmpty ? wizard.titleHi : wizard.titleEn,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                Text(wizard.titleEn, style: const TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                Text(wizard.titleEn,
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.textMuted)),
                 const SizedBox(height: 8),
                 Text(
-                  wizard.descriptionHi.isNotEmpty ? wizard.descriptionHi : wizard.descriptionEn,
-                  style: const TextStyle(fontSize: 14, color: AppTheme.textCharcoal, height: 1.3),
+                  wizard.descriptionHi.isNotEmpty
+                      ? wizard.descriptionHi
+                      : wizard.descriptionEn,
+                  style: const TextStyle(
+                      fontSize: 14, color: AppTheme.textCharcoal, height: 1.3),
                 ),
                 const SizedBox(height: 12),
-                Text("साहित्य: ${wizard.material.isNotEmpty ? wizard.material : 'उपलब्ध नाही'}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text("पद्धत: ${wizard.technique.isNotEmpty ? wizard.technique : 'उपलब्ध नाही'}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                    "साहित्य: ${wizard.material.isNotEmpty ? wizard.material : 'उपलब्ध नाही'}",
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                    "पद्धत: ${wizard.technique.isNotEmpty ? wizard.technique : 'उपलब्ध नाही'}",
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 Center(
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.terracotta),
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text("ठीक आहे (Close)"),
+                    child: const Text("ठीक आहे"),
                   ),
                 ),
               ],
@@ -1121,7 +2032,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   }
 
   // ─── Step 4: Intelligent Pricing Assistant ────────────────────────────────
-  Widget _buildPricingStep(ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
+  Widget _buildPricingStep(
+      ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
     final isMr = auth.selectedLanguage == 'mr';
     final isHi = auth.selectedLanguage == 'hi';
 
@@ -1132,10 +2044,14 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: wizard.isVerifiedMarketPrice ? Colors.green.shade50 : Colors.amber.shade50,
+            color: wizard.isVerifiedMarketPrice
+                ? Colors.green.shade50
+                : Colors.amber.shade50,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: wizard.isVerifiedMarketPrice ? Colors.green.shade600 : Colors.amber.shade700,
+              color: wizard.isVerifiedMarketPrice
+                  ? Colors.green.shade600
+                  : Colors.amber.shade700,
               width: 1.5,
             ),
           ),
@@ -1143,8 +2059,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                wizard.isVerifiedMarketPrice ? Icons.verified_rounded : Icons.info_outline_rounded,
-                color: wizard.isVerifiedMarketPrice ? Colors.green.shade700 : Colors.amber.shade900,
+                wizard.isVerifiedMarketPrice
+                    ? Icons.verified_rounded
+                    : Icons.info_outline_rounded,
+                color: wizard.isVerifiedMarketPrice
+                    ? Colors.green.shade700
+                    : Colors.amber.shade900,
                 size: 24,
               ),
               const SizedBox(width: 12),
@@ -1154,12 +2074,22 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   children: [
                     Text(
                       wizard.isVerifiedMarketPrice
-                          ? (isMr ? "सत्यापित बाजार आधार (Verified Market Price)" : (isHi ? "सत्यापित बाज़ार डेटा" : "Verified Market Benchmark"))
-                          : (isMr ? "अंदाजित किंमत (Unverified Cost-Based Estimate)" : (isHi ? "अनुमानित मूल्य (लागत आधार)" : "Unverified Cost-Based Estimate")),
+                          ? (isMr
+                              ? "सत्यापित बाजार आधार"
+                              : (isHi
+                                  ? "सत्यापित बाज़ार डेटा"
+                                  : "Verified Market Benchmark"))
+                          : (isMr
+                              ? "अंदाजित किंमत (Unverified Cost-Based Estimate)"
+                              : (isHi
+                                  ? "अनुमानित मूल्य (लागत आधार)"
+                                  : "Unverified Cost-Based Estimate")),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: wizard.isVerifiedMarketPrice ? Colors.green.shade900 : Colors.amber.shade900,
+                        color: wizard.isVerifiedMarketPrice
+                            ? Colors.green.shade900
+                            : Colors.amber.shade900,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -1173,7 +2103,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                               : "इस विशिष्ट शिल्प हेतु कोई प्रत्यक्ष बाज़ार सूची नहीं मिली। अतः अनुमानित पारदर्शी मजदूरी पर आधारित मूल्य दिया गया है।"),
                       style: TextStyle(
                         fontSize: 12,
-                        color: wizard.isVerifiedMarketPrice ? Colors.green.shade900 : Colors.amber.shade900,
+                        color: wizard.isVerifiedMarketPrice
+                            ? Colors.green.shade900
+                            : Colors.amber.shade900,
                         height: 1.3,
                       ),
                     ),
@@ -1197,7 +2129,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             children: [
               IconButton(
                 tooltip: isMr ? "किंमतीचा तपशील ऐका" : "मूल्य विवरण सुनें",
-                icon: const Icon(Icons.volume_up_rounded, color: AppTheme.turmericDark, size: 28),
+                icon: const Icon(Icons.volume_up_rounded,
+                    color: AppTheme.turmericDark, size: 28),
                 onPressed: () {
                   VoiceGuidanceService.speakPrompt(
                     context,
@@ -1213,7 +2146,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   wizard.priceExplanation.isNotEmpty
                       ? wizard.priceExplanation
                       : "साहित्याचा खर्च अधिक तुमचे श्रम यानुसार किमान किंमत ₹${wizard.costFloor.toStringAsFixed(0)} आहे.",
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textCharcoal, height: 1.3),
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textCharcoal,
+                      height: 1.3),
                 ),
               ),
             ],
@@ -1244,43 +2181,62 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.receipt_long_rounded, color: AppTheme.terracotta, size: 20),
+                      const Icon(Icons.receipt_long_rounded,
+                          color: AppTheme.terracotta, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        isMr ? "खर्चाचा पारदर्शक तपशील" : (isHi ? "पारदर्शी लागत विवरण" : "Cost Breakdown"),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.terracotta),
+                        isMr
+                            ? "खर्चाचा पारदर्शक तपशील"
+                            : (isHi ? "पारदर्शी लागत विवरण" : "Cost Breakdown"),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppTheme.terracotta),
                       ),
                     ],
                   ),
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.tune_rounded, size: 16, color: AppTheme.terracotta),
+                    icon: const Icon(Icons.tune_rounded,
+                        size: 16, color: AppTheme.terracotta),
                     label: Text(
-                      isMr ? "खर्च बदला" : (isHi ? "संपादित करें" : "Edit Costs"),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+                      isMr
+                          ? "खर्च बदला"
+                          : (isHi ? "संपादित करें" : "Edit Costs"),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.terracotta),
                     ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppTheme.terracotta),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       visualDensity: VisualDensity.compact,
                     ),
-                    onPressed: () => _showEditCostsDialog(context, wizard, auth),
+                    onPressed: () =>
+                        _showEditCostsDialog(context, wizard, auth),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               const Divider(height: 1),
               const SizedBox(height: 10),
-              _buildCostRow(isMr ? "कच्चा माल (Materials)" : "कच्चा माल", "₹ ${wizard.materialCost.toStringAsFixed(0)}"),
+              _buildCostRow(isMr ? "कच्चा माल" : "कच्चा माल",
+                  "₹ ${wizard.materialCost.toStringAsFixed(0)}"),
               _buildCostRow(
                 isMr
                     ? "कारागीर श्रम (${wizard.laborHours} तास @ ₹${wizard.hourlyRate.toStringAsFixed(0)}/तास)"
                     : "श्रम (${wizard.laborHours} घंटे @ ₹${wizard.hourlyRate.toStringAsFixed(0)}/घं)",
                 "₹ ${(wizard.laborHours * wizard.hourlyRate).toStringAsFixed(0)}",
               ),
-              _buildCostRow(isMr ? "पॅकेजिंग साहित्य" : "पैकेजिंग सामग्री", "₹ ${wizard.packagingCost.toStringAsFixed(0)}"),
-              _buildCostRow(isMr ? "वाहतूक / कुरिअर" : "परिवहन / डिलीवरी", "₹ ${wizard.shippingCost.toStringAsFixed(0)}"),
+              _buildCostRow(isMr ? "पॅकेजिंग साहित्य" : "पैकेजिंग सामग्री",
+                  "₹ ${wizard.packagingCost.toStringAsFixed(0)}"),
+              _buildCostRow(isMr ? "वाहतूक / कुरिअर" : "परिवहन / डिलीवरी",
+                  "₹ ${wizard.shippingCost.toStringAsFixed(0)}"),
               _buildCostRow(
-                isMr ? "प्लॅटफॉर्म व बँक गेटवे (8%)" : "प्लेटफ़ॉर्म और बैंक शुल्क (8%)",
+                isMr
+                    ? "प्लॅटफॉर्म व बँक गेटवे (8%)"
+                    : "प्लेटफ़ॉर्म और बैंक शुल्क (8%)",
                 "₹ ${(wizard.costFloor * wizard.platformFeePercent).toStringAsFixed(0)}",
               ),
               const SizedBox(height: 6),
@@ -1290,12 +2246,18 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    isMr ? "किमान सुरक्षित तळ (Cost Floor)" : "न्यूनतम लागत सीमा (Cost Floor)",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textCharcoal),
+                    isMr ? "किमान सुरक्षित तळ" : "न्यूनतम लागत सीमा",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppTheme.textCharcoal),
                   ),
                   Text(
                     "₹ ${wizard.costFloor.toStringAsFixed(0)}",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.terracotta),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppTheme.terracotta),
                   ),
                 ],
               ),
@@ -1306,17 +2268,22 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
         // ── 4. Three Distinct Understandable Price Tiers ──────────────────────
         Text(
-          isMr ? "किंमत निवडा (Select Price Tier):" : "मूल्य विकल्प चुनें:",
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textCharcoal),
+          isMr ? "किंमत निवडा:" : "मूल्य विकल्प चुनें:",
+          style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: AppTheme.textCharcoal),
         ),
         const SizedBox(height: 10),
 
         _buildPriceCard(
           title: l10n.translate('costFloor'),
-          subtitle: isMr ? "केवळ साहित्याचा व मजुरीचा किमान खर्च भरून काढणारा दर" : l10n.translate('costFloorSub'),
+          subtitle: isMr
+              ? "केवळ साहित्याचा व मजुरीचा किमान खर्च भरून काढणारा दर"
+              : l10n.translate('costFloorSub'),
           price: wizard.costFloor,
           isSelected: wizard.acceptedPrice == wizard.costFloor,
-          badge: isMr ? "सुरक्षित तळ (Floor)" : "लागत सीमा",
+          badge: isMr ? "किमान सुरक्षित तळ" : "लागत सीमा",
           badgeColor: AppTheme.textMuted,
           onTap: () => wizard.selectPrice(wizard.costFloor),
         ),
@@ -1324,10 +2291,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
         _buildPriceCard(
           title: l10n.translate('suggestedPrice'),
-          subtitle: isMr ? "बाजारातील स्पर्धात्मक व नफ्यासह योग्य किंमत" : l10n.translate('suggestedPriceSub'),
+          subtitle: isMr
+              ? "बाजारातील स्पर्धात्मक व नफ्यासह योग्य किंमत"
+              : l10n.translate('suggestedPriceSub'),
           price: wizard.suggestedPrice,
           isSelected: wizard.acceptedPrice == wizard.suggestedPrice,
-          badge: isMr ? "शिफारस (Recommended)" : "सुझाव",
+          badge: isMr ? "शिफारस केलेली किंमत" : "सुझाव",
           badgeColor: AppTheme.terracotta,
           onTap: () => wizard.selectPrice(wizard.suggestedPrice),
         ),
@@ -1335,10 +2304,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
         _buildPriceCard(
           title: l10n.translate('premiumPrice'),
-          subtitle: isMr ? "विशेष कलाकुसर, भेटवस्तू अथवा आंतरराष्ट्रीय विक्री दर" : l10n.translate('premiumPriceSub'),
+          subtitle: isMr
+              ? "विशेष कलाकुसर, भेटवस्तू अथवा आंतरराष्ट्रीय विक्री दर"
+              : l10n.translate('premiumPriceSub'),
           price: wizard.premiumPrice,
           isSelected: wizard.acceptedPrice == wizard.premiumPrice,
-          badge: isMr ? "प्रीमियम (Export/Gallery)" : "प्रीमियम",
+          badge: isMr ? "प्रीमियम किंमत" : "प्रीमियम",
           badgeColor: AppTheme.indigo,
           onTap: () => wizard.selectPrice(wizard.premiumPrice),
         ),
@@ -1351,7 +2322,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: wizard.priceOverrideWarning != null ? Colors.red.shade400 : AppTheme.borderWarm,
+              color: wizard.priceOverrideWarning != null
+                  ? Colors.red.shade400
+                  : AppTheme.borderWarm,
               width: wizard.priceOverrideWarning != null ? 1.8 : 1.0,
             ),
           ),
@@ -1359,8 +2332,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isMr ? "स्वतःची पसंतीची किंमत टाका (Custom Price)" : (isHi ? "अपनी मनपसंद कीमत तय करें" : "Custom Price Override"),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textCharcoal),
+                isMr
+                    ? "स्वतःची पसंतीची किंमत टाका"
+                    : (isHi
+                        ? "अपनी मनपसंद कीमत तय करें"
+                        : "Custom Price Override"),
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppTheme.textCharcoal),
               ),
               const SizedBox(height: 8),
               Row(
@@ -1370,10 +2350,13 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       controller: _customPriceCtrl,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
-                        hintText: "उदा. ${wizard.acceptedPrice.toStringAsFixed(0)}",
+                        hintText:
+                            "उदा. ${wizard.acceptedPrice.toStringAsFixed(0)}",
                         prefixText: "₹ ",
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                   ),
@@ -1381,12 +2364,14 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.terracotta,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
                     onPressed: () {
                       final val = double.tryParse(_customPriceCtrl.text.trim());
                       if (val != null && val > 0) {
-                        wizard.applyCustomPriceOverride(val, auth.selectedLanguage);
+                        wizard.applyCustomPriceOverride(
+                            val, auth.selectedLanguage);
                       }
                     },
                     child: Text(isMr ? "लागू करा" : "लागू करें"),
@@ -1404,12 +2389,16 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                      const Icon(Icons.warning_amber_rounded,
+                          color: Colors.red, size: 20),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           wizard.priceOverrideWarning!,
-                          style: TextStyle(color: Colors.red.shade900, fontSize: 12, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: Colors.red.shade900,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -1424,8 +2413,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         // ── 6. Legitimate Comparable Products / Market Benchmark ──────────────
         if (wizard.comparableProducts.isNotEmpty) ...[
           Text(
-            isMr ? "सत्यापित बाजार संदर्भ (Market Benchmarks):" : "तुलनात्मक बाज़ार संदर्भ:",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textCharcoal),
+            isMr ? "सत्यापित बाजार संदर्भ:" : "तुलनात्मक बाज़ार संदर्भ:",
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: AppTheme.textCharcoal),
           ),
           const SizedBox(height: 8),
           ...wizard.comparableProducts.map((comp) {
@@ -1433,7 +2425,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             final pPrice = (comp['price'] as num?)?.toDouble() ?? 0.0;
             final pSource = comp['source_platform'] as String? ?? 'TRIFED';
             final pDate = comp['retrieval_date'] as String? ?? '';
-            final pScore = (comp['similarity_score'] as num?)?.toDouble() ?? 0.8;
+            final pScore =
+                (comp['similarity_score'] as num?)?.toDouble() ?? 0.8;
             final pUrl = comp['source_url'] as String? ?? '';
 
             return Container(
@@ -1453,14 +2446,18 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       Expanded(
                         child: Text(
                           pTitle,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
                         "₹ ${pPrice.toStringAsFixed(0)}",
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.indigo),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppTheme.indigo),
                       ),
                     ],
                   ),
@@ -1468,7 +2465,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.indigo.shade50,
                           borderRadius: BorderRadius.circular(4),
@@ -1476,18 +2474,25 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                         ),
                         child: Text(
                           pSource,
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.indigo.shade800),
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.indigo.shade800),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         isMr ? "तपासणी: $pDate" : "सत्यापित: $pDate",
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey.shade700),
                       ),
                       const Spacer(),
                       Text(
                         "${(pScore * 100).toStringAsFixed(0)}% ${isMr ? 'जुळणी' : 'समानता'}",
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green.shade800),
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green.shade800),
                       ),
                     ],
                   ),
@@ -1495,7 +2500,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     const SizedBox(height: 4),
                     Text(
                       pUrl,
-                      style: TextStyle(fontSize: 10, color: Colors.blue.shade700, decoration: TextDecoration.underline),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.blue.shade700,
+                          decoration: TextDecoration.underline),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1511,7 +2519,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         if (wizard.influencingFactors.isNotEmpty) ...[
           Text(
             isMr ? "किंमतीवर प्रभाव टाकणारे घटक:" : "मूल्य निर्धारक घटक:",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textCharcoal),
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppTheme.textCharcoal),
           ),
           const SizedBox(height: 6),
           Wrap(
@@ -1519,7 +2530,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             runSpacing: 6,
             children: wizard.influencingFactors.map((factor) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: AppTheme.backgroundSand,
                   borderRadius: BorderRadius.circular(8),
@@ -1527,7 +2539,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 ),
                 child: Text(
                   factor,
-                  style: const TextStyle(fontSize: 11, color: AppTheme.textCharcoal, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textCharcoal,
+                      fontWeight: FontWeight.w500),
                 ),
               );
             }).toList(),
@@ -1559,27 +2574,41 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 13, color: AppTheme.textCharcoal)),
+            child: Text(title,
+                style: const TextStyle(
+                    fontSize: 13, color: AppTheme.textCharcoal)),
           ),
-          Text(amount, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textCharcoal)),
+          Text(amount,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textCharcoal)),
         ],
       ),
     );
   }
 
-  void _showEditCostsDialog(BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
-    final matCtrl = TextEditingController(text: wizard.materialCost.toStringAsFixed(0));
+  void _showEditCostsDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+    final matCtrl =
+        TextEditingController(text: wizard.materialCost.toStringAsFixed(0));
     final hoursCtrl = TextEditingController(text: wizard.laborHours.toString());
-    final rateCtrl = TextEditingController(text: wizard.hourlyRate.toStringAsFixed(0));
-    final packCtrl = TextEditingController(text: wizard.packagingCost.toStringAsFixed(0));
-    final shipCtrl = TextEditingController(text: wizard.shippingCost.toStringAsFixed(0));
+    final rateCtrl =
+        TextEditingController(text: wizard.hourlyRate.toStringAsFixed(0));
+    final packCtrl =
+        TextEditingController(text: wizard.packagingCost.toStringAsFixed(0));
+    final shipCtrl =
+        TextEditingController(text: wizard.shippingCost.toStringAsFixed(0));
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          auth.selectedLanguage == 'mr' ? "खर्चाचा तपशील बदला" : "लागत विवरण संपादित करें",
-          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+          auth.selectedLanguage == 'mr'
+              ? "खर्चाचा तपशील बदला"
+              : "लागत विवरण संपादित करें",
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, color: AppTheme.terracotta),
         ),
         content: SingleChildScrollView(
           child: Column(
@@ -1589,7 +2618,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 controller: matCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: auth.selectedLanguage == 'mr' ? "कच्चा माल खर्च (₹)" : "सामग्री लागत (₹)",
+                  labelText: auth.selectedLanguage == 'mr'
+                      ? "कच्चा माल खर्च (₹)"
+                      : "सामग्री लागत (₹)",
                   border: const OutlineInputBorder(),
                   prefixText: "₹ ",
                 ),
@@ -1597,9 +2628,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: hoursCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
-                  labelText: auth.selectedLanguage == 'mr' ? "कामाचे तास (Labour Hours)" : "श्रम के घंटे",
+                  labelText: auth.selectedLanguage == 'mr'
+                      ? "कामाचे तास"
+                      : "श्रम के घंटे",
                   border: const OutlineInputBorder(),
                   suffixText: "तास",
                 ),
@@ -1609,7 +2643,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 controller: rateCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: auth.selectedLanguage == 'mr' ? "दर तास मजुरी (Hourly Wage Rate ₹)" : "प्रति घंटा दर (₹)",
+                  labelText: auth.selectedLanguage == 'mr'
+                      ? "दर तास मजुरी (Hourly Wage Rate ₹)"
+                      : "प्रति घंटा दर (₹)",
                   border: const OutlineInputBorder(),
                   prefixText: "₹ ",
                 ),
@@ -1619,7 +2655,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 controller: packCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: auth.selectedLanguage == 'mr' ? "पॅकेजिंग खर्च (₹)" : "पैकेजिंग लागत (₹)",
+                  labelText: auth.selectedLanguage == 'mr'
+                      ? "पॅकेजिंग खर्च (₹)"
+                      : "पैकेजिंग लागत (₹)",
                   border: const OutlineInputBorder(),
                   prefixText: "₹ ",
                 ),
@@ -1629,7 +2667,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 controller: shipCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: auth.selectedLanguage == 'mr' ? "वाहतूक / डिलिव्हरी (₹)" : "शिपिंग / परिवहन (₹)",
+                  labelText: auth.selectedLanguage == 'mr'
+                      ? "वाहतूक / डिलिव्हरी (₹)"
+                      : "शिपिंग / परिवहन (₹)",
                   border: const OutlineInputBorder(),
                   prefixText: "₹ ",
                 ),
@@ -1640,17 +2680,24 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(auth.selectedLanguage == 'mr' ? "रद्द करा" : "रद्द करें"),
+            child:
+                Text(auth.selectedLanguage == 'mr' ? "रद्द करा" : "रद्द करें"),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
             onPressed: () async {
               Navigator.pop(ctx);
-              final mCost = double.tryParse(matCtrl.text.trim()) ?? wizard.materialCost;
-              final lHrs = double.tryParse(hoursCtrl.text.trim()) ?? wizard.laborHours;
-              final hRate = double.tryParse(rateCtrl.text.trim()) ?? wizard.hourlyRate;
-              final pCost = double.tryParse(packCtrl.text.trim()) ?? wizard.packagingCost;
-              final sCost = double.tryParse(shipCtrl.text.trim()) ?? wizard.shippingCost;
+              final mCost =
+                  double.tryParse(matCtrl.text.trim()) ?? wizard.materialCost;
+              final lHrs =
+                  double.tryParse(hoursCtrl.text.trim()) ?? wizard.laborHours;
+              final hRate =
+                  double.tryParse(rateCtrl.text.trim()) ?? wizard.hourlyRate;
+              final pCost =
+                  double.tryParse(packCtrl.text.trim()) ?? wizard.packagingCost;
+              final sCost =
+                  double.tryParse(shipCtrl.text.trim()) ?? wizard.shippingCost;
 
               await wizard.recalculatePricing(
                 materialCost: mCost,
@@ -1661,7 +2708,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 language: auth.selectedLanguage,
               );
             },
-            child: Text(auth.selectedLanguage == 'mr' ? "पुन्हा मोजा (Calculate)" : "पुनर्गणना करें"),
+            child: Text(auth.selectedLanguage == 'mr'
+                ? "पुन्हा मोजा"
+                : "पुनर्गणना करें"),
           ),
         ],
       ),
@@ -1717,25 +2766,32 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                         title,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w600,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: badgeColor.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           badge,
-                          style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              color: badgeColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppTheme.textMuted)),
                 ],
               ),
             ),
@@ -1754,7 +2810,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   }
 
   // ─── Step 5: Publish Live ──────────────────────────────────────────────────
-  Widget _buildPublishStep(ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
+  Widget _buildPublishStep(
+      ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
     final isMr = auth.selectedLanguage == 'mr';
 
     // ── 1. Success State ─────────────────────────────────────────────────────
@@ -1769,13 +2826,17 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               color: AppTheme.successGreen,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_rounded, color: Colors.white, size: 54),
+            child:
+                const Icon(Icons.check_rounded, color: Colors.white, size: 54),
           ),
           const SizedBox(height: 20),
           Text(
             l10n.translate('publishedSuccess'),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.textCharcoal),
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textCharcoal),
           ),
           if (wizard.publishedProductId != null) ...[
             const SizedBox(height: 8),
@@ -1786,8 +2847,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                "उत्पादन क्रमांक: #${wizard.publishedProductId} (Live on Website)",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.indigo, fontSize: 13),
+                "उत्पादन क्रमांक: #${wizard.publishedProductId} (वेबसाइटवर थेट)",
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.indigo,
+                    fontSize: 13),
               ),
             ),
           ],
@@ -1795,7 +2859,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           const Text(
             "कलासाथी ई-कॉमर्स वेबसाइटवर उत्पादन क्षणात उपलब्ध झाले आहे! खरेदीदार आता हे उत्पादन पाहू व खरेदी करू शकतात.",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: AppTheme.textMuted, height: 1.4),
+            style:
+                TextStyle(fontSize: 14, color: AppTheme.textMuted, height: 1.4),
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
@@ -1811,7 +2876,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
           const SizedBox(height: 14),
           OutlinedButton(
-            child: const Text("डॅशबोर्डवर परत जा (Back to Home)"),
+            child: const Text("डॅशबोर्डवर परत जा"),
             onPressed: () {
               Navigator.pop(context);
             },
@@ -1837,14 +2902,18 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.bookmark_added_rounded, color: AppTheme.indigo, size: 22),
+                const Icon(Icons.bookmark_added_rounded,
+                    color: AppTheme.indigo, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     isMr
                         ? "मसुदा सुरक्षित जतन केला आहे${wizard.draftProductId != null ? ' (#${wizard.draftProductId})' : ''}. आता अंतिम प्रसिद्धी करा."
                         : "ड्राफ़्ट सुरक्षित है। लाइव प्रकाशित करने के लिए नीचे टैप करें।",
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.indigo),
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.indigo),
                   ),
                 ),
               ],
@@ -1884,18 +2953,25 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       child: primaryImgBase64 != null
                           ? (primaryImgBase64.startsWith('data:image')
                               ? Image.memory(
-                                  base64Decode(primaryImgBase64.split(',').last),
+                                  base64Decode(
+                                      primaryImgBase64.split(',').last),
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.image, color: Colors.grey),
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.image,
+                                      color: Colors.grey),
                                 )
                               : Image.network(
                                   primaryImgBase64,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.image, color: Colors.grey),
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.image,
+                                      color: Colors.grey),
                                 ))
                           : (wizard.photos.isNotEmpty
-                              ? Image.memory(wizard.photos[0], fit: BoxFit.cover)
-                              : const Icon(Icons.palette_rounded, size: 40, color: AppTheme.terracotta)),
+                              ? Image.memory(wizard.photos[0],
+                                  fit: BoxFit.cover)
+                              : const Icon(Icons.palette_rounded,
+                                  size: 40, color: AppTheme.terracotta)),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -1904,16 +2980,21 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          wizard.titleHi.isNotEmpty ? wizard.titleHi : wizard.titleEn,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                          wizard.titleHi.isNotEmpty
+                              ? wizard.titleHi
+                              : wizard.titleEn,
+                          style: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (wizard.titleEn.isNotEmpty && wizard.titleHi.isNotEmpty) ...[
+                        if (wizard.titleEn.isNotEmpty &&
+                            wizard.titleHi.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(
                             wizard.titleEn,
-                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                            style: const TextStyle(
+                                fontSize: 12, color: AppTheme.textMuted),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1921,38 +3002,96 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                         const SizedBox(height: 6),
                         Text(
                           "किंमत: ₹ ${wizard.acceptedPrice.toStringAsFixed(0)}",
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.terracotta),
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
+              // 3 Selected Variation Thumbnails row
+              if (wizard.selectedVariations.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  isMr
+                      ? "निवडलेले ३ व्यावसायिक फोटो (Live Photos):"
+                      : "चयनित 3 व्यावसायिक फ़ोटो:",
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textMuted),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children:
+                      wizard.selectedVariations.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final v = entry.value;
+                    return Expanded(
+                      child: Container(
+                        height: 72,
+                        margin: EdgeInsets.only(right: idx < 2 ? 8 : 0),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: idx == 0
+                                ? AppTheme.terracotta
+                                : AppTheme.borderWarm,
+                            width: idx == 0 ? 2 : 1,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _buildVariationThumbnail(v),
+                              if (idx == 0)
+                                Positioned(
+                                  bottom: 2,
+                                  left: 2,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.terracotta,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      "मुख्य",
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    isMr ? "साहित्य (Material):" : "सामग्री:",
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                    isMr ? "साहित्य:" : "सामग्री:",
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.textMuted),
                   ),
                   Text(
-                    wizard.material.isNotEmpty ? wizard.material : "अस्सल पारंपारिक",
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    isMr ? "कला पद्धत (Technique):" : "तकनीक:",
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
-                  ),
-                  Text(
-                    wizard.technique.isNotEmpty ? wizard.technique : "हस्तनिर्मित",
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    wizard.material.isNotEmpty
+                        ? wizard.material
+                        : "अस्सल पारंपारिक",
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -1961,26 +3100,52 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    isMr ? "विक्रीसाठी उपलब्ध नग (Stock):" : "स्टॉक (Stock):",
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                    isMr ? "कला पद्धत:" : "तकनीक:",
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.textMuted),
+                  ),
+                  Text(
+                    wizard.technique.isNotEmpty
+                        ? wizard.technique
+                        : "हस्तनिर्मित",
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    isMr ? "विक्रीसाठी उपलब्ध नग:" : "शिल्लक साठा:",
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.textMuted),
                   ),
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppTheme.textMuted),
+                        icon: const Icon(Icons.remove_circle_outline,
+                            size: 20, color: AppTheme.textMuted),
                         visualDensity: VisualDensity.compact,
                         onPressed: wizard.inventoryStock > 1
-                            ? () => wizard.setInventoryStock(wizard.inventoryStock - 1)
+                            ? () => wizard
+                                .setInventoryStock(wizard.inventoryStock - 1)
                             : null,
                       ),
                       Text(
                         "${wizard.inventoryStock} नग",
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.indigo),
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.indigo),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.add_circle_outline, size: 20, color: AppTheme.indigo),
+                        icon: const Icon(Icons.add_circle_outline,
+                            size: 20, color: AppTheme.indigo),
                         visualDensity: VisualDensity.compact,
-                        onPressed: () => wizard.setInventoryStock(wizard.inventoryStock + 1),
+                        onPressed: () =>
+                            wizard.setInventoryStock(wizard.inventoryStock + 1),
                       ),
                     ],
                   ),
@@ -1988,19 +3153,26 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppTheme.successGreenLight,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.translate_rounded, color: AppTheme.successGreen, size: 16),
+                    const Icon(Icons.translate_rounded,
+                        color: AppTheme.successGreen, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isMr ? "१२ भारतीय भाषांमध्ये सूची तयार आहे." : "12 भारतीय भाषाओं में अनुवाद तैयार है।",
-                        style: const TextStyle(fontSize: 11, color: AppTheme.successGreen, fontWeight: FontWeight.bold),
+                        isMr
+                            ? "१२ भारतीय भाषांमध्ये सूची तयार आहे."
+                            : "12 भारतीय भाषाओं में अनुवाद तैयार है।",
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.successGreen,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -2023,7 +3195,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.error_outline_rounded, color: Colors.red, size: 22),
+                const Icon(Icons.error_outline_rounded,
+                    color: Colors.red, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -2031,12 +3204,16 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     children: [
                       Text(
                         isMr ? "प्रकाशन अयशस्वी" : "प्रकाशन विफल",
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 13),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                            fontSize: 13),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         wizard.publishError!,
-                        style: TextStyle(color: Colors.red.shade900, fontSize: 12),
+                        style:
+                            TextStyle(color: Colors.red.shade900, fontSize: 12),
                       ),
                     ],
                   ),
@@ -2053,14 +3230,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2.5),
                 )
               : const Icon(Icons.rocket_launch_rounded, size: 26),
           label: Text(
             wizard.isPublishing
                 ? (isMr ? "वेबसाइटवर पाठवत आहे..." : "प्रकाशित हो रहा है...")
                 : (wizard.publishError != null
-                    ? (isMr ? "पुन्हा प्रयत्न करा (Retry)" : "पुनः प्रयास करें")
+                    ? (isMr ? "पुन्हा प्रयत्न करा" : "पुनः प्रयास करें")
                     : l10n.translate('publishNow')),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
@@ -2078,8 +3256,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
         if (!wizard.isDraftSaved && !wizard.isPublishing) ...[
           OutlinedButton.icon(
-            icon: const Icon(Icons.save_as_rounded, size: 20, color: AppTheme.indigo),
-            label: Text(isMr ? "मसुदा म्हणून जतन करा (Save Draft)" : "ड्राफ़्ट के रूप में सहेजें"),
+            icon: const Icon(Icons.save_as_rounded,
+                size: 20, color: AppTheme.indigo),
+            label: Text(
+                isMr ? "मसुदा म्हणून जतन करा" : "ड्राफ़्ट के रूप में सहेजें"),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: AppTheme.indigo),
               padding: const EdgeInsets.symmetric(vertical: 14),
