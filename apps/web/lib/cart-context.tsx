@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Product } from "./api";
+import { fetchProductById, Product } from "./api";
 
 export interface CartItem {
   product: Product;
@@ -13,6 +13,7 @@ interface CartContextType {
   addToCart: (product: Product, quantity?: number) => void;
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
+  refreshCartProducts: () => Promise<number[]>;
   clearCart: () => void;
   total: number;
   totalPrice: number;
@@ -74,6 +75,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   };
 
+  const refreshCartProducts = async () => {
+    const currentItems = items;
+    const results = await Promise.all(
+      currentItems.map(async (item) => ({
+        productId: item.product.id,
+        product: await fetchProductById(item.product.id),
+      }))
+    );
+    const unavailable = results
+      .filter((result) => !result.product || result.product.status !== "published")
+      .map((result) => result.productId);
+    const freshById = new Map(
+      results
+        .filter((result): result is { productId: number; product: Product } =>
+          result.product !== null && result.product.status === "published"
+        )
+        .map((result) => [result.productId, result.product])
+    );
+    setItems((current) =>
+      current
+        .filter((item) => freshById.has(item.product.id))
+        .map((item) => ({ ...item, product: freshById.get(item.product.id)! }))
+    );
+    return unavailable;
+  };
+
   const total = items.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
@@ -88,6 +115,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         addToCart,
         removeFromCart,
         updateQuantity,
+        refreshCartProducts,
         clearCart,
         total,
         totalPrice: total,

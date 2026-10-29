@@ -15,7 +15,7 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_artisan_to_buyer_lifecycle(client: AsyncClient):
+async def test_end_to_end_artisan_to_buyer_lifecycle(client: AsyncClient, db_session):
     # ─── Step 1: Artisan Login ───────────────────────────────────────────────
     artisan_phone = "+919800000001"
     res = await client.post("/api/v1/auth/otp/send", json={"phone": artisan_phone, "role": "artisan"})
@@ -63,9 +63,10 @@ async def test_end_to_end_artisan_to_buyer_lifecycle(client: AsyncClient):
             {"language": "en", "title": "Warli Tarpa Harvest Folk Art", "description": "Authentic bamboo twig and rice paste painting."}
         ]
     }
-    prod_res = await client.post("/api/v1/products", json=product_payload, headers=artisan_headers)
-    assert prod_res.status_code == 201
-    created_product = prod_res.json()
+    from product_helpers import seed_published_product
+    created_product = await seed_published_product(
+        client, db_session, artisan_headers, product_payload
+    )
     product_id = created_product["id"]
     assert created_product["title_en"] == "Warli Tarpa Harvest Folk Art"
     assert created_product["price"] == 1800.0

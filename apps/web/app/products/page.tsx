@@ -362,7 +362,7 @@ function ProductsContent() {
                   {displayedProducts.map((p) => {
                     const primaryImg = p.images?.find((i) => i.is_primary)?.url
                       ?? p.images?.[0]?.url
-                      ?? "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800";
+                      ?? null;
                     const inStock = p.stock > 0;
 
                     return (
@@ -373,14 +373,20 @@ function ProductsContent() {
                       >
                         <div>
                           <div className="relative aspect-square w-full bg-stone-100 overflow-hidden">
-                            <img
-                              src={primaryImg}
-                              alt={p.title_en}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800";
-                              }}
-                            />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-stone-400" aria-label="Product image unavailable">
+                              <Package className="w-8 h-8" />
+                              <span className="text-xs">Image unavailable</span>
+                            </div>
+                            {primaryImg && (
+                              <img
+                                src={primaryImg}
+                                alt={p.title_en}
+                                className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
+                            )}
                             {p.ai_generated && (
                               <span className="absolute top-3 left-3 inline-flex items-center space-x-1 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-[11px] font-medium text-stone-800 shadow-sm">
                                 <Sparkles className="w-3 h-3 text-[#E09F3E]" />
@@ -400,7 +406,7 @@ function ProductsContent() {
 
                           <div className="p-4 sm:p-5">
                             <p className="text-xs font-semibold text-[#2C3E6B] mb-1">
-                              {p.artisan?.craft_type || p.category?.name || "Heritage Craft"}
+                              {p.category?.name || p.artisan?.craft_type || ""}
                             </p>
                             <h3 className="font-serif font-bold text-stone-900 group-hover:text-[#C85A32] transition-colors line-clamp-2 text-base mb-1">
                               {p.title_en}

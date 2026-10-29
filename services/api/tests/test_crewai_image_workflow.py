@@ -176,7 +176,7 @@ async def test_product_cannot_publish_before_image_job_is_ready(client: AsyncCli
             "selected_variant_ids": ["v1", "v2", "v3"],
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 409
 
 
 @pytest.mark.asyncio
@@ -650,7 +650,7 @@ async def test_rejection_of_invalid_variant_selections(client: AsyncClient, monk
 # ─── Test 12: Product Draft versus Published Visibility ───────────────────────
 
 @pytest.mark.asyncio
-async def test_product_draft_versus_published_visibility(client: AsyncClient):
+async def test_product_draft_cannot_skip_final_review(client: AsyncClient):
     token = await get_artisan_token(client, "+919900000121", "Visibility Artisan")
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -672,14 +672,13 @@ async def test_product_draft_versus_published_visibility(client: AsyncClient):
     catalog_res = await client.get("/api/products")
     assert not any(p["id"] == prod_id for p in catalog_res.json()["items"])
 
-    # 2. Publish the draft
+    # 2. The old empty-body publish call cannot bypass final review.
     pub_res = await client.post(f"/api/products/{prod_id}/publish", headers=headers)
-    assert pub_res.status_code == 200
-    assert pub_res.json()["status"] == "published"
+    assert pub_res.status_code == 422
 
     # Now it MUST appear in the public catalog
     catalog_after = await client.get("/api/products")
-    assert any(p["id"] == prod_id for p in catalog_after.json()["items"])
+    assert not any(p["id"] == prod_id for p in catalog_after.json()["items"])
 
 
 # ─── Test 13: Display of Saved Images on Published Product ────────────────────
@@ -720,7 +719,7 @@ async def test_display_of_saved_images_on_product(client: AsyncClient, monkeypat
         "title_en": "Carved Teakwood Box",
         "price": 950.0,
         "stock": 3,
-        "status": "published",
+        "status": "draft",
         "category_slug": "pottery",
         "image_job_id": job_id,
         "selected_variant_ids": ["var_1", "var_2", "var_3"],

@@ -49,8 +49,22 @@ async def init_db():
     global engine, AsyncSessionLocal
     # Import all models to ensure they are registered with Base.metadata
     import app.models  # noqa: F401
-    def _apply_sqlite_migrations(connection):
-        from sqlalchemy import text
+    def _apply_compatibility_migrations(connection):
+        from sqlalchemy import inspect, text
+
+        # create_all() creates missing tables but never adds new columns to an
+        # existing PostgreSQL/SQLite table. Older local databases therefore
+        # need this idempotent compatibility addition for password sign-up.
+        tables = set(inspect(connection).get_table_names())
+        if "users" in tables:
+            user_columns = {
+                column["name"] for column in inspect(connection).get_columns("users")
+            }
+            if "password_hash" not in user_columns:
+                connection.execute(
+                    text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")
+                )
+
         try:
             connection.execute(text("ALTER TABLE products ADD COLUMN idempotency_key TEXT"))
         except Exception:
@@ -71,7 +85,7 @@ async def init_db():
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await conn.run_sync(_apply_sqlite_migrations)
+            await conn.run_sync(_apply_compatibility_migrations)
     except Exception as e:
         if "sqlite" not in settings.DATABASE_URL:
             import logging
@@ -89,6 +103,6 @@ async def init_db():
             )
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-                await conn.run_sync(_apply_sqlite_migrations)
+                await conn.run_sync(_apply_compatibility_migrations)
         else:
             raise

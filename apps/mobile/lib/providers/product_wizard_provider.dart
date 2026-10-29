@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -36,6 +36,8 @@ class ProductWizardProvider extends ChangeNotifier {
   bool _descriptionNeedsReview = false;
   bool _descriptionManuallyEdited = false;
   bool _englishDescriptionConfirmed = false;
+  bool _finalDescriptionConfirmed = false;
+  bool _finalPriceConfirmed = false;
   int _currentStep = 0;
   bool _isProcessingAI = false;
   String? _imageJobId;
@@ -81,23 +83,34 @@ class ProductWizardProvider extends ChangeNotifier {
   bool _isDraftSaved = false;
 
   // Step 4: Intelligent Pricing
-  double _materialCost = 85.0;
-  double _laborHours = 4.5;
-  double _hourlyRate = 85.0;
-  double _packagingCost = 30.0;
-  double _shippingCost = 60.0;
-  double _platformFeePercent = 8.0;
+  double _materialCost = 0.0;
+  double _laborHours = 0.0;
+  double _hourlyRate = 0.0;
+  double _packagingCost = 0.0;
+  double _shippingCost = 0.0;
+  double _platformFeePercent = 0.0;
+  bool _hasArtisanCostInputs = false;
+  bool _isPricingLoading = false;
+  bool _priceSelectionSaved = false;
+  String _currency = 'INR';
+  String _pricingConfidence = 'none';
+  bool _requiresPricingReview = true;
+  int? _pricingRevisionId;
+  int _pricingVersion = 0;
+  double? _priceRangeMin;
+  double? _priceRangeMax;
+  String? _pricingError;
+  Map<String, dynamic>? _previousPricingRecommendation;
 
-  double _costFloor = 480.0;
-  double _suggestedPrice = 630.0;
-  double _premiumPrice = 850.0;
-  double _acceptedPrice = 630.0;
+  double _costFloor = 0.0;
+  double _suggestedPrice = 0.0;
+  double _premiumPrice = 0.0;
+  double _acceptedPrice = 0.0;
   double? _customPriceOverride;
   String? _priceOverrideWarning;
 
-  bool _isVerifiedMarketPrice = false;
-  String _pricingBasis = "cost_plus_estimate";
-  String _statusLabel = "Unverified Cost-Based Estimate";
+  String _pricingBasis = "storefront_comparables";
+  String _statusLabel = "No storefront evidence loaded";
   Map<String, dynamic> _costBreakdown = {};
   List<Map<String, dynamic>> _comparableProducts = [];
   List<String> _influencingFactors = [];
@@ -135,6 +148,8 @@ class ProductWizardProvider extends ChangeNotifier {
   String get voiceLanguage => _voiceLanguage;
   bool get descriptionNeedsReview => _descriptionNeedsReview;
   bool get englishDescriptionConfirmed => _englishDescriptionConfirmed;
+  bool get finalDescriptionConfirmed => _finalDescriptionConfirmed;
+  bool get finalPriceConfirmed => _finalPriceConfirmed;
   List<stt.LocaleName> get speechLocales => List.unmodifiable(_speechLocales);
   String get titleEn => _titleEn;
   String get titleHi => _titleHi;
@@ -176,13 +191,28 @@ class ProductWizardProvider extends ChangeNotifier {
   double get acceptedPrice => _acceptedPrice;
   double? get customPriceOverride => _customPriceOverride;
   String? get priceOverrideWarning => _priceOverrideWarning;
-  bool get isVerifiedMarketPrice => _isVerifiedMarketPrice;
+  bool get isVerifiedMarketPrice => _comparableProducts.isNotEmpty;
   String get pricingBasis => _pricingBasis;
   String get statusLabel => _statusLabel;
   Map<String, dynamic> get costBreakdown => _costBreakdown;
   List<Map<String, dynamic>> get comparableProducts => _comparableProducts;
   List<String> get influencingFactors => _influencingFactors;
   String get priceExplanation => _priceExplanation;
+  bool get isPricingLoading => _isPricingLoading;
+  bool get priceSelectionSaved => _priceSelectionSaved;
+  String get currency => _currency;
+  String get pricingConfidence => _pricingConfidence;
+  bool get requiresPricingReview => _requiresPricingReview;
+  int? get pricingRevisionId => _pricingRevisionId;
+  int get pricingVersion => _pricingVersion;
+  double? get priceRangeMin => _priceRangeMin;
+  double? get priceRangeMax => _priceRangeMax;
+  String? get pricingError => _pricingError;
+  Map<String, dynamic>? get previousPricingRecommendation =>
+      _previousPricingRecommendation;
+  bool get hasArtisanCostInputs => _hasArtisanCostInputs;
+  bool get hasSuggestedPrice =>
+      _pricingRevisionId != null && _suggestedPrice > 0;
 
   // Publish Getters
   bool get isPublishing => _isPublishing;
@@ -200,6 +230,11 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   set acceptedPrice(double val) {
+    if (_acceptedPrice != val) {
+      _priceSelectionSaved = false;
+      _finalPriceConfirmed = false;
+      _customPriceOverride = val > 0 ? val : null;
+    }
     _acceptedPrice = val;
     notifyListeners();
   }
@@ -222,6 +257,41 @@ class ProductWizardProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void goToStep(int step) {
+    if (step >= 0 && step <= 4 && !_isPublishing && !_isPublished) {
+      _currentStep = step;
+      notifyListeners();
+    }
+  }
+
+  void confirmFinalDescription(bool confirmed) {
+    _finalDescriptionConfirmed =
+        confirmed && _descriptionEn.trim().length >= 10;
+    notifyListeners();
+  }
+
+  void confirmFinalPrice(bool confirmed) {
+    _finalPriceConfirmed =
+        confirmed && _acceptedPrice.isFinite && _acceptedPrice > 0;
+    notifyListeners();
+  }
+
+  bool get canPublishProduct =>
+      _draftProductId != null &&
+      _titleEn.trim().length >= 2 &&
+      _categorySlug.isNotEmpty &&
+      _descriptionEn.trim().length >= 10 &&
+      _finalDescriptionConfirmed &&
+      _imageJobId != null &&
+      _imageJobStatus == 'completed' &&
+      _imageProcessingMode != 'mock' &&
+      hasSelectedExact3 &&
+      _originalImageUrl != null &&
+      _acceptedPrice.isFinite &&
+      _acceptedPrice > 0 &&
+      _pricingRevisionId != null &&
+      _finalPriceConfirmed;
 
   bool get hasSelectedExact3 => _selectedVariationIds.length == 3;
   bool get canProceedFromStudio => _selectedVariationIds.length == 3;
@@ -410,7 +480,7 @@ class ProductWizardProvider extends ChangeNotifier {
 
   String _newPhotoUploadId() {
     final randomPart =
-        Random.secure().nextInt(1 << 32).toRadixString(16).padLeft(8, '0');
+        math.Random.secure().nextInt(1 << 32).toRadixString(16).padLeft(8, '0');
     return 'photo_${DateTime.now().microsecondsSinceEpoch}_$randomPart';
   }
 
@@ -866,14 +936,6 @@ class ProductWizardProvider extends ChangeNotifier {
         [];
     _missingInfoPrompt = catalog['missing_info_prompt'] as String?;
 
-    // Seed costs from catalog extraction
-    _materialCost =
-        (catalog['estimated_material_cost'] as num?)?.toDouble() ?? 85.0;
-    _laborHours = (catalog['estimated_labor_hours'] as num?)?.toDouble() ?? 4.5;
-
-    // 3. Compute fair pricing tiers with breakdown & comparables
-    await recalculatePricing(language: language);
-
     _isProcessingAI = false;
     notifyListeners();
   }
@@ -883,6 +945,7 @@ class ProductWizardProvider extends ChangeNotifier {
     _descriptionManuallyEdited = true;
     _descriptionNeedsReview = false;
     _englishDescriptionConfirmed = false;
+    _finalDescriptionConfirmed = false;
     final english =
         _translations.indexWhere((item) => item['language'] == 'en');
     if (english >= 0) {
@@ -927,93 +990,261 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   String getListingSummaryForSpeech(String language) {
+    final priceSentence = _suggestedPrice > 0
+        ? (language == 'mr'
+            ? ' सुचवलेली किंमत: ₹${_suggestedPrice.toStringAsFixed(0)}.'
+            : language == 'hi'
+                ? ' सुझाई गई कीमत: ₹${_suggestedPrice.toStringAsFixed(0)}.'
+                : ' Suggested price: ₹${_suggestedPrice.toStringAsFixed(0)}.')
+        : '';
     if (language == 'mr') {
       final title = _titleHi.isNotEmpty ? _titleHi : _titleEn;
-      return "तुमचे उत्पादन: $title. साहित्य: ${_material.isNotEmpty ? _material : 'अस्सल हस्तकला'}. पद्धत: ${_technique.isNotEmpty ? _technique : 'हस्तनिर्मित'}. सुचवलेली किंमत: ₹${_suggestedPrice.toStringAsFixed(0)}.";
+      return "तुमचे उत्पादन: $title. साहित्य: ${_material.isNotEmpty ? _material : 'अस्सल हस्तकला'}. पद्धत: ${_technique.isNotEmpty ? _technique : 'हस्तनिर्मित'}.$priceSentence";
     }
     if (language == 'hi') {
       final title = _titleHi.isNotEmpty ? _titleHi : _titleEn;
-      return "आपका उत्पाद: $title. सामग्री: ${_material.isNotEmpty ? _material : 'प्राकृतिक हस्तशिल्प'}. तकनीक: ${_technique.isNotEmpty ? _technique : 'पारंपरिक'}. सुझाई गई कीमत: ₹${_suggestedPrice.toStringAsFixed(0)}.";
+      return "आपका उत्पाद: $title. सामग्री: ${_material.isNotEmpty ? _material : 'प्राकृतिक हस्तशिल्प'}. तकनीक: ${_technique.isNotEmpty ? _technique : 'पारंपरिक'}.$priceSentence";
     }
-    return "Your product: $_titleEn. Material: ${_material.isNotEmpty ? _material : 'Handcrafted'}. Technique: ${_technique.isNotEmpty ? _technique : 'Handmade'}. Suggested Price: ₹${_suggestedPrice.toStringAsFixed(0)}.";
+    return "Your product: $_titleEn. Material: ${_material.isNotEmpty ? _material : 'Handcrafted'}. Technique: ${_technique.isNotEmpty ? _technique : 'Handmade'}.$priceSentence";
   }
 
   // ─── Step 4: Intelligent Pricing Logic & Overrides ─────────────────────────
-  Future<void> recalculatePricing({
-    double? materialCost,
-    double? laborHours,
-    double? hourlyRate,
-    double? packagingCost,
-    double? shippingCost,
-    required String language,
+  Map<String, double> get _providedCosts => _hasArtisanCostInputs
+      ? {
+          if (_materialCost > 0) 'material_cost': _materialCost,
+          if (_laborHours > 0) 'labor_hours': _laborHours,
+          if (_hourlyRate > 0) 'hourly_rate': _hourlyRate,
+          if (_packagingCost > 0) 'packaging_cost': _packagingCost,
+          if (_shippingCost > 0) 'shipping_cost': _shippingCost,
+        }
+      : const {};
+
+  String _newPricingRequestKey() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${math.Random().nextInt(1 << 32)}';
+
+  Future<bool> loadPricingRecommendation({required String token}) async {
+    final productId = _draftProductId;
+    if (productId == null) {
+      _pricingError =
+          'Save and upload this product draft before requesting a price recommendation.';
+      notifyListeners();
+      return false;
+    }
+    if (_isPricingLoading) return false;
+    _isPricingLoading = true;
+    _pricingError = null;
+    notifyListeners();
+    try {
+      await ApiService.updateProduct(
+        token: token,
+        productId: productId,
+        payload: {
+          'title_en': _titleEn.isNotEmpty ? _titleEn : 'Handcrafted Creation',
+          'description_en': _descriptionEn,
+          'title_hi': _titleHi,
+          'description_hi': _descriptionHi,
+          'material': _material,
+          'technique': _technique,
+          'care_instructions': _careInstructions,
+          'voice_transcript': _voiceTranscript,
+          'voice_language': _voiceLanguage,
+          'seo_keywords': _seoKeywords,
+        },
+      );
+      final result = await ApiService.recommendProductPrice(
+        token: token,
+        productId: productId,
+        idempotencyKey: _newPricingRequestKey(),
+        costs: _providedCosts,
+      );
+      _previousPricingRecommendation = null;
+      _applyPricingResponse(result);
+      _priceSelectionSaved = false;
+      _customPriceOverride = null;
+      _priceOverrideWarning = null;
+      return true;
+    } catch (error) {
+      _pricingError = error.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _isPricingLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Map<String, dynamic> _pricingSnapshot() => {
+        'revision_id': _pricingRevisionId,
+        'version': _pricingVersion,
+        'suggested_price': _suggestedPrice > 0 ? _suggestedPrice : null,
+        'price_range_min': _priceRangeMin,
+        'price_range_max': _priceRangeMax,
+        'currency': _currency,
+        'comparable_products': _comparableProducts
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(),
+        'comparison_summary': _priceExplanation,
+        'confidence': _pricingConfidence,
+        'requires_review': _requiresPricingReview,
+      };
+
+  void _applyPricingResponse(Map<String, dynamic> result) {
+    _pricingRevisionId = (result['revision_id'] as num?)?.toInt();
+    _pricingVersion = (result['version'] as num?)?.toInt() ?? 0;
+    _currency = result['currency'] as String? ?? 'INR';
+    _suggestedPrice = (result['suggested_price'] as num?)?.toDouble() ?? 0;
+    _priceRangeMin = (result['price_range_min'] as num?)?.toDouble();
+    _priceRangeMax = (result['price_range_max'] as num?)?.toDouble();
+    _pricingConfidence = result['confidence'] as String? ?? 'none';
+    _requiresPricingReview = result['requires_review'] == true;
+    _priceExplanation = result['comparison_summary'] as String? ?? '';
+    _comparableProducts = ((result['comparable_products'] as List?) ?? [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    _influencingFactors = ((result['pricing_factors'] as List?) ?? [])
+        .map((item) => item.toString())
+        .toList();
+    _pricingError = result['error'] == 'insufficient_comparable_data'
+        ? 'There are not enough comparable published products to suggest a price. You can set your own price.'
+        : result['error'] as String?;
+    _pricingBasis = 'storefront_comparables';
+    _statusLabel = _comparableProducts.isEmpty
+        ? 'Insufficient storefront evidence'
+        : 'Published storefront comparison';
+    if (_suggestedPrice > 0 && _customPriceOverride == null) {
+      _acceptedPrice = _suggestedPrice;
+    }
+    _costFloor = 0;
+    _premiumPrice = 0;
+  }
+
+  Future<bool> challengePricing({
+    required String token,
+    required String reason,
+    String? context,
   }) async {
-    if (materialCost != null) _materialCost = materialCost;
-    if (laborHours != null) _laborHours = laborHours;
-    if (hourlyRate != null) _hourlyRate = hourlyRate;
-    if (packagingCost != null) _packagingCost = packagingCost;
-    if (shippingCost != null) _shippingCost = shippingCost;
+    final productId = _draftProductId;
+    final previousId = _pricingRevisionId;
+    if (productId == null || previousId == null || _isPricingLoading) {
+      _pricingError =
+          'Load a current recommendation before requesting a recheck.';
+      notifyListeners();
+      return false;
+    }
+    _isPricingLoading = true;
+    _pricingError = null;
+    _previousPricingRecommendation = _pricingSnapshot();
+    notifyListeners();
+    try {
+      final result = await ApiService.challengeProductPrice(
+        token: token,
+        productId: productId,
+        previousRevisionId: previousId,
+        reason: reason,
+        context: context,
+        idempotencyKey: _newPricingRequestKey(),
+        costs: _providedCosts,
+      );
+      _applyPricingResponse(result);
+      _priceSelectionSaved = false;
+      return true;
+    } catch (error) {
+      _pricingError = error.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _isPricingLoading = false;
+      notifyListeners();
+    }
+  }
 
-    final pricing = await ApiService.recommendPrice(
-      category: _categorySlug,
-      materialCost: _materialCost,
-      laborHours: _laborHours,
-      hourlyRate: _hourlyRate,
-      packagingCost: _packagingCost,
-      shippingCost: _shippingCost,
-      platformFeePercent: _platformFeePercent,
-      material: _material,
-      technique: _technique,
-      language: language,
+  Future<bool> applyCustomPriceOverride(
+      double customPrice, String token) async {
+    if (!customPrice.isFinite || customPrice <= 0) {
+      _priceOverrideWarning = 'Enter a valid price greater than zero.';
+      notifyListeners();
+      return false;
+    }
+    final rechecked = await challengePricing(
+      token: token,
+      reason: 'market_difference',
+      context:
+          'Artisan proposed ${_currency} ${customPrice.toStringAsFixed(2)} and requested a fresh storefront comparison.',
     );
-
-    _costFloor = (pricing['cost_floor'] as num).toDouble();
-    _suggestedPrice = (pricing['suggested_price'] as num).toDouble();
-    _premiumPrice = (pricing['premium_price'] as num).toDouble();
-    _acceptedPrice = _suggestedPrice;
-    _priceExplanation = pricing['explanation'] as String? ?? '';
-    _isVerifiedMarketPrice = pricing['is_verified_market_price'] == true;
-    _pricingBasis = pricing['pricing_basis'] as String? ?? 'cost_plus_estimate';
-    _statusLabel =
-        pricing['status_label'] as String? ?? 'Unverified Cost-Based Estimate';
-
-    if (pricing['cost_breakdown'] != null) {
-      _costBreakdown = Map<String, dynamic>.from(pricing['cost_breakdown']);
+    if (rechecked) {
+      _customPriceOverride = customPrice;
+      _acceptedPrice = customPrice;
+      _priceOverrideWarning = null;
+      notifyListeners();
     }
-    if (pricing['comparable_products'] != null) {
-      _comparableProducts = (pricing['comparable_products'] as List)
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-    }
-    if (pricing['influencing_factors'] != null) {
-      _influencingFactors = (pricing['influencing_factors'] as List)
-          .map((e) => e.toString())
-          .toList();
-    }
+    return rechecked;
+  }
 
-    _customPriceOverride = null;
-    _priceOverrideWarning = null;
+  Future<bool> savePriceSelection({
+    required String token,
+    required double price,
+    required String source,
+  }) async {
+    final productId = _draftProductId;
+    final revisionId = _pricingRevisionId;
+    if (productId == null ||
+        revisionId == null ||
+        !price.isFinite ||
+        price <= 0) {
+      _pricingError = 'Enter a valid price and load a current recommendation.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final result = await ApiService.selectProductPrice(
+        token: token,
+        productId: productId,
+        revisionId: revisionId,
+        price: double.parse(price.toStringAsFixed(2)),
+        selectionSource: source,
+      );
+      _applyPricingResponse(result);
+      _acceptedPrice = (result['selected_price'] as num).toDouble();
+      _priceSelectionSaved = true;
+      _pricingError = null;
+      notifyListeners();
+      return true;
+    } catch (error) {
+      _pricingError = error.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void setArtisanCosts({
+    required double materialCost,
+    required double laborHours,
+    required double hourlyRate,
+    required double packagingCost,
+    required double shippingCost,
+  }) {
+    _materialCost = materialCost;
+    _laborHours = laborHours;
+    _hourlyRate = hourlyRate;
+    _packagingCost = packagingCost;
+    _shippingCost = shippingCost;
+    _hasArtisanCostInputs = [
+      materialCost,
+      laborHours,
+      hourlyRate,
+      packagingCost,
+      shippingCost,
+    ].any((value) => value > 0);
     notifyListeners();
   }
 
   void selectPrice(double price) {
+    if (_acceptedPrice != price) {
+      _priceSelectionSaved = false;
+      _finalPriceConfirmed = false;
+    }
     _acceptedPrice = price;
+    _priceSelectionSaved = false;
     _customPriceOverride = null;
     _priceOverrideWarning = null;
-    notifyListeners();
-  }
-
-  Future<void> applyCustomPriceOverride(
-      double customPrice, String language) async {
-    _customPriceOverride = customPrice;
-    _acceptedPrice = customPrice;
-
-    final valRes = await ApiService.validatePriceOverride(
-      overridePrice: customPrice,
-      costFloor: _costFloor,
-      language: language,
-    );
-
-    _priceOverrideWarning = valRes['warning'] as String?;
     notifyListeners();
   }
 
@@ -1075,17 +1306,23 @@ class ProductWizardProvider extends ChangeNotifier {
             ],
     };
 
-    // Save to local SQLite / offline queue
-    await OfflineStorageService.queueOfflineProduct(draftPayload);
-
-    // Save to backend API
+    // Keep a recoverable local copy, but report server save only when the API
+    // confirms that the draft row was actually created or updated.
     try {
+      await OfflineStorageService.queueOfflineProduct(draftPayload);
       final res =
           await ApiService.createProduct(token: token, payload: draftPayload);
       if (res['id'] != null) {
         _draftProductId = res['id'] as int?;
       }
-    } catch (_) {}
+      if (_draftProductId == null) {
+        throw Exception('The API did not return a saved draft ID.');
+      }
+    } catch (error) {
+      _publishError = error.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
 
     _isDraftSaved = true;
     notifyListeners();
@@ -1094,12 +1331,33 @@ class ProductWizardProvider extends ChangeNotifier {
 
   // ─── Step 5: Publish to Website Live ───────────────────────────────────────
   Future<bool> publishProduct(String token) async {
-    if (_isPublishing || _isPublished) return true;
+    if (_isPublished) return true;
+    if (_isPublishing) return false;
+    if (_draftProductId == null) {
+      _publishError = 'Save the product draft before publishing.';
+      notifyListeners();
+      return false;
+    }
+    if (!_finalDescriptionConfirmed || !_finalPriceConfirmed) {
+      _publishError =
+          'Review and confirm the English description and final price.';
+      notifyListeners();
+      return false;
+    }
     if (_imageJobId == null ||
         _imageJobStatus != 'completed' ||
+        _imageProcessingMode == 'mock' ||
         !hasSelectedExact3) {
       _publishError = _imageJobError ??
-          'Wait for image processing and select exactly three approved images.';
+          'Wait for approved image processing and select exactly three images.';
+      notifyListeners();
+      return false;
+    }
+    if (_pricingRevisionId == null ||
+        !_acceptedPrice.isFinite ||
+        _acceptedPrice <= 0) {
+      _publishError =
+          'Choose a valid final price from the current pricing review.';
       notifyListeners();
       return false;
     }
@@ -1107,44 +1365,30 @@ class ProductWizardProvider extends ChangeNotifier {
     _publishError = null;
     notifyListeners();
 
+    int? apiPublishedProductId;
     try {
-      final selectedImgs = selectedVariations.isNotEmpty
-          ? selectedVariations
-              .asMap()
-              .entries
-              .map((entry) => {
-                    'url': entry.value['image_url'],
-                    'is_primary': entry.key == 0,
-                    'order_index': entry.key,
-                  })
-              .toList()
-          : <Map<String, dynamic>>[];
-
-      final publishIdempotencyKey = _imageJobId != null
-          ? 'pub_$_imageJobId'
-          : 'pub_${_draftProductId ?? _voiceTranscript.hashCode}_${_acceptedPrice.toInt()}';
-      final payload = {
-        'title_en': _titleEn.isNotEmpty ? _titleEn : 'Handcrafted Creation',
+      if (!_priceSelectionSaved) {
+        final priceSaved = await savePriceSelection(
+          token: token,
+          price: _acceptedPrice,
+          source: 'custom',
+        );
+        if (!priceSaved)
+          throw Exception(_pricingError ?? 'Final price could not be saved.');
+      }
+      final metadata = {
+        'title_en': _titleEn.trim(),
         'description_en': _descriptionEn,
         'title_hi': _titleHi,
         'description_hi': _descriptionHi,
+        'category_slug': _categorySlug,
         'material': _material,
         'technique': _technique,
         'care_instructions': _careInstructions,
-        'price': _acceptedPrice,
         'stock': _inventoryStock,
-        'status': 'published',
-        'category_slug': _categorySlug,
         'voice_transcript': _voiceTranscript,
         'voice_language': _voiceLanguage,
-        'ai_generated': true,
-        'image_job_id': _imageJobId,
-        'selected_variant_ids': selectedVariations
-            .map((v) => (v['id'] ?? v['variant_id']).toString())
-            .toList(),
-        'draft_product_id': _draftProductId,
-        'idempotency_key': publishIdempotencyKey,
-        'images': selectedImgs,
+        'seo_keywords': _seoKeywords,
         'translations': _translations.isNotEmpty
             ? _translations
             : [
@@ -1160,9 +1404,47 @@ class ProductWizardProvider extends ChangeNotifier {
                 },
               ],
       };
+      await ApiService.updateProduct(
+        token: token,
+        productId: _draftProductId!,
+        payload: metadata,
+      );
 
-      final res =
-          await ApiService.createProduct(token: token, payload: payload);
+      final variantIds = selectedVariations
+          .map((v) => (v['id'] ?? v['variant_id']).toString())
+          .toList();
+      await ApiService.selectImageVariants(
+        token: token,
+        jobId: _imageJobId!,
+        variantIds: variantIds,
+      );
+
+      final res = await ApiService.publishDraftProduct(
+        token: token,
+        productId: _draftProductId!,
+        price: _acceptedPrice,
+        priceConfirmed: _finalPriceConfirmed,
+        descriptionConfirmed: _finalDescriptionConfirmed,
+        imageJobId: _imageJobId!,
+        selectedVariantIds: variantIds,
+        idempotencyKey: 'publish_${_draftProductId}_$_imageJobId',
+      );
+      if (res['status'] != 'published' || res['id'] == null) {
+        throw Exception('The API did not confirm a published product.');
+      }
+      apiPublishedProductId = res['id'] as int;
+      final publicProduct =
+          await ApiService.fetchPublicProduct(apiPublishedProductId);
+      final publicImages = (publicProduct['images'] as List?) ?? const [];
+      final publicImageUrls = publicImages
+          .map((image) => (image as Map)['url']?.toString() ?? '')
+          .toSet();
+      if (publicProduct['status'] != 'published' ||
+          publicImages.length != 3 ||
+          publicImageUrls.length != 3) {
+        throw Exception(
+            'The published product is not yet available with all three images. Retry verification.');
+      }
       _isPublishing = false;
       _isPublished = true;
       _publishedProductId = res['id'] as int?;
@@ -1170,8 +1452,11 @@ class ProductWizardProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       _isPublishing = false;
-      _publishError =
-          "प्रकाशन अयशस्वी झाले. कृपया इंटरनेट तपासून पुन्हा प्रयत्न करा.";
+      final reason = e.toString().replaceFirst('Exception: ', '');
+      _publishError = apiPublishedProductId == null
+          ? reason
+          : 'The API published product #$apiPublishedProductId, but public listing verification did not complete. Retry to verify it.';
+      _publishedProductId = apiPublishedProductId;
       notifyListeners();
       return false;
     }
@@ -1201,6 +1486,8 @@ class ProductWizardProvider extends ChangeNotifier {
     _descriptionNeedsReview = false;
     _descriptionManuallyEdited = false;
     _englishDescriptionConfirmed = false;
+    _finalDescriptionConfirmed = false;
+    _finalPriceConfirmed = false;
     _draftProductId = null;
     _publishError = null;
     _inventoryStock = 5;
@@ -1217,16 +1504,36 @@ class ProductWizardProvider extends ChangeNotifier {
     _missingFields = [];
     _missingInfoPrompt = null;
     _isDraftSaved = false;
-    _materialCost = 85.0;
-    _laborHours = 4.5;
-    _costFloor = 480.0;
-    _suggestedPrice = 630.0;
-    _premiumPrice = 850.0;
-    _acceptedPrice = 630.0;
+    _materialCost = 0;
+    _laborHours = 0;
+    _hourlyRate = 0;
+    _packagingCost = 0;
+    _shippingCost = 0;
+    _platformFeePercent = 0;
+    _costFloor = 0;
+    _suggestedPrice = 0;
+    _premiumPrice = 0;
+    _acceptedPrice = 0;
     _customPriceOverride = null;
     _priceOverrideWarning = null;
     _comparableProducts = [];
-    _isVerifiedMarketPrice = false;
+    _hasArtisanCostInputs = false;
+    _isPricingLoading = false;
+    _priceSelectionSaved = false;
+    _currency = 'INR';
+    _pricingConfidence = 'none';
+    _requiresPricingReview = true;
+    _pricingRevisionId = null;
+    _pricingVersion = 0;
+    _priceRangeMin = null;
+    _priceRangeMax = null;
+    _pricingError = null;
+    _previousPricingRecommendation = null;
+    _pricingBasis = 'storefront_comparables';
+    _statusLabel = 'No storefront evidence loaded';
+    _costBreakdown = {};
+    _influencingFactors = [];
+    _priceExplanation = '';
     _isPublished = false;
     _isPublishing = false;
     notifyListeners();

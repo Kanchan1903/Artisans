@@ -19,13 +19,16 @@ class AddProductWizardScreen extends StatefulWidget {
 class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   late final TextEditingController _customPriceCtrl;
   late final TextEditingController _englishDescriptionCtrl;
+  late final TextEditingController _finalPriceCtrl;
   final FocusNode _englishDescriptionFocus = FocusNode();
+  final FocusNode _finalPriceFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _customPriceCtrl = TextEditingController();
     _englishDescriptionCtrl = TextEditingController();
+    _finalPriceCtrl = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final wizard = Provider.of<ProductWizardProvider>(context, listen: false);
       final language =
@@ -39,7 +42,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   void dispose() {
     _customPriceCtrl.dispose();
     _englishDescriptionCtrl.dispose();
+    _finalPriceCtrl.dispose();
     _englishDescriptionFocus.dispose();
+    _finalPriceFocus.dispose();
     super.dispose();
   }
 
@@ -51,6 +56,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     if (!_englishDescriptionFocus.hasFocus &&
         _englishDescriptionCtrl.text != wizard.descriptionEn) {
       _englishDescriptionCtrl.text = wizard.descriptionEn;
+    }
+    final finalPriceText =
+        wizard.acceptedPrice > 0 ? wizard.acceptedPrice.toStringAsFixed(2) : '';
+    if (!_finalPriceFocus.hasFocus && _finalPriceCtrl.text != finalPriceText) {
+      _finalPriceCtrl.text = finalPriceText;
     }
 
     final stepTitles = [
@@ -75,13 +85,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         title: Text(stepTitles[wizard.currentStep]),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () {
-            if (wizard.currentStep > 0 && !wizard.isPublished) {
-              wizard.previousStep();
-            } else {
-              Navigator.pop(context);
-            }
-          },
+          onPressed: wizard.isPublishing
+              ? null
+              : () {
+                  if (wizard.currentStep > 0 && !wizard.isPublished) {
+                    wizard.previousStep();
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
         ),
       ),
       floatingActionButton: VoiceHelpFab(
@@ -1083,7 +1095,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               ? () async {
                   final saved =
                       await wizard.saveImageSelection(auth.authToken ?? '');
-                  if (saved) wizard.nextStep();
+                  if (saved) {
+                    await wizard.loadPricingRecommendation(
+                        token: auth.authToken ?? '');
+                    wizard.nextStep();
+                  }
                 }
               : null,
         ),
@@ -2214,6 +2230,38 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (wizard.isPricingLoading) ...[
+          const LinearProgressIndicator(color: AppTheme.terracotta),
+          const SizedBox(height: 12),
+        ],
+        if (wizard.pricingError != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              border: Border.all(color: Colors.amber.shade700),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(wizard.pricingError!,
+                    style: TextStyle(color: Colors.brown.shade900)),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: wizard.isPricingLoading
+                      ? null
+                      : () => wizard.loadPricingRecommendation(
+                          token: auth.authToken ?? ''),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh storefront comparisons'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         // ── 1. Verification Status & Estimate Disclosure Banner ───────────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2249,15 +2297,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     Text(
                       wizard.isVerifiedMarketPrice
                           ? (isMr
-                              ? "सत्यापित बाजार आधार"
+                              ? "स्टोअरवरील प्रकाशित उत्पादनांची तुलना"
                               : (isHi
-                                  ? "सत्यापित बाज़ार डेटा"
-                                  : "Verified Market Benchmark"))
+                                  ? "स्टोर पर प्रकाशित उत्पादों की तुलना"
+                                  : "Published storefront comparisons"))
                           : (isMr
-                              ? "अंदाजित किंमत (Unverified Cost-Based Estimate)"
+                              ? "पुरेशी तुलनात्मक माहिती नाही"
                               : (isHi
-                                  ? "अनुमानित मूल्य (लागत आधार)"
-                                  : "Unverified Cost-Based Estimate")),
+                                  ? "पर्याप्त तुलनात्मक जानकारी नहीं"
+                                  : "Insufficient comparable evidence")),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -2269,12 +2317,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     const SizedBox(height: 3),
                     Text(
                       wizard.isVerifiedMarketPrice
-                          ? (isMr
-                              ? "ही किंमत TRIFED, CCIC व अधिकृत हस्तकला नोंदींमधील प्रत्यक्ष बाजारभावावर आधारित आहे."
-                              : "यह मूल्य TRIFED, CCIC व सरकारी बाज़ार बेंचमार्क पर आधारित है।")
-                          : (isMr
-                              ? "या अचूक कलाकृतीसाठी थेट बाजार नोंद आढळली नाही. त्यामुळे अनधिकृत फुगवलेले भाव न लावता, रास्त मजुरी व खर्चावर आधारित प्रामाणिक अंदाजित किंमत दिली आहे."
-                              : "इस विशिष्ट शिल्प हेतु कोई प्रत्यक्ष बाज़ार सूची नहीं मिली। अतः अनुमानित पारदर्शी मजदूरी पर आधारित मूल्य दिया गया है।"),
+                          ? "${wizard.comparableProducts.length} current published KarigarAI listings were compared. This suggestion is advisory; you choose the final price."
+                          : "No matching published listings were found. There is no market-based suggestion; you can still enter your own price.",
                       style: TextStyle(
                         fontSize: 12,
                         color: wizard.isVerifiedMarketPrice
@@ -2310,7 +2354,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     context,
                     wizard.priceExplanation.isNotEmpty
                         ? wizard.priceExplanation
-                        : "साहित्याचा खर्च अधिक तुमचे श्रम यानुसार किमान किंमत ₹${wizard.costFloor.toStringAsFixed(0)} आहे.",
+                        : 'No price recommendation has been loaded yet.',
                   );
                 },
               ),
@@ -2319,7 +2363,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 child: Text(
                   wizard.priceExplanation.isNotEmpty
                       ? wizard.priceExplanation
-                      : "साहित्याचा खर्च अधिक तुमचे श्रम यानुसार किमान किंमत ₹${wizard.costFloor.toStringAsFixed(0)} आहे.",
+                      : 'No price recommendation has been loaded yet.',
                   style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -2332,112 +2376,151 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         ),
         const SizedBox(height: 16),
 
-        // ── 3. Itemized Cost Breakdown Card ──────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.borderWarm),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
+        if (wizard.previousPricingRecommendation != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.indigoLight,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.indigo.withOpacity(0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Recommendation recheck',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                          'Before: ${wizard.previousPricingRecommendation!['suggested_price'] == null ? 'No suggestion' : '${wizard.currency} ${(wizard.previousPricingRecommendation!['suggested_price'] as num).toStringAsFixed(2)}'}'),
+                    ),
+                    const Icon(Icons.arrow_forward_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                          'Now: ${wizard.hasSuggestedPrice ? '${wizard.currency} ${wizard.suggestedPrice.toStringAsFixed(2)}' : 'No suggestion'}'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(wizard.previousPricingRecommendation!['suggested_price'] ==
+                        wizard.suggestedPrice
+                    ? 'The refreshed storefront evidence produced the same recommendation.'
+                    : wizard.priceExplanation),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.receipt_long_rounded,
-                          color: AppTheme.terracotta, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
+          const SizedBox(height: 14),
+        ],
+
+        // ── 3. Itemized Cost Breakdown Card ──────────────────────────────────
+        if (wizard.hasArtisanCostInputs)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderWarm),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.receipt_long_rounded,
+                            color: AppTheme.terracotta, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          isMr
+                              ? "खर्चाचा पारदर्शक तपशील"
+                              : (isHi
+                                  ? "पारदर्शी लागत विवरण"
+                                  : "Cost Breakdown"),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: AppTheme.terracotta),
+                        ),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.tune_rounded,
+                          size: 16, color: AppTheme.terracotta),
+                      label: Text(
                         isMr
-                            ? "खर्चाचा पारदर्शक तपशील"
-                            : (isHi ? "पारदर्शी लागत विवरण" : "Cost Breakdown"),
+                            ? "खर्च बदला"
+                            : (isHi ? "संपादित करें" : "Edit Costs"),
                         style: const TextStyle(
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            fontSize: 15,
                             color: AppTheme.terracotta),
                       ),
-                    ],
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.tune_rounded,
-                        size: 16, color: AppTheme.terracotta),
-                    label: Text(
-                      isMr
-                          ? "खर्च बदला"
-                          : (isHi ? "संपादित करें" : "Edit Costs"),
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.terracotta),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppTheme.terracotta),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () =>
+                          _showEditCostsDialog(context, wizard, auth),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.terracotta),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: () =>
-                        _showEditCostsDialog(context, wizard, auth),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              const Divider(height: 1),
-              const SizedBox(height: 10),
-              _buildCostRow(isMr ? "कच्चा माल" : "कच्चा माल",
-                  "₹ ${wizard.materialCost.toStringAsFixed(0)}"),
-              _buildCostRow(
-                isMr
-                    ? "कारागीर श्रम (${wizard.laborHours} तास @ ₹${wizard.hourlyRate.toStringAsFixed(0)}/तास)"
-                    : "श्रम (${wizard.laborHours} घंटे @ ₹${wizard.hourlyRate.toStringAsFixed(0)}/घं)",
-                "₹ ${(wizard.laborHours * wizard.hourlyRate).toStringAsFixed(0)}",
-              ),
-              _buildCostRow(isMr ? "पॅकेजिंग साहित्य" : "पैकेजिंग सामग्री",
-                  "₹ ${wizard.packagingCost.toStringAsFixed(0)}"),
-              _buildCostRow(isMr ? "वाहतूक / कुरिअर" : "परिवहन / डिलीवरी",
-                  "₹ ${wizard.shippingCost.toStringAsFixed(0)}"),
-              _buildCostRow(
-                isMr
-                    ? "प्लॅटफॉर्म व बँक गेटवे (8%)"
-                    : "प्लेटफ़ॉर्म और बैंक शुल्क (8%)",
-                "₹ ${(wizard.costFloor * wizard.platformFeePercent).toStringAsFixed(0)}",
-              ),
-              const SizedBox(height: 6),
-              const Divider(height: 1, thickness: 1.2),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    isMr ? "किमान सुरक्षित तळ" : "न्यूनतम लागत सीमा",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: AppTheme.textCharcoal),
-                  ),
-                  Text(
-                    "₹ ${wizard.costFloor.toStringAsFixed(0)}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppTheme.terracotta),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                _buildCostRow(isMr ? "कच्चा माल" : "कच्चा माल",
+                    "₹ ${wizard.materialCost.toStringAsFixed(0)}"),
+                _buildCostRow(
+                  isMr
+                      ? "कारागीर श्रम (${wizard.laborHours} तास @ ₹${wizard.hourlyRate.toStringAsFixed(0)}/तास)"
+                      : "श्रम (${wizard.laborHours} घंटे @ ₹${wizard.hourlyRate.toStringAsFixed(0)}/घं)",
+                  "₹ ${(wizard.laborHours * wizard.hourlyRate).toStringAsFixed(0)}",
+                ),
+                _buildCostRow(isMr ? "पॅकेजिंग साहित्य" : "पैकेजिंग सामग्री",
+                    "₹ ${wizard.packagingCost.toStringAsFixed(0)}"),
+                _buildCostRow(isMr ? "वाहतूक / कुरिअर" : "परिवहन / डिलीवरी",
+                    "₹ ${wizard.shippingCost.toStringAsFixed(0)}"),
+              ],
+            ),
+          )
+        else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderWarm),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.receipt_long_rounded,
+                    color: AppTheme.terracotta),
+                const SizedBox(width: 10),
+                const Expanded(
+                    child: Text(
+                        'No costs have been supplied. Pricing uses storefront listings only.')),
+                OutlinedButton(
+                  onPressed: () => _showEditCostsDialog(context, wizard, auth),
+                  child: const Text('Add costs'),
+                ),
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: 20),
 
         // ── 4. Three Distinct Understandable Price Tiers ──────────────────────
@@ -2450,43 +2533,21 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         ),
         const SizedBox(height: 10),
 
-        _buildPriceCard(
-          title: l10n.translate('costFloor'),
-          subtitle: isMr
-              ? "केवळ साहित्याचा व मजुरीचा किमान खर्च भरून काढणारा दर"
-              : l10n.translate('costFloorSub'),
-          price: wizard.costFloor,
-          isSelected: wizard.acceptedPrice == wizard.costFloor,
-          badge: isMr ? "किमान सुरक्षित तळ" : "लागत सीमा",
-          badgeColor: AppTheme.textMuted,
-          onTap: () => wizard.selectPrice(wizard.costFloor),
-        ),
-        const SizedBox(height: 12),
-
-        _buildPriceCard(
-          title: l10n.translate('suggestedPrice'),
-          subtitle: isMr
-              ? "बाजारातील स्पर्धात्मक व नफ्यासह योग्य किंमत"
-              : l10n.translate('suggestedPriceSub'),
-          price: wizard.suggestedPrice,
-          isSelected: wizard.acceptedPrice == wizard.suggestedPrice,
-          badge: isMr ? "शिफारस केलेली किंमत" : "सुझाव",
-          badgeColor: AppTheme.terracotta,
-          onTap: () => wizard.selectPrice(wizard.suggestedPrice),
-        ),
-        const SizedBox(height: 12),
-
-        _buildPriceCard(
-          title: l10n.translate('premiumPrice'),
-          subtitle: isMr
-              ? "विशेष कलाकुसर, भेटवस्तू अथवा आंतरराष्ट्रीय विक्री दर"
-              : l10n.translate('premiumPriceSub'),
-          price: wizard.premiumPrice,
-          isSelected: wizard.acceptedPrice == wizard.premiumPrice,
-          badge: isMr ? "प्रीमियम किंमत" : "प्रीमियम",
-          badgeColor: AppTheme.indigo,
-          onTap: () => wizard.selectPrice(wizard.premiumPrice),
-        ),
+        if (wizard.hasSuggestedPrice)
+          _buildPriceCard(
+            title: l10n.translate('suggestedPrice'),
+            subtitle:
+                'Observed range: ${wizard.currency} ${wizard.priceRangeMin?.toStringAsFixed(2) ?? '—'} – ${wizard.priceRangeMax?.toStringAsFixed(2) ?? '—'}',
+            price: wizard.suggestedPrice,
+            isSelected: wizard.acceptedPrice == wizard.suggestedPrice,
+            badge: 'Storefront median · ${wizard.pricingConfidence} confidence',
+            badgeColor: AppTheme.terracotta,
+            onTap: () => wizard.selectPrice(wizard.suggestedPrice),
+          )
+        else
+          const Text(
+              'No suggested price is available from the current storefront evidence. Enter your own price below.',
+              style: TextStyle(color: AppTheme.textMuted)),
         const SizedBox(height: 18),
 
         // ── 5. Artisan Custom Price Override & Warning ────────────────────────
@@ -2541,12 +2602,17 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       final val = double.tryParse(_customPriceCtrl.text.trim());
-                      if (val != null && val > 0) {
-                        wizard.applyCustomPriceOverride(
-                            val, auth.selectedLanguage);
+                      if (val == null || !val.isFinite || val <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Enter a valid positive price.')),
+                        );
+                        return;
                       }
+                      await wizard.applyCustomPriceOverride(
+                          val, auth.authToken ?? '');
                     },
                     child: Text(isMr ? "लागू करा" : "लागू करें"),
                   ),
@@ -2595,13 +2661,13 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
           const SizedBox(height: 8),
           ...wizard.comparableProducts.map((comp) {
-            final pTitle = comp['title'] as String? ?? 'Handicraft Item';
+            final pTitle = comp['title'] as String? ?? 'Storefront product';
             final pPrice = (comp['price'] as num?)?.toDouble() ?? 0.0;
-            final pSource = comp['source_platform'] as String? ?? 'TRIFED';
-            final pDate = comp['retrieval_date'] as String? ?? '';
+            final pSource = 'KarigarAI storefront';
+            final pDate = comp['category'] as String? ?? '';
             final pScore =
-                (comp['similarity_score'] as num?)?.toDouble() ?? 0.8;
-            final pUrl = comp['source_url'] as String? ?? '';
+                (comp['similarity_score'] as num?)?.toDouble() ?? 0.0;
+            final pUrl = comp['product_url'] as String? ?? '';
 
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -2656,7 +2722,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        isMr ? "तपासणी: $pDate" : "सत्यापित: $pDate",
+                        pDate,
                         style: TextStyle(
                             fontSize: 11, color: Colors.grey.shade700),
                       ),
@@ -2724,21 +2790,131 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           const SizedBox(height: 18),
         ],
 
-        // ── 8. Acceptance CTA ────────────────────────────────────────────────
-        ElevatedButton.icon(
-          icon: const Icon(Icons.check_rounded, size: 24),
-          label: Text(
-            isMr
-                ? "स्वीकारा: ₹ ${wizard.acceptedPrice.toStringAsFixed(0)} (पुढे जा)"
-                : "स्वीकारें: ₹ ${wizard.acceptedPrice.toStringAsFixed(0)}",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          onPressed: () {
-            wizard.nextStep();
-          },
+        OutlinedButton.icon(
+          icon: const Icon(Icons.rate_review_outlined),
+          label: const Text('Challenge recommendation and recheck listings'),
+          onPressed: wizard.pricingRevisionId == null || wizard.isPricingLoading
+              ? null
+              : () => _showPricingChallengeDialog(context, wizard, auth),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            if (wizard.hasSuggestedPrice)
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.check_rounded),
+                  label: Text(wizard.previousPricingRecommendation == null
+                      ? 'Accept Suggested Price'
+                      : 'Accept Revised Price'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.terracotta),
+                  onPressed: wizard.isPricingLoading
+                      ? null
+                      : () async {
+                          final saved = await wizard.savePriceSelection(
+                            token: auth.authToken ?? '',
+                            price: wizard.suggestedPrice,
+                            source: wizard.previousPricingRecommendation == null
+                                ? 'suggested'
+                                : 'revised_suggestion',
+                          );
+                          if (saved) wizard.nextStep();
+                        },
+                ),
+              ),
+            if (wizard.customPriceOverride != null) ...[
+              if (wizard.hasSuggestedPrice) const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.edit_rounded),
+                  label: Text(
+                      'Set My Own Price (${wizard.currency} ${wizard.customPriceOverride!.toStringAsFixed(2)})'),
+                  onPressed: wizard.isPricingLoading
+                      ? null
+                      : () async {
+                          final saved = await wizard.savePriceSelection(
+                            token: auth.authToken ?? '',
+                            price: wizard.customPriceOverride!,
+                            source: 'custom',
+                          );
+                          if (saved) wizard.nextStep();
+                        },
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );
+  }
+
+  void _showPricingChallengeDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+    final contextController = TextEditingController();
+    var reason = 'material_cost';
+    const reasons = <String, String>{
+      'material_cost': 'My material cost is higher',
+      'labor': 'The craftsmanship requires more labor',
+      'size_or_detail': 'My product is larger or more detailed',
+      'market_difference': 'Similar products are priced differently',
+      'other': 'Other reason',
+    };
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Challenge price recommendation'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: reason,
+                items: reasons.entries
+                    .map((entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => reason = value);
+                },
+                decoration: const InputDecoration(
+                    labelText: 'Why do you disagree?',
+                    border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: contextController,
+                maxLines: 3,
+                maxLength: 2000,
+                decoration: const InputDecoration(
+                  labelText: 'Additional details (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final detail = contextController.text.trim();
+                Navigator.pop(dialogContext);
+                await wizard.challengePricing(
+                  token: auth.authToken ?? '',
+                  reason: reason,
+                  context: detail.isEmpty ? null : detail,
+                );
+              },
+              child: const Text('Recheck current listings'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(contextController.dispose);
   }
 
   Widget _buildCostRow(String title, String amount) {
@@ -2764,15 +2940,24 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
   void _showEditCostsDialog(
       BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
-    final matCtrl =
-        TextEditingController(text: wizard.materialCost.toStringAsFixed(0));
-    final hoursCtrl = TextEditingController(text: wizard.laborHours.toString());
-    final rateCtrl =
-        TextEditingController(text: wizard.hourlyRate.toStringAsFixed(0));
-    final packCtrl =
-        TextEditingController(text: wizard.packagingCost.toStringAsFixed(0));
-    final shipCtrl =
-        TextEditingController(text: wizard.shippingCost.toStringAsFixed(0));
+    final matCtrl = TextEditingController(
+        text: wizard.hasArtisanCostInputs
+            ? wizard.materialCost.toStringAsFixed(2)
+            : '');
+    final hoursCtrl = TextEditingController(
+        text: wizard.hasArtisanCostInputs ? wizard.laborHours.toString() : '');
+    final rateCtrl = TextEditingController(
+        text: wizard.hasArtisanCostInputs
+            ? wizard.hourlyRate.toStringAsFixed(2)
+            : '');
+    final packCtrl = TextEditingController(
+        text: wizard.hasArtisanCostInputs
+            ? wizard.packagingCost.toStringAsFixed(2)
+            : '');
+    final shipCtrl = TextEditingController(
+        text: wizard.hasArtisanCostInputs
+            ? wizard.shippingCost.toStringAsFixed(2)
+            : '');
 
     showDialog(
       context: context,
@@ -2861,25 +3046,37 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             style:
                 ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
             onPressed: () async {
-              Navigator.pop(ctx);
-              final mCost =
-                  double.tryParse(matCtrl.text.trim()) ?? wizard.materialCost;
-              final lHrs =
-                  double.tryParse(hoursCtrl.text.trim()) ?? wizard.laborHours;
-              final hRate =
-                  double.tryParse(rateCtrl.text.trim()) ?? wizard.hourlyRate;
-              final pCost =
-                  double.tryParse(packCtrl.text.trim()) ?? wizard.packagingCost;
-              final sCost =
-                  double.tryParse(shipCtrl.text.trim()) ?? wizard.shippingCost;
-
-              await wizard.recalculatePricing(
+              final mCost = double.tryParse(matCtrl.text.trim()) ?? 0;
+              final lHrs = double.tryParse(hoursCtrl.text.trim()) ?? 0;
+              final hRate = double.tryParse(rateCtrl.text.trim()) ?? 0;
+              final pCost = double.tryParse(packCtrl.text.trim()) ?? 0;
+              final sCost = double.tryParse(shipCtrl.text.trim()) ?? 0;
+              final values = [mCost, lHrs, hRate, pCost, sCost];
+              if (values.any((value) => !value.isFinite || value < 0)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content:
+                          Text('Costs must be valid non-negative amounts.')),
+                );
+                return;
+              }
+              final reason = mCost != wizard.materialCost
+                  ? 'material_cost'
+                  : (lHrs != wizard.laborHours || hRate != wizard.hourlyRate)
+                      ? 'labor'
+                      : 'other';
+              wizard.setArtisanCosts(
                 materialCost: mCost,
                 laborHours: lHrs,
                 hourlyRate: hRate,
                 packagingCost: pCost,
                 shippingCost: sCost,
-                language: auth.selectedLanguage,
+              );
+              Navigator.pop(ctx);
+              await wizard.challengePricing(
+                token: auth.authToken ?? '',
+                reason: reason,
+                context: 'Artisan updated cost information for this product.',
               );
             },
             child: Text(auth.selectedLanguage == 'mr'
@@ -3357,6 +3554,190 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         ),
         const SizedBox(height: 18),
 
+        // Final review confirmations required before the publish action is enabled.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppTheme.borderWarm),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Final product review',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Text('Product name: ${wizard.titleEn}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text('Category: ${wizard.categorySlug}'),
+              if (wizard.material.trim().isNotEmpty)
+                Text('Material: ${wizard.material}'),
+              if (wizard.technique.trim().isNotEmpty)
+                Text('Technique: ${wizard.technique}'),
+              if (wizard.careInstructions.trim().isNotEmpty)
+                Text('Care: ${wizard.careInstructions}'),
+              if (wizard.seoKeywords.isNotEmpty)
+                Text('Keywords: ${wizard.seoKeywords.join(', ')}'),
+              if (wizard.voiceTranscript.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Original-language transcript',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(wizard.voiceTranscript,
+                    style: const TextStyle(color: AppTheme.textMuted)),
+              ],
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundSand,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(wizard.descriptionEn),
+              ),
+              TextButton.icon(
+                onPressed:
+                    wizard.isPublishing ? null : () => wizard.goToStep(1),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit product details'),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: wizard.finalDescriptionConfirmed,
+                onChanged: wizard.isPublishing
+                    ? null
+                    : (value) => wizard.confirmFinalDescription(value ?? false),
+                title: const Text(
+                    'I reviewed and approve this English description.'),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+              const Divider(height: 18),
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      color: AppTheme.backgroundSand,
+                      child: wizard.originalImageUrl == null
+                          ? const Icon(Icons.image_not_supported_outlined)
+                          : Image.network(
+                              wizard.originalImageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: AppTheme.textMuted),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(wizard.originalImageUrl == null
+                        ? 'Original uploaded photo is unavailable.'
+                        : 'Original uploaded photo kept for reference.'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('Selected product images',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 92,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: wizard.selectedVariations.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final variant = wizard.selectedVariations[index];
+                    final imageUrl =
+                        (variant['image_url'] ?? variant['url'] ?? '')
+                            .toString();
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 92,
+                        color: AppTheme.backgroundSand,
+                        child: imageUrl.startsWith('http')
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: AppTheme.textMuted,
+                                ),
+                                loadingBuilder: (context, child, progress) =>
+                                    progress == null
+                                        ? child
+                                        : const Center(
+                                            child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          ),
+                              )
+                            : const Icon(Icons.image_not_supported_outlined),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed:
+                    wizard.isPublishing ? null : () => wizard.goToStep(2),
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('Change the three selected images'),
+              ),
+              const Divider(height: 18),
+              TextField(
+                controller: _finalPriceCtrl,
+                focusNode: _finalPriceFocus,
+                enabled: !wizard.isPublishing,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (value) {
+                  final price = double.tryParse(value.trim());
+                  wizard.acceptedPrice =
+                      price != null && price.isFinite && price > 0 ? price : 0;
+                },
+                decoration: InputDecoration(
+                  labelText: 'Final selling price (${wizard.currency})',
+                  prefixText: '₹ ',
+                  border: const OutlineInputBorder(),
+                  helperText: wizard.hasSuggestedPrice
+                      ? 'AI suggestion: ${wizard.currency} ${wizard.suggestedPrice.toStringAsFixed(2)} (advisory)'
+                      : 'Set the price you want buyers to pay.',
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: wizard.finalPriceConfirmed,
+                onChanged: wizard.isPublishing
+                    ? null
+                    : (value) => wizard.confirmFinalPrice(value ?? false),
+                title: const Text('I confirm this final selling price.'),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+              if (wizard.selectedVariations.length != 3 ||
+                  wizard.imageJobStatus != 'completed' ||
+                  wizard.imageProcessingMode == 'mock')
+                Text(
+                  wizard.imageJobError ??
+                      'Three successfully processed, approved images are required.',
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
         // ── 3. Failure State Alert & Retry ────────────────────────────────────
         if (wizard.publishError != null) ...[
           Container(
@@ -3420,15 +3801,13 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             backgroundColor: AppTheme.successGreen,
             padding: const EdgeInsets.symmetric(vertical: 18),
           ),
-          onPressed: wizard.isPublishing
+          onPressed: wizard.isPublishing || !wizard.canPublishProduct
               ? null
-              : () async {
-                  await wizard.publishProduct(auth.authToken ?? "mock_token");
-                },
+              : () => _confirmAndPublish(wizard, auth),
         ),
         const SizedBox(height: 12),
 
-        if (!wizard.isDraftSaved && !wizard.isPublishing) ...[
+        if (!wizard.isPublishing) ...[
           OutlinedButton.icon(
             icon: const Icon(Icons.save_as_rounded,
                 size: 20, color: AppTheme.indigo),
@@ -3445,5 +3824,33 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         ],
       ],
     );
+  }
+
+  Future<void> _confirmAndPublish(
+      ProductWizardProvider wizard, AuthProvider auth) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Publish this product?'),
+        content: Text(
+          '${wizard.titleEn}\n${wizard.categorySlug}\n'
+          '${wizard.currency} ${wizard.acceptedPrice.toStringAsFixed(2)}\n'
+          'Three approved product images',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Review again'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm and publish'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await wizard.publishProduct(auth.authToken ?? '');
+    }
   }
 }

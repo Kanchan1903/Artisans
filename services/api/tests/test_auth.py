@@ -4,6 +4,38 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
+async def test_artisan_can_register_and_sign_in_without_otp(client: AsyncClient):
+    phone = "+919877766655"
+    registration = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Password Artisan",
+            "phone": phone,
+            "password": "craftpass123",
+            "role": "artisan",
+        },
+    )
+    assert registration.status_code == 200, registration.text
+    account = registration.json()
+    assert account["is_artisan"] is True
+    assert account["artisan_id"] is not None
+
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"identifier": phone, "password": "craftpass123"},
+    )
+    assert login.status_code == 200, login.text
+    assert login.json()["is_artisan"] is True
+    assert login.json()["artisan_id"] == account["artisan_id"]
+
+    bad_login = await client.post(
+        "/api/v1/auth/login",
+        json={"identifier": phone, "password": "wrongpass"},
+    )
+    assert bad_login.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_send_and_verify_otp(client: AsyncClient):
     # 1. Send OTP
     phone = "+919876543210"

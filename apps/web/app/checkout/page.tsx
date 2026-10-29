@@ -20,7 +20,7 @@ import { createOrder } from "@/lib/api";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, clearCart, refreshCartProducts } = useCart();
   const { user, isLoggedIn, token } = useAuth();
 
   const [name, setName] = useState("");
@@ -32,6 +32,20 @@ export default function CheckoutPage() {
   const [pincode, setPincode] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "cod">("razorpay");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cartRefreshError, setCartRefreshError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items.length === 0) return;
+    refreshCartProducts().then((unavailable) => {
+      if (unavailable.length) {
+        setCartRefreshError('Some items are no longer available and were removed from your basket.');
+      }
+    }).catch(() => {
+      setCartRefreshError('Could not refresh current product prices. Please try again before ordering.');
+    });
+  // Refresh when entering checkout; the order API still validates current prices.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
 
   // Pre-fill from auth user
   useEffect(() => {
@@ -44,8 +58,13 @@ export default function CheckoutPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setCartRefreshError(null);
 
     try {
+      const unavailable = await refreshCartProducts();
+      if (unavailable.length) {
+        throw new Error('Some items are no longer available and were removed from your basket. Review your basket and try again.');
+      }
       const orderPayload = {
         items: items.map((i) => ({
           product_id: i.product.id,
@@ -68,6 +87,7 @@ export default function CheckoutPage() {
       const orderId = result.id;
       router.push(`/orders/${orderId}`);
     } catch (err: any) {
+      setCartRefreshError(err.message || 'Order could not be processed. Please try again.');
       alert(err.message || "Order could not be processed. Please try again.");
       setIsSubmitting(false);
     }
@@ -122,6 +142,12 @@ export default function CheckoutPage() {
         </h1>
 
         {authNudge}
+
+        {cartRefreshError && (
+          <div role="alert" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {cartRefreshError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Shipping and Payment Info (7 cols) */}

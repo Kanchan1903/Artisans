@@ -7,7 +7,8 @@ import 'package:kalasathi_mobile/screens/language_picker_screen.dart';
 import 'package:kalasathi_mobile/widgets/voice_help_fab.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, this.initialPhone, this.popOnSuccess = false});
+  const OnboardingScreen(
+      {super.key, this.initialPhone, this.popOnSuccess = false});
 
   final String? initialPhone;
   final bool popOnSuccess;
@@ -24,7 +25,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final TextEditingController _nameController = TextEditingController();
   late final TextEditingController _identifierController =
       TextEditingController(text: widget.initialPhone ?? "+919800000001");
-  final TextEditingController _passwordController = TextEditingController(text: "kalasathi123");
+  final TextEditingController _passwordController = TextEditingController();
 
   String? _lastLanguage;
   bool _isLoading = false;
@@ -68,9 +69,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final password = _passwordController.text.trim();
     final name = _nameController.text.trim();
 
-    if (identifier.isEmpty || password.isEmpty || (_isSignUp && name.isEmpty)) {
+    if (identifier.isEmpty ||
+        password.isEmpty ||
+        (_isSignUp && name.isEmpty) ||
+        (_isSignUp && password.length < 6)) {
       setState(() {
-        _errorMessage = "Please fill in all required fields";
+        _errorMessage = _isSignUp && password.length < 6
+            ? "Password must be at least 6 characters"
+            : "Please fill in all required fields";
       });
       return;
     }
@@ -80,10 +86,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _errorMessage = null;
     });
 
-    final success = await auth.verifyOtp(
-      phone: identifier.startsWith('+') ? identifier : '+91$identifier',
-      code: "123456",
-      name: _isSignUp ? name : (auth.artisanProfile?['name'] ?? name),
+    final success = await auth.authenticateWithPassword(
+      identifier: identifier,
+      password: password,
+      isSignUp: _isSignUp,
+      name: _isSignUp ? name : null,
     );
 
     setState(() {
@@ -139,7 +146,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Image.asset(
                 'assets/images/login_pot.png',
                 width: 180,
-                errorBuilder: (_, __, ___) => const Icon(Icons.local_florist, size: 140, color: Colors.white),
+                errorBuilder: (_, __, ___) => const Icon(Icons.local_florist,
+                    size: 140, color: Colors.white),
               ),
             ),
           ),
@@ -151,7 +159,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Image.asset(
                 'assets/images/login_pot.png',
                 width: 220,
-                errorBuilder: (_, __, ___) => const Icon(Icons.spa, size: 160, color: Colors.white),
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.spa, size: 160, color: Colors.white),
               ),
             ),
           ),
@@ -160,10 +169,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 440),
-                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 32),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 26, vertical: 32),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(32),
@@ -181,7 +192,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     children: [
                       // Card Header
                       Text(
-                        _isSignUp ? l10n.translate('createAccount') : l10n.translate('signIn'),
+                        _isSignUp
+                            ? l10n.translate('createAccount')
+                            : l10n.translate('signIn'),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 26,
@@ -236,14 +249,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                             // More Languages (12 Indian languages)
                             IconButton(
-                              icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF7C3AED), size: 20),
+                              icon: const Icon(Icons.more_horiz_rounded,
+                                  color: Color(0xFF7C3AED), size: 20),
                               tooltip: "All 12 Languages",
-                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              constraints: const BoxConstraints(
+                                  minWidth: 36, minHeight: 36),
                               padding: EdgeInsets.zero,
                               onPressed: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const LanguagePickerScreen(isModal: true)),
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const LanguagePickerScreen(
+                                              isModal: true)),
                                 );
                               },
                             ),
@@ -256,7 +274,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       if (_errorMessage != null) ...[
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEE2E2),
                             borderRadius: BorderRadius.circular(12),
@@ -264,7 +283,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           child: Text(
                             _errorMessage!,
-                            style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13),
+                            style: const TextStyle(
+                                color: Color(0xFFB91C1C), fontSize: 13),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -296,7 +316,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         obscureText: _obscurePassword,
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
                             color: const Color(0xFF6B7280),
                             size: 20,
                           ),
@@ -316,7 +338,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             Checkbox(
                               value: _agreeTerms,
                               activeColor: const Color(0xFF7C3AED),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(5)),
                               onChanged: (val) {
                                 setState(() {
                                   _agreeTerms = val ?? true;
@@ -325,10 +348,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => setState(() => _agreeTerms = !_agreeTerms),
+                                onTap: () =>
+                                    setState(() => _agreeTerms = !_agreeTerms),
                                 child: Text(
                                   l10n.translate('agreeTerms'),
-                                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                                  style: const TextStyle(
+                                      fontSize: 13, color: Color(0xFF475569)),
                                 ),
                               ),
                             ),
@@ -360,23 +385,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ],
                         ),
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : () => _submit(auth, l10n),
+                          onPressed:
+                              _isLoading ? null : () => _submit(auth, l10n),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.transparent,
                             shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(26)),
                           ),
                           child: _isLoading
                               ? const SizedBox(
                                   width: 22,
                                   height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2.5, color: Colors.white),
                                 )
                               : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      _isSignUp ? l10n.translate('createAccount') : l10n.translate('signIn'),
+                                      _isSignUp
+                                          ? l10n.translate('createAccount')
+                                          : l10n.translate('signIn'),
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -384,7 +414,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                                    const Icon(Icons.arrow_forward_rounded,
+                                        color: Colors.white, size: 18),
                                   ],
                                 ),
                         ),
@@ -394,15 +425,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       // Divider "OR"
                       Row(
                         children: [
-                          const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                          const Expanded(
+                              child: Divider(color: Color(0xFFE2E8F0))),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 14),
                             child: Text(
                               l10n.translate('or'),
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
-                          const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                          const Expanded(
+                              child: Divider(color: Color(0xFFE2E8F0))),
                         ],
                       ),
                       const SizedBox(height: 14),
@@ -422,10 +458,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               _isSignUp
                                   ? "${l10n.translate('alreadyHaveAccount')} "
                                   : "${l10n.translate('dontHaveAccount')} ",
-                              style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                              style: const TextStyle(
+                                  fontSize: 14, color: Color(0xFF64748B)),
                             ),
                             Text(
-                              _isSignUp ? "${l10n.translate('signIn')} →" : "${l10n.translate('createAccount')} →",
+                              _isSignUp
+                                  ? "${l10n.translate('signIn')} →"
+                                  : "${l10n.translate('createAccount')} →",
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -444,7 +483,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ],
       ),
       floatingActionButton: const VoiceHelpFab(
-        customMessage: "खाते तयार करण्यासाठी तुमचे नाव व मोबाइल नंबर टाका किंवा त्वरित साइन इन करा.",
+        customMessage:
+            "खाते तयार करण्यासाठी तुमचे नाव व मोबाइल नंबर टाका किंवा त्वरित साइन इन करा.",
       ),
     );
   }
@@ -478,7 +518,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF6B7280)),
+                Icon(icon,
+                    size: 14,
+                    color: isSelected ? Colors.white : const Color(0xFF6B7280)),
                 const SizedBox(width: 4),
               ],
               Text(
@@ -514,10 +556,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
-        style: const TextStyle(fontSize: 15, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
+        style: const TextStyle(
+            fontSize: 15,
+            color: Color(0xFF1E293B),
+            fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.normal),
+          hintStyle: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 14,
+              fontWeight: FontWeight.normal),
           prefixIcon: Container(
             margin: const EdgeInsets.only(left: 6, right: 8),
             padding: const EdgeInsets.all(8),
@@ -529,7 +577,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           suffixIcon: suffixIcon,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );

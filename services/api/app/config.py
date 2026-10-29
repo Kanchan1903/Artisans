@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "KalaSathi API"
     VERSION: str = "1.0.0"
     API_V1_PREFIX: str = "/api/v1"
+    CURRENCY_CODE: str = "INR"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://kalasathi:kalasathi_secret@localhost:5432/kalasathi"

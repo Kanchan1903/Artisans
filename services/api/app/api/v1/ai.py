@@ -224,7 +224,7 @@ async def extract_catalog(payload: CatalogPayload):
 
 @router.get("/price/evaluation")
 async def get_pricing_model_evaluation():
-    """Proxies pricing ML model evaluation metrics from AI microservice."""
+    """Expose real AI-service metrics only; never fabricate evaluation results."""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             res = await client.get(f"{settings.AI_SERVICE_URL}/ai/price/evaluation")
@@ -232,101 +232,25 @@ async def get_pricing_model_evaluation():
                 return res.json()
     except Exception:
         pass
-    return {
-        "status": "success",
-        "evaluation": {
-            "model_type": "RandomForestRegressor",
-            "n_estimators": 100,
-            "r2_score": 0.942,
-            "mae": 45.5,
-            "test_samples": 8,
-        },
-    }
+    raise HTTPException(status_code=503, detail="Pricing evaluation service is unavailable")
 
 
 @router.post("/price")
 async def recommend_price(payload: PricePayload):
-    """Proxies pricing calculation with itemized breakdown and comparable matching to AI microservice."""
-    if payload.material_cost < 0:
-        raise HTTPException(status_code=400, detail="Material cost cannot be negative")
-    if payload.labor_hours <= 0:
-        raise HTTPException(status_code=400, detail="Labor hours must be greater than zero")
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.post(f"{settings.AI_SERVICE_URL}/ai/price", json=payload.model_dump())
-            if res.status_code == 200:
-                return res.json()
-            elif res.status_code == 400:
-                raise HTTPException(status_code=400, detail=res.json().get("detail", "Invalid pricing request"))
-    except HTTPException:
-        raise
-    except Exception:
-        pass
-
-    # Transparent local calculation if microservice proxy fails
-    labor_cost = round(payload.labor_hours * payload.hourly_rate, 2)
-    direct_cost = round(payload.material_cost + labor_cost + payload.packaging_cost + payload.shipping_cost, 2)
-    fee_factor = 1.0 - (payload.platform_fee_percent / 100.0)
-    cost_floor = round(direct_cost / fee_factor, 2)
-    platform_fee = round(cost_floor - direct_cost, 2)
-    suggested = round(round((cost_floor * 1.30) / 10.0) * 10.0, 2)
-    premium = round(round((suggested * 1.35) / 10.0) * 10.0, 2)
-
-    return {
-        "cost_floor": cost_floor,
-        "suggested_price": suggested,
-        "premium_price": premium,
-        "is_verified_market_price": False,
-        "pricing_basis": "cost_plus_estimate",
-        "status_label": "Unverified Cost-Based Estimate",
-        "cost_breakdown": {
-            "material_cost": payload.material_cost,
-            "labor_hours": payload.labor_hours,
-            "hourly_rate": payload.hourly_rate,
-            "labor_cost": labor_cost,
-            "packaging_cost": payload.packaging_cost,
-            "shipping_cost": payload.shipping_cost,
-            "platform_fee": platform_fee,
-            "platform_fee_percent": payload.platform_fee_percent,
-            "total_direct_cost": direct_cost,
-            "cost_floor": cost_floor,
-        },
-        "comparable_products": [],
-        "influencing_factors": [
-            f"Direct cost baseline: ₹{direct_cost:.0f}",
-            f"Packaging & delivery: ₹{payload.packaging_cost + payload.shipping_cost:.0f}",
-            "Notice: Comparable market data unavailable; recommendation labeled as unverified estimate",
-        ],
-        "explanation": f"Minimum cost floor is ₹{cost_floor:.0f}. Suggested market price is ₹{suggested:.0f}.",
-        "language": payload.language,
-    }
+    """Reject the old unauthenticated estimator; pricing now belongs to a product draft."""
+    raise HTTPException(
+        status_code=410,
+        detail="This pricing endpoint was retired. Use the authenticated product pricing routes.",
+    )
 
 
 @router.post("/price/validate-override")
 async def validate_price_override(payload: PriceOverridePayload):
-    """Proxies custom price override validation to AI microservice."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            res = await client.post(f"{settings.AI_SERVICE_URL}/ai/price/validate-override", json=payload.model_dump())
-            if res.status_code == 200:
-                return res.json()
-    except Exception:
-        pass
-
-    is_valid = payload.override_price >= payload.cost_floor
-    diff = round(payload.override_price - payload.cost_floor, 2)
-    warning = None
-    if not is_valid:
-        loss = abs(diff)
-        warning = f"Warning: Override price ₹{payload.override_price:.0f} is ₹{loss:.0f} below cost floor ₹{payload.cost_floor:.0f}."
-    return {
-        "is_valid": is_valid,
-        "override_price": payload.override_price,
-        "cost_floor": payload.cost_floor,
-        "difference": diff,
-        "warning": warning,
-    }
+    """Retire the unauthenticated cost-floor validator with the old pricing API."""
+    raise HTTPException(
+        status_code=410,
+        detail="This pricing endpoint was retired. Use authenticated product pricing routes.",
+    )
 
 
 

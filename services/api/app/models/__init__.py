@@ -9,3 +9,4 @@ from app.models.inquiry import Inquiry  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.earning import Earning  # noqa: F401
 from app.models.wishlist import WishlistItem  # noqa: F401
+from app.models.pricing_revision import PricingRevision  # noqa: F401

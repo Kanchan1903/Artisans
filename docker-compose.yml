@@ -109,6 +109,7 @@ services:
       JWT_ALGORITHM: HS256
       AI_SERVICE_URL: http://ai:8001
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      CURRENCY_CODE: ${CURRENCY_CODE:-INR}
     volumes:
       - ./services/api:/app
     ports:

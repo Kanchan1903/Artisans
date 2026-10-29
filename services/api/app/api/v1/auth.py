@@ -199,7 +199,7 @@ async def register_with_password(
     payload: PasswordRegister,
     db: AsyncSession = Depends(get_db),
 ):
-    """Register a new customer using Name, Phone, Email, and Password."""
+    """Register a buyer or artisan using Name, Phone, Email, and Password."""
     phone = payload.phone.strip()
     name = payload.name.strip()
     email = payload.email.strip().lower() if payload.email else None
@@ -224,20 +224,32 @@ async def register_with_password(
     # Hash the password securely using bcrypt
     hashed = hash_password(payload.password)
 
-    # Create new customer user
+    # Create the selected account type. Public web registration keeps its
+    # schema default (buyer); the artisan app submits role=artisan explicitly.
     new_user = User(
         phone=phone,
         email=email,
         name=name,
-        role=UserRole.buyer,  # Web customers are always buyers
+        role=payload.role,
         language=Language.en,
         is_verified=True,
         is_active=True,
         password_hash=hashed,
     )
     db.add(new_user)
+    if payload.role == UserRole.artisan:
+        await db.flush()
+        db.add(ArtisanProfile(user_id=new_user.id, is_approved=True))
     await db.commit()
     await db.refresh(new_user)
+
+    artisan_id = None
+    if new_user.role == UserRole.artisan:
+        profile_result = await db.execute(
+            select(ArtisanProfile).where(ArtisanProfile.user_id == new_user.id)
+        )
+        profile = profile_result.scalar_one_or_none()
+        artisan_id = profile.id if profile else None
 
     token = create_access_token(
         subject=new_user.id,
@@ -251,8 +263,8 @@ async def register_with_password(
         role=new_user.role,
         name=new_user.name,
         language=new_user.language,
-        is_artisan=False,
-        artisan_id=None,
+        is_artisan=new_user.role == UserRole.artisan,
+        artisan_id=artisan_id,
     )
 
 
@@ -294,6 +306,14 @@ async def login_with_password(
         extra={"role": user.role.value, "phone": user.phone},
     )
 
+    artisan_id = None
+    if user.role == UserRole.artisan:
+        profile_result = await db.execute(
+            select(ArtisanProfile).where(ArtisanProfile.user_id == user.id)
+        )
+        profile = profile_result.scalar_one_or_none()
+        artisan_id = profile.id if profile else None
+
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -302,7 +322,7 @@ async def login_with_password(
         name=user.name,
         language=user.language,
         is_artisan=user.role == UserRole.artisan,
-        artisan_id=None,
+        artisan_id=artisan_id,
     )
 
 

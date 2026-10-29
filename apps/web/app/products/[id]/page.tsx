@@ -176,7 +176,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const primaryImage =
     product.images?.[selectedImageIdx]?.url ||
     product.images?.[0]?.url ||
-    "https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=800";
+    null;
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
@@ -217,7 +217,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     "@context": "https://schema.org/",
     "@type": "Product",
     name: product.title_en,
-    image: [primaryImage],
+    image: primaryImage ? [primaryImage] : [],
     description: product.description_en,
     sku: `KS-PROD-${product.id}`,
     brand: {
@@ -263,11 +263,20 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
           {/* Left Column: Image Studio Gallery (5 cols) */}
           <div className="lg:col-span-5 space-y-4">
             <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-stone-100 border border-stone-200">
-              <img
-                src={primaryImage}
-                alt={currentTitle}
-                className="w-full h-full object-cover"
-              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-stone-400" aria-label="Product image unavailable">
+                <Package className="w-10 h-10" />
+                <span className="text-sm">Image unavailable</span>
+              </div>
+              {primaryImage && (
+                <img
+                  src={primaryImage}
+                  alt={currentTitle}
+                  className="relative w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              )}
               {product.ai_generated && (
                 <div className="absolute top-4 left-4 inline-flex items-center space-x-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-semibold text-stone-800 shadow-sm border border-stone-100">
                   <Sparkles className="w-3.5 h-3.5 text-[#E09F3E]" />
@@ -330,7 +339,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               {/* Category & Origin Tags */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <span className="px-2.5 py-1 bg-[#2C3E6B]/10 text-[#2C3E6B] rounded-lg text-xs font-semibold">
-                  {product.artisan?.craft_type || "Folk Heritage"}
+                  {product.category?.name || product.artisan?.craft_type || ""}
                 </span>
                 <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-stone-100 text-stone-700 rounded-lg text-xs font-medium">
                   <MapPin className="w-3 h-3 text-[#C85A32]" />
@@ -353,9 +362,6 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               <div className="flex items-baseline space-x-4 mb-6">
                 <span className="text-3xl font-extrabold text-stone-900">
                   ₹{product.price.toLocaleString("en-IN")}
-                </span>
-                <span className="text-xs text-stone-500 font-medium line-through">
-                  ₹{Math.round(product.price * 1.35).toLocaleString("en-IN")}
                 </span>
                 <span className="text-xs font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">
                   Fair Price Guarantee

@@ -14,23 +14,21 @@ async def get_user_token(client: AsyncClient, phone: str, role: str, name: str) 
 
 
 @pytest.mark.asyncio
-async def test_order_lifecycle(client: AsyncClient):
+async def test_order_lifecycle(client: AsyncClient, db_session):
     # 1. Artisan creates a product
     artisan_token = await get_user_token(client, "+919222222222", "artisan", "Sunita Bai")
     artisan_headers = {"Authorization": f"Bearer {artisan_token}"}
 
-    prod_res = await client.post(
-        "/api/v1/products",
-        json={
+    from product_helpers import seed_published_product
+    product = await seed_published_product(
+        client, db_session, artisan_headers, {
             "title_en": "Warli Tribal Canvas Painting",
             "price": 1200.0,
             "stock": 5,
             "status": "published",
         },
-        headers=artisan_headers,
     )
-    assert prod_res.status_code == 201
-    product_id = prod_res.json()["id"]
+    product_id = product["id"]
 
     # 2. Buyer places an order
     buyer_token = await get_user_token(client, "+919333333333", "buyer", "Amit Sharma")

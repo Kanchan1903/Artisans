@@ -58,19 +58,26 @@ class ApiService {
 
   // ─── Authentication ─────────────────────────────────────────────────────────
 
-  static Future<Map<String, dynamic>> sendOtp(String phone) async {
+  static Future<Map<String, dynamic>> registerArtisan({
+    required String name,
+    required String phone,
+    required String password,
+  }) async {
     try {
       final res = await http
           .post(
-            Uri.parse('$apiBaseUrl/auth/otp/send'),
+            Uri.parse('$apiBaseUrl/auth/register'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'phone': phone, 'role': 'artisan'}),
+            body: jsonEncode({
+              'name': name,
+              'phone': phone,
+              'password': password,
+              'role': 'artisan',
+            }),
           )
           .timeout(timeoutDuration);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-      throw Exception(_responseError(res, 'Could not send verification code'));
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      throw Exception(_responseError(res, 'Could not create artisan account'));
     } catch (error) {
       if (error is Exception && error.toString().startsWith('Exception:')) {
         rethrow;
@@ -79,30 +86,20 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> verifyOtp({
-    required String phone,
-    required String code,
-    String? name,
-    String language = 'en',
+  static Future<Map<String, dynamic>> loginWithPassword({
+    required String identifier,
+    required String password,
   }) async {
     try {
       final res = await http
           .post(
-            Uri.parse('$apiBaseUrl/auth/otp/verify'),
+            Uri.parse('$apiBaseUrl/auth/login'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'phone': phone,
-              'code': code,
-              'name': name,
-              'role': 'artisan',
-              'language': language,
-            }),
+            body: jsonEncode({'identifier': identifier, 'password': password}),
           )
           .timeout(timeoutDuration);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-      throw Exception(_responseError(res, 'Could not verify sign-in'));
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      throw Exception(_responseError(res, 'Could not sign in'));
     } catch (error) {
       if (error is Exception && error.toString().startsWith('Exception:')) {
         rethrow;
@@ -335,6 +332,27 @@ class ApiService {
         error['detail'] ?? 'Product save failed (${res.statusCode})');
   }
 
+  static Future<Map<String, dynamic>> updateProduct({
+    required String token,
+    required int productId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('$apiBaseUrl/products/$productId'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_pricingErrorMessage(response));
+    }
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
   static Future<bool> updateStock({
     required String token,
     required int productId,
@@ -448,18 +466,44 @@ class ApiService {
   static Future<Map<String, dynamic>> publishDraftProduct({
     required String token,
     required int productId,
+    required double price,
+    required bool priceConfirmed,
+    required bool descriptionConfirmed,
+    required String imageJobId,
+    required List<String> selectedVariantIds,
+    required String idempotencyKey,
   }) async {
-    final res = await http.post(
-      Uri.parse('$apiBaseUrl/products/$productId/publish'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    ).timeout(timeoutDuration);
+    final res = await http
+        .post(
+          Uri.parse('$apiBaseUrl/products/$productId/publish'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'price': price,
+            'price_confirmed': priceConfirmed,
+            'description_confirmed': descriptionConfirmed,
+            'image_job_id': imageJobId,
+            'selected_variant_ids': selectedVariantIds,
+            'idempotency_key': idempotencyKey,
+          }),
+        )
+        .timeout(timeoutDuration);
     if (res.statusCode == 200) return jsonDecode(res.body);
     final error = jsonDecode(res.body);
     throw Exception(
         error['detail'] ?? 'Product publication failed (${res.statusCode})');
+  }
+
+  static Future<Map<String, dynamic>> fetchPublicProduct(int productId) async {
+    final response = await http
+        .get(Uri.parse('$apiBaseUrl/products/$productId'))
+        .timeout(timeoutDuration);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_pricingErrorMessage(response));
+    }
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
   }
 
   static Future<bool> cancelOrder({
@@ -790,123 +834,109 @@ class ApiService {
     };
   }
 
-  static Future<Map<String, dynamic>> recommendPrice({
-    required String category,
-    required double materialCost,
-    required double laborHours,
-    double hourlyRate = 85.0,
-    double packagingCost = 30.0,
-    double shippingCost = 60.0,
-    double platformFeePercent = 8.0,
-    String? material,
-    String? technique,
-    String? dimensions,
-    String language = 'en',
+  static Future<Map<String, dynamic>> recommendProductPrice({
+    required String token,
+    required int productId,
+    required String idempotencyKey,
+    Map<String, double> costs = const {},
   }) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$apiBaseUrl/ai/price'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'craft_category': category,
-              'material_cost': materialCost,
-              'labor_hours': laborHours,
-              'hourly_rate': hourlyRate,
-              'packaging_cost': packagingCost,
-              'shipping_cost': shippingCost,
-              'platform_fee_percent': platformFeePercent,
-              'material': material,
-              'technique': technique,
-              'dimensions': dimensions,
-              'language': language,
-            }),
-          )
-          .timeout(aiTimeoutDuration);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-
-    final laborWage = laborHours * hourlyRate;
-    final directCost = materialCost + laborWage + packagingCost + shippingCost;
-    final feeFactor = 1.0 - (platformFeePercent / 100.0);
-    final floor = (directCost / feeFactor).roundToDouble();
-    final platformFee = floor - directCost;
-    final suggested = ((floor * 1.30) / 10).round() * 10.0;
-    final premium = ((suggested * 1.35) / 10).round() * 10.0;
-
-    return {
-      'cost_floor': floor,
-      'suggested_price': suggested,
-      'premium_price': premium,
-      'is_verified_market_price': false,
-      'pricing_basis': 'cost_plus_estimate',
-      'status_label': 'Unverified Cost-Based Estimate',
-      'cost_breakdown': {
-        'material_cost': materialCost,
-        'labor_hours': laborHours,
-        'hourly_rate': hourlyRate,
-        'labor_cost': laborWage,
-        'packaging_cost': packagingCost,
-        'shipping_cost': shippingCost,
-        'platform_fee': platformFee,
-        'platform_fee_percent': platformFeePercent,
-        'total_direct_cost': directCost,
-        'cost_floor': floor,
-      },
-      'comparable_products': [],
-      'influencing_factors': [
-        'Direct cost recovery: Raw materials (₹$materialCost) + $laborHours hrs @ ₹$hourlyRate/hr',
-        'Packaging & shipping: ₹${packagingCost + shippingCost}',
-        'Platform fee: $platformFeePercent%',
-        'Notice: Recommendation is an unverified cost-based estimate',
-      ],
-      'explanation': language == 'mr'
-          ? 'साहित्याचा खर्च ₹$materialCost, मजुरी ₹$laborWage आणि पॅकेजिंग धरून किमान आधार किंमत ₹$floor आहे. सुचवलेली योग्य किंमत ₹$suggested आहे.'
-          : 'सामग्री ₹$materialCost, श्रम ₹$laborWage और पैकेजिंग मिलाकर न्यूनतम आधार मूल्य ₹$floor है। सुझाई गई कीमत ₹$suggested है।',
-      'language': language,
-    };
+    final response = await http
+        .post(
+          Uri.parse('$apiBaseUrl/products/$productId/pricing/recommendations'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'idempotency_key': idempotencyKey, ...costs}),
+        )
+        .timeout(const Duration(seconds: 30));
+    return _decodePricingResponse(response);
   }
 
-  static Future<Map<String, dynamic>> validatePriceOverride({
-    required double overridePrice,
-    required double costFloor,
-    String language = 'en',
+  static Future<Map<String, dynamic>> challengeProductPrice({
+    required String token,
+    required int productId,
+    required int previousRevisionId,
+    required String reason,
+    String? context,
+    required String idempotencyKey,
+    Map<String, double> costs = const {},
   }) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$apiBaseUrl/ai/price/validate-override'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'override_price': overridePrice,
-              'cost_floor': costFloor,
-              'language': language,
-            }),
-          )
-          .timeout(aiTimeoutDuration);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
+    final response = await http
+        .post(
+          Uri.parse('$apiBaseUrl/products/$productId/pricing/challenges'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'previous_revision_id': previousRevisionId,
+            'reason': reason,
+            'context': context,
+            'idempotency_key': idempotencyKey,
+            ...costs,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    return _decodePricingResponse(response);
+  }
 
-    final isValid = overridePrice >= costFloor;
-    final diff = overridePrice - costFloor;
-    String? warn;
-    if (!isValid) {
-      final loss = diff.abs();
-      warn = language == 'mr'
-          ? 'सावधान: ही किंमत आधार मूल्यापेक्षा ₹${loss.toStringAsFixed(0)} कमी आहे. यामुळे नुकसान होईल.'
-          : 'चेतावनी: यह मूल्य लागत आधार से ₹${loss.toStringAsFixed(0)} कम है।';
+  static Future<Map<String, dynamic>> selectProductPrice({
+    required String token,
+    required int productId,
+    required int revisionId,
+    required double price,
+    required String selectionSource,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('$apiBaseUrl/products/$productId/pricing/selection'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'revision_id': revisionId,
+            'price': price,
+            'selection_source': selectionSource,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    return _decodePricingResponse(response);
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchProductPricingHistory({
+    required String token,
+    required int productId,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/products/$productId/pricing/history'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 30));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_pricingErrorMessage(response));
     }
-    return {
-      'is_valid': isValid,
-      'override_price': overridePrice,
-      'cost_floor': costFloor,
-      'difference': diff,
-      'warning': warn,
-    };
+    return (jsonDecode(response.body) as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  static Map<String, dynamic> _decodePricingResponse(http.Response response) {
+    final data = jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_pricingErrorMessage(response));
+    }
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  static String _pricingErrorMessage(http.Response response) {
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      return (body['detail'] ?? body['error'] ?? 'Pricing request failed.')
+          .toString();
+    } catch (_) {
+      return 'Pricing request failed (${response.statusCode}).';
+    }
   }
 }
 

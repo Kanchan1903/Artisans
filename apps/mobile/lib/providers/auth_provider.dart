@@ -54,44 +54,39 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<String?> sendOtp(String phone) async {
-    _isLoading = true;
-    _lastAuthError = null;
-    notifyListeners();
-    try {
-      final res = await ApiService.sendOtp(phone);
-      _isLoading = false;
-      notifyListeners();
-      return res['mock_code'] as String?;
-    } catch (error) {
-      _lastAuthError = error.toString().replaceFirst('Exception: ', '');
-      _isLoading = false;
-      notifyListeners();
-      return null;
-    }
-  }
-
-  Future<bool> verifyOtp({
-    required String phone,
-    required String code,
+  Future<bool> authenticateWithPassword({
+    required String identifier,
+    required String password,
+    required bool isSignUp,
     String? name,
   }) async {
     _isLoading = true;
     _lastAuthError = null;
     notifyListeners();
     try {
-      final res = await ApiService.verifyOtp(
-        phone: phone,
-        code: code,
-        name: name,
-        language: _selectedLanguage,
-      );
-      _authToken = res['access_token'] as String;
+      final normalizedIdentifier =
+          identifier.contains('@') || identifier.startsWith('+')
+              ? identifier
+              : '+91${identifier.replaceAll(RegExp(r'\s+'), '')}';
+      final response = isSignUp
+          ? await ApiService.registerArtisan(
+              name: name!.trim(),
+              phone: normalizedIdentifier,
+              password: password,
+            )
+          : await ApiService.loginWithPassword(
+              identifier: normalizedIdentifier,
+              password: password,
+            );
+      if (response['is_artisan'] != true || response['artisan_id'] == null) {
+        throw Exception('This account is not registered as an artisan.');
+      }
+      _authToken = response['access_token'] as String;
       _artisanProfile = {
-        'name': res['name'] ?? name ?? 'Artisan',
-        'phone': phone,
+        'name': response['name'] ?? name ?? 'Artisan',
+        'phone': normalizedIdentifier,
         'role': 'artisan',
-        'artisan_id': res['artisan_id'] ?? 1,
+        'artisan_id': response['artisan_id'],
       };
       await OfflineStorageService.saveAuthToken(_authToken!);
       await OfflineStorageService.saveArtisanProfile(_artisanProfile!);

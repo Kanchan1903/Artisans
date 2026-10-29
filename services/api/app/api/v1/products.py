@@ -11,10 +11,12 @@ from app.database import get_db
 from app.models.user import User
 from app.models.artisan import ArtisanProfile
 from app.models.product import Product, ProductImage, ProductTranslation, Category, ProductStatus
+from app.models.pricing_revision import PricingRevision
 from app.models.review import Review
 from app.schemas.product import (
     ProductCreate,
     ProductUpdate,
+    ProductPublishIn,
     ProductOut,
     ProductStockUpdate,
     CategoryOut,
@@ -26,6 +28,13 @@ from app.schemas.product import (
     ProductDescriptionTranslationOut,
     VOICE_LANGUAGES,
 )
+from app.schemas.pricing import (
+    PricingRecommendationIn,
+    PricingChallengeIn,
+    PricingSelectionIn,
+    PricingRecommendationOut,
+)
+from app.utils.pricing_comparables import PRICING_VERSION, build_storefront_recommendation
 from app.config import settings
 from app.core.dependencies import get_current_artisan, get_optional_user, get_current_user
 from app.models.user import UserRole
@@ -34,6 +43,271 @@ from app.utils.events import event_broker
 from app.utils.image_jobs import apply_variant_selection, get_job_for_artisan, selected_variant_records
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+
+async def _owned_draft(product_id: int, artisan_id: int, db: AsyncSession) -> Product:
+    result = await db.execute(
+        select(Product)
+        .where(Product.id == product_id, Product.artisan_id == artisan_id)
+        .options(selectinload(Product.category))
+    )
+    product = result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product draft not found")
+    if product.status != ProductStatus.draft:
+        raise HTTPException(status_code=409, detail="Pricing review is available only for an unpublished draft")
+    return product
+
+
+def _pricing_revision_out(revision: PricingRevision) -> dict:
+    return {
+        "revision_id": revision.id,
+        "product_id": revision.product_id,
+        "version": revision.version,
+        "suggested_price": revision.suggested_price,
+        "currency": revision.currency,
+        "price_range_min": revision.price_range_min,
+        "price_range_max": revision.price_range_max,
+        "comparable_products": revision.comparable_products or [],
+        "comparison_summary": revision.comparison_summary,
+        "pricing_factors": revision.pricing_factors or [],
+        "confidence": revision.confidence,
+        "requires_review": revision.requires_review,
+        "pricing_version": revision.pricing_version,
+        "error": revision.error,
+        "challenge_reason": revision.challenge_reason,
+        "challenge_context": revision.challenge_context,
+        "previous_revision_id": revision.previous_revision_id,
+        "selected_price": revision.selected_price,
+        "selection_source": revision.selection_source,
+        "created_at": revision.created_at.isoformat() if revision.created_at else "",
+    }
+
+
+async def _save_pricing_revision(
+    *,
+    product: Product,
+    artisan_id: int,
+    db: AsyncSession,
+    request: PricingRecommendationIn,
+    challenge_reason: str | None = None,
+    challenge_context: str | None = None,
+    previous_revision_id: int | None = None,
+) -> PricingRevision:
+    if request.idempotency_key:
+        existing_result = await db.execute(
+            select(PricingRevision).where(
+                PricingRevision.product_id == product.id,
+                PricingRevision.idempotency_key == request.idempotency_key,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            return existing
+
+    category_slug = product.category.slug if product.category else None
+    if not category_slug:
+        raise HTTPException(status_code=422, detail="Select a valid product category before pricing")
+
+    candidates_result = await db.execute(
+        select(Product)
+        .where(
+            Product.category_id == product.category_id,
+            Product.status == ProductStatus.published,
+            Product.price > 0,
+            Product.id != product.id,
+        )
+        .options(selectinload(Product.category))
+        .order_by(Product.updated_at.desc(), Product.id.desc())
+        .limit(1000)
+    )
+    candidates = candidates_result.scalars().all()
+    costs = {
+        "material_cost": request.material_cost,
+        "labor_hours": request.labor_hours,
+        "hourly_rate": request.hourly_rate,
+        "packaging_cost": request.packaging_cost,
+        "shipping_cost": request.shipping_cost,
+    }
+    snapshot = build_storefront_recommendation(
+        product,
+        candidates,
+        currency=settings.CURRENCY_CODE.upper(),
+        costs=costs,
+    )
+    version_result = await db.execute(
+        select(func.max(PricingRevision.version)).where(
+            PricingRevision.product_id == product.id
+        )
+    )
+    version = (version_result.scalar_one() or 0) + 1
+    revision = PricingRevision(
+        product_id=product.id,
+        artisan_id=artisan_id,
+        version=version,
+        pricing_version=PRICING_VERSION,
+        currency=settings.CURRENCY_CODE.upper(),
+        suggested_price=snapshot["suggested_price"],
+        price_range_min=snapshot["price_range_min"],
+        price_range_max=snapshot["price_range_max"],
+        comparable_products=snapshot["comparable_products"],
+        comparison_summary=snapshot["comparison_summary"],
+        pricing_factors=snapshot["pricing_factors"],
+        confidence=snapshot["confidence"],
+        requires_review=snapshot["requires_review"],
+        error=snapshot["error"],
+        challenge_reason=challenge_reason,
+        challenge_context=challenge_context,
+        previous_revision_id=previous_revision_id,
+        idempotency_key=request.idempotency_key,
+    )
+    db.add(revision)
+    await db.commit()
+    await db.refresh(revision)
+    return revision
+
+
+async def _ensure_selected_price_before_publish(
+    product_id: int, artisan_id: int, db: AsyncSession
+) -> float | None:
+    history_result = await db.execute(
+        select(PricingRevision)
+        .where(
+            PricingRevision.product_id == product_id,
+            PricingRevision.artisan_id == artisan_id,
+        )
+        .order_by(PricingRevision.version.desc())
+    )
+    latest = history_result.scalars().first()
+    if latest is not None and latest.selected_price is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Choose a suggested or custom price before publishing this product",
+        )
+    return latest.selected_price if latest is not None else None
+
+
+@router.post(
+    "/{product_id}/pricing/recommendations",
+    response_model=PricingRecommendationOut,
+)
+async def create_product_price_recommendation(
+    product_id: int,
+    payload: PricingRecommendationIn,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Snapshot a fresh, deterministic comparison against published storefront products."""
+    _, profile = artisan_tuple
+    product = await _owned_draft(product_id, profile.id, db)
+    revision = await _save_pricing_revision(
+        product=product, artisan_id=profile.id, db=db, request=payload
+    )
+    return _pricing_revision_out(revision)
+
+
+@router.post(
+    "/{product_id}/pricing/challenges",
+    response_model=PricingRecommendationOut,
+)
+async def challenge_product_price_recommendation(
+    product_id: int,
+    payload: PricingChallengeIn,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record the artisan's challenge and fetch a new live snapshot for a single recheck."""
+    _, profile = artisan_tuple
+    product = await _owned_draft(product_id, profile.id, db)
+    previous_result = await db.execute(
+        select(PricingRevision).where(
+            PricingRevision.id == payload.previous_revision_id,
+            PricingRevision.product_id == product.id,
+            PricingRevision.artisan_id == profile.id,
+        )
+    )
+    previous = previous_result.scalar_one_or_none()
+    if previous is None:
+        raise HTTPException(status_code=404, detail="Pricing recommendation not found")
+    revision = await _save_pricing_revision(
+        product=product,
+        artisan_id=profile.id,
+        db=db,
+        request=payload,
+        challenge_reason=payload.reason,
+        challenge_context=payload.context,
+        previous_revision_id=previous.id,
+    )
+    return _pricing_revision_out(revision)
+
+
+@router.get("/{product_id}/pricing/history", response_model=list[PricingRecommendationOut])
+async def get_product_pricing_history(
+    product_id: int,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return recommendation snapshots only to the artisan who owns the product."""
+    _, profile = artisan_tuple
+    product_result = await db.execute(
+        select(Product).where(
+            Product.id == product_id,
+            Product.artisan_id == profile.id,
+        )
+    )
+    if product_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    result = await db.execute(
+        select(PricingRevision)
+        .where(
+            PricingRevision.product_id == product_id,
+            PricingRevision.artisan_id == profile.id,
+        )
+        .order_by(PricingRevision.version.asc())
+    )
+    return [_pricing_revision_out(row) for row in result.scalars().all()]
+
+
+@router.put("/{product_id}/pricing/selection", response_model=PricingRecommendationOut)
+async def select_product_price(
+    product_id: int,
+    payload: PricingSelectionIn,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save the artisan-approved price without publishing the product."""
+    _, profile = artisan_tuple
+    product = await _owned_draft(product_id, profile.id, db)
+    revision_result = await db.execute(
+        select(PricingRevision).where(
+            PricingRevision.id == payload.revision_id,
+            PricingRevision.product_id == product.id,
+            PricingRevision.artisan_id == profile.id,
+        )
+    )
+    revision = revision_result.scalar_one_or_none()
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Pricing recommendation not found")
+    latest_result = await db.execute(
+        select(func.max(PricingRevision.version)).where(
+            PricingRevision.product_id == product.id
+        )
+    )
+    if revision.version != latest_result.scalar_one():
+        raise HTTPException(status_code=409, detail="This recommendation is stale. Refresh pricing before selecting.")
+    if payload.selection_source in {"suggested", "revised_suggestion"}:
+        if revision.suggested_price is None:
+            raise HTTPException(status_code=409, detail="There is no supported suggestion to accept; set your own price instead")
+        if abs(payload.price - revision.suggested_price) > 0.01:
+            raise HTTPException(status_code=422, detail="Accepted price must match the current suggestion")
+
+    product.price = round(payload.price, 2)
+    revision.selected_price = product.price
+    revision.selection_source = payload.selection_source
+    revision.selected_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(revision)
+    return _pricing_revision_out(revision)
 
 
 @router.post("/translate-description", response_model=ProductDescriptionTranslationOut)
@@ -136,16 +410,19 @@ async def _images_from_image_job(payload: ProductCreate, artisan_id: int, db: As
         raise HTTPException(status_code=400, detail="Image job not found for this artisan")
     if job.status == "retake_required":
         raise HTTPException(status_code=400, detail="Cannot publish: photo must be retaken")
-    if job.status != "completed":
-        raise HTTPException(status_code=400, detail="Cannot publish until image processing completes")
+    if job.status != "completed" or job.requires_review:
+        raise HTTPException(status_code=400, detail="Cannot publish until image processing and required human review complete")
     if payload.selected_variant_ids:
         try:
             await apply_variant_selection(job, payload.selected_variant_ids)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     records = selected_variant_records(job)
-    if len(records) != 3:
+    urls = [str(item.get("image_url") or "").strip() for item in records]
+    if len(records) != 3 or len(set(urls)) != 3 or any(not url.startswith(("http://", "https://")) for url in urls):
         raise HTTPException(status_code=400, detail="Select exactly three processed variants before saving")
+    if any(item.get("status") == "missing_image" or item.get("saved") is False for item in records):
+        raise HTTPException(status_code=400, detail="One or more selected images were not successfully stored")
     return [
         ProductImageCreate(url=item["image_url"], is_primary=idx == 0, order_index=idx)
         for idx, item in enumerate(records)
@@ -492,6 +769,11 @@ async def create_product(
 ):
     """Artisan publishes or creates a new handcrafted product with idempotency and duplicate prevention."""
     user, profile = artisan_tuple
+    if payload.status == ProductStatus.published:
+        raise HTTPException(
+            status_code=409,
+            detail="Products must be saved as drafts and published through the final review endpoint.",
+        )
     now = datetime.now(timezone.utc)
     category_id = payload.category_id
     if payload.category_slug:
@@ -538,6 +820,15 @@ async def create_product(
         res = await db.execute(stmt)
         draft_prod = res.scalar_one_or_none()
         if draft_prod:
+            if payload.status == ProductStatus.published:
+                selected_price = await _ensure_selected_price_before_publish(
+                    draft_prod.id, profile.id, db
+                )
+                if selected_price is not None and abs(payload.price - selected_price) > 0.01:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Publish price does not match the artisan's approved price",
+                    )
             draft_prod.category_id = category_id
             draft_prod.title_en = payload.title_en
             draft_prod.description_en = payload.description_en
@@ -691,6 +982,7 @@ async def create_product(
 @router.post("/{product_id}/publish", response_model=ProductOut)
 async def publish_draft_product(
     product_id: int,
+    payload: ProductPublishIn,
     artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
     db: AsyncSession = Depends(get_db),
 ):
@@ -699,6 +991,7 @@ async def publish_draft_product(
     stmt = (
         select(Product)
         .where(Product.id == product_id, Product.artisan_id == profile.id)
+        .with_for_update()
         .options(
             selectinload(Product.images),
             selectinload(Product.translations),
@@ -712,13 +1005,79 @@ async def publish_draft_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or unauthorized")
 
     if product.status == ProductStatus.published:
-        return product  # Idempotent
+        if product.idempotency_key == payload.idempotency_key:
+            return product
+        raise HTTPException(status_code=409, detail="This product has already been published")
 
-    from app.mongodb import publish_product_mongo
+    if product.status != ProductStatus.draft:
+        raise HTTPException(status_code=409, detail="Only a draft product can be published")
+    if not payload.description_confirmed or not payload.price_confirmed:
+        raise HTTPException(status_code=422, detail="Confirm the saved English description and final price before publishing")
+    if not product.title_en or len(product.title_en.strip()) < 2:
+        raise HTTPException(status_code=422, detail="A valid product name is required")
+    if not product.description_en or not product.description_en.strip():
+        raise HTTPException(status_code=422, detail="A reviewed English description is required")
+    if not product.category_id:
+        raise HTTPException(status_code=422, detail="Select a valid product category before publishing")
+
+    # The selection is checked against the authenticated artisan's job and exact stored outputs.
+    job = await get_job_for_artisan(db, payload.image_job_id, profile.id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Image processing job not found for this artisan")
+    if job.product_id not in (None, product.id):
+        raise HTTPException(status_code=409, detail="These processed images are already attached to another product")
+    if job.status != "completed" or job.requires_review:
+        raise HTTPException(status_code=409, detail="Image processing must complete and any required human review must be approved")
+    try:
+        await apply_variant_selection(job, payload.selected_variant_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Image selection could not be saved. Retry publication.") from exc
+    selected_records = selected_variant_records(job)
+    selected_urls = [str(item.get("image_url") or "").strip() for item in selected_records]
+    if (
+        len(selected_records) != 3
+        or len(set(selected_urls)) != 3
+        or any(not url.startswith(("http://", "https://")) for url in selected_urls)
+        or any(item.get("status") == "missing_image" or item.get("saved") is False for item in selected_records)
+    ):
+        raise HTTPException(status_code=422, detail="Exactly three distinct, stored image variants are required")
+
+    selected_price = await _ensure_selected_price_before_publish(
+        product.id, profile.id, db
+    )
+    if selected_price is None:
+        raise HTTPException(status_code=409, detail="Choose and save a final price before publishing")
+    if abs(payload.price - selected_price) > 0.01 or abs(product.price - selected_price) > 0.01:
+        raise HTTPException(
+            status_code=409,
+            detail="Product price differs from the artisan-approved price",
+        )
+
+    product.images.clear()
+    for index, item in enumerate(selected_records):
+        product.images.append(ProductImage(
+            url=selected_urls[index],
+            is_primary=index == 0,
+            order_index=index,
+        ))
+    job.product_id = product.id
+    product.idempotency_key = payload.idempotency_key
+
     product.status = ProductStatus.published
     product.published_at = datetime.now(timezone.utc)
     await db.commit()
-    await publish_product_mongo(product.id, profile.id)
+    from app.mongodb import publish_product_mongo
+    await _sync_product_to_mongo(product, payload.image_job_id)
+    try:
+        await publish_product_mongo(product.id, profile.id)
+    except Exception:
+        # PostgreSQL is the public catalog source; compensate if a mirror update fails.
+        product.status = ProductStatus.draft
+        product.published_at = None
+        await db.commit()
+        raise HTTPException(status_code=503, detail="Product publication could not be synchronized. It remains a draft.")
 
     # Refetch
     refetch_stmt = (
@@ -733,17 +1092,20 @@ async def publish_draft_product(
     )
     product = (await db.execute(refetch_stmt)).scalar_one()
 
-    await event_broker.publish(
-        "product_published",
-        {
-            "product_id": product.id,
-            "title": product.title_en,
-            "price": product.price,
-            "artisan_name": user.name,
-            "state": profile.state,
-            "image_url": product.images[0].url if product.images else None,
-        },
-    )
+    try:
+        await event_broker.publish(
+            "product_published",
+            {
+                "product_id": product.id,
+                "title": product.title_en,
+                "price": product.price,
+                "artisan_name": user.name,
+                "state": profile.state,
+                "image_url": product.images[0].url if product.images else None,
+            },
+        )
+    except Exception:
+        pass
     return product
 
 
@@ -764,9 +1126,37 @@ async def update_product(
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or unauthorized")
 
+    if payload.status == ProductStatus.published and product.status != ProductStatus.published:
+        raise HTTPException(status_code=409, detail="Use the final review publish endpoint to publish this product")
+
     update_data = payload.model_dump(exclude_unset=True)
+    category_slug = update_data.pop("category_slug", None)
+    category_id = update_data.pop("category_id", None) if "category_id" in update_data else None
+    translations = update_data.pop("translations", None)
+    if category_slug:
+        category_result = await db.execute(select(Category).where(Category.slug == category_slug))
+        category = category_result.scalar_one_or_none()
+        if not category:
+            raise HTTPException(status_code=400, detail="Unknown product category")
+        if category_id is not None and category_id != category.id:
+            raise HTTPException(status_code=400, detail="Category ID and slug do not match")
+        product.category_id = category.id
+    elif "category_id" in payload.model_fields_set:
+        if category_id is not None:
+            category_result = await db.execute(select(Category).where(Category.id == category_id))
+            if category_result.scalar_one_or_none() is None:
+                raise HTTPException(status_code=400, detail="Unknown product category")
+        product.category_id = category_id
     for field, val in update_data.items():
         setattr(product, field, val)
+    if translations is not None:
+        product.translations.clear()
+        for tr in translations:
+            product.translations.append(ProductTranslation(
+                language=tr["language"],
+                title=tr["title"],
+                description=tr.get("description"),
+            ))
 
     await db.commit()
 

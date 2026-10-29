@@ -17,8 +17,8 @@ async def get_user_token(client: AsyncClient, phone: str, role: str, name: str) 
 
 
 @pytest.mark.asyncio
-async def test_publishing_draft_conversion_and_idempotency(client: AsyncClient):
-    """Test draft creation, one-tap publish, draft conversion, idempotency, and public visibility."""
+async def test_draft_visibility_and_unreviewed_publish_is_rejected(client: AsyncClient):
+    """Draft rows remain private and cannot be published without final review input."""
     artisan_token = await get_user_token(client, "+919400000001", "artisan", "Laxmi Devi")
     headers = {"Authorization": f"Bearer {artisan_token}"}
 
@@ -61,7 +61,7 @@ async def test_publishing_draft_conversion_and_idempotency(client: AsyncClient):
     assert dup_res.status_code == 200 or dup_res.status_code == 201
     assert dup_res.json()["id"] == draft_id
 
-    # 3. Publish via draft conversion (draft_product_id)
+    # 3. Direct publishing through draft conversion is no longer allowed.
     publish_res = await client.post(
         "/api/v1/products",
         json={
@@ -82,21 +82,9 @@ async def test_publishing_draft_conversion_and_idempotency(client: AsyncClient):
         },
         headers=headers,
     )
-    assert publish_res.status_code == 201
-    pub_data = publish_res.json()
-    assert pub_data["id"] == draft_id
-    assert pub_data["status"] == "published"
-    assert pub_data["price"] == 400.0
-    assert len(pub_data["translations"]) >= 2
-    assert len(pub_data["images"]) >= 1
-
-    # 4. Verified on public website catalog immediately without manual DB changes
-    pub_catalog_after = await client.get("/api/v1/products")
-    items = pub_catalog_after.json()["items"]
-    assert any(p["id"] == draft_id for p in items)
-    matched = next(p for p in items if p["id"] == draft_id)
-    assert matched["title_en"] == "Madhubani Painted Fish Coaster - Set of 4"
-    assert matched["price"] == 400.0
+    assert publish_res.status_code == 409
+    still_private = await client.get("/api/v1/products")
+    assert not any(p["id"] == draft_id for p in still_private.json()["items"])
 
     # 5. Dedicated one-tap publish endpoint check
     draft_res2 = await client.post(
@@ -106,32 +94,24 @@ async def test_publishing_draft_conversion_and_idempotency(client: AsyncClient):
     )
     diya_id = draft_res2.json()["id"]
     one_tap = await client.post(f"/api/v1/products/{diya_id}/publish", headers=headers)
-    assert one_tap.status_code == 200
-    assert one_tap.json()["status"] == "published"
+    assert one_tap.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_multi_artisan_orders_and_notifications(client: AsyncClient):
+async def test_multi_artisan_orders_and_notifications(client: AsyncClient, db_session):
     """Test placing an order containing products from 2 distinct artisans."""
     # Artisan 1 (Shyam - Weaver)
     shyam_token = await get_user_token(client, "+919500000001", "artisan", "Shyam Weaver")
     shyam_headers = {"Authorization": f"Bearer {shyam_token}"}
-    p1_res = await client.post(
-        "/api/v1/products",
-        json={"title_en": "Khadi Silk Scarf", "price": 1000.0, "stock": 10, "status": "published"},
-        headers=shyam_headers,
-    )
-    p1_id = p1_res.json()["id"]
+    from product_helpers import seed_published_product
+    p1 = await seed_published_product(client, db_session, shyam_headers, {"title_en": "Khadi Silk Scarf", "price": 1000.0, "stock": 10})
+    p1_id = p1["id"]
 
     # Artisan 2 (Geeta - Potter)
     geeta_token = await get_user_token(client, "+919500000002", "artisan", "Geeta Potter")
     geeta_headers = {"Authorization": f"Bearer {geeta_token}"}
-    p2_res = await client.post(
-        "/api/v1/products",
-        json={"title_en": "Clay Water Bottle", "price": 500.0, "stock": 5, "status": "published"},
-        headers=geeta_headers,
-    )
-    p2_id = p2_res.json()["id"]
+    p2 = await seed_published_product(client, db_session, geeta_headers, {"title_en": "Clay Water Bottle", "price": 500.0, "stock": 5})
+    p2_id = p2["id"]
 
     # Buyer places multi-artisan order: 2 Scarves (2 * 1000 = 2000) + 1 Clay Bottle (500) = 2500
     buyer_token = await get_user_token(client, "+919500000003", "buyer", "Rohan Mehta")
@@ -201,17 +181,14 @@ async def test_multi_artisan_orders_and_notifications(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_order_cancellation_and_inventory_restocking(client: AsyncClient):
+async def test_order_cancellation_and_inventory_restocking(client: AsyncClient, db_session):
     """Test cancelling an order restocks inventory, sets payment_status='refunded', and voids earnings."""
     artisan_token = await get_user_token(client, "+919600000001", "artisan", "Kamla Devi")
     artisan_headers = {"Authorization": f"Bearer {artisan_token}"}
 
-    prod_res = await client.post(
-        "/api/v1/products",
-        json={"title_en": "Brass Bell", "price": 800.0, "stock": 4, "status": "published"},
-        headers=artisan_headers,
-    )
-    product_id = prod_res.json()["id"]
+    from product_helpers import seed_published_product
+    product = await seed_published_product(client, db_session, artisan_headers, {"title_en": "Brass Bell", "price": 800.0, "stock": 4})
+    product_id = product["id"]
 
     buyer_token = await get_user_token(client, "+919600000002", "buyer", "Vikram Rathore")
     buyer_headers = {"Authorization": f"Bearer {buyer_token}"}
@@ -259,17 +236,14 @@ async def test_order_cancellation_and_inventory_restocking(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_webhook_idempotency(client: AsyncClient):
+async def test_webhook_idempotency(client: AsyncClient, db_session):
     """Test that repeated payment webhook events do not duplicate earnings or notifications."""
     artisan_token = await get_user_token(client, "+919700000001", "artisan", "Babu Lal")
     artisan_headers = {"Authorization": f"Bearer {artisan_token}"}
 
-    prod_res = await client.post(
-        "/api/v1/products",
-        json={"title_en": "Wood Carved Elephant", "price": 1500.0, "stock": 3, "status": "published"},
-        headers=artisan_headers,
-    )
-    product_id = prod_res.json()["id"]
+    from product_helpers import seed_published_product
+    product = await seed_published_product(client, db_session, artisan_headers, {"title_en": "Wood Carved Elephant", "price": 1500.0, "stock": 3})
+    product_id = product["id"]
 
     buyer_token = await get_user_token(client, "+919700000002", "buyer", "Anita Rao")
     buyer_headers = {"Authorization": f"Bearer {buyer_token}"}
@@ -311,7 +285,7 @@ async def test_webhook_idempotency(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_artisan_dashboard_metrics_and_authorization(client: AsyncClient):
+async def test_artisan_dashboard_metrics_and_authorization(client: AsyncClient, db_session):
     """Test verified DB metrics calculation: gross sales, 8% platform fee, net earnings, trends, and authorization isolation."""
     # Artisan A
     token_a = await get_user_token(client, "+919800000001", "artisan", "Mahesh Artisan")
@@ -322,11 +296,12 @@ async def test_artisan_dashboard_metrics_and_authorization(client: AsyncClient):
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
     # Artisan A creates 2 products
-    p_a1 = (await client.post("/api/v1/products", json={"title_en": "Bamboo Basket", "price": 500.0, "stock": 10, "status": "published"}, headers=headers_a)).json()["id"]
-    p_a2 = (await client.post("/api/v1/products", json={"title_en": "Bamboo Lamp", "price": 1000.0, "stock": 5, "status": "published"}, headers=headers_a)).json()["id"]
+    from product_helpers import seed_published_product
+    p_a1 = (await seed_published_product(client, db_session, headers_a, {"title_en": "Bamboo Basket", "price": 500.0, "stock": 10}))['id']
+    p_a2 = (await seed_published_product(client, db_session, headers_a, {"title_en": "Bamboo Lamp", "price": 1000.0, "stock": 5}))['id']
 
     # Artisan B creates 1 product
-    p_b1 = (await client.post("/api/v1/products", json={"title_en": "Stone Idol", "price": 3000.0, "stock": 2, "status": "published"}, headers=headers_b)).json()["id"]
+    p_b1 = (await seed_published_product(client, db_session, headers_b, {"title_en": "Stone Idol", "price": 3000.0, "stock": 2}))['id']
 
     # Buyer places Order 1 for Artisan A (2 Baskets = ₹1000)
     buyer_token = await get_user_token(client, "+919800000003", "buyer", "Buyer Alpha")

@@ -14,7 +14,7 @@ async def get_artisan_token(client: AsyncClient, phone: str = "+919111111111") -
 
 
 @pytest.mark.asyncio
-async def test_artisan_create_and_browse_product(client: AsyncClient):
+async def test_artisan_create_and_browse_product(client: AsyncClient, db_session):
     token = await get_artisan_token(client)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -47,13 +47,17 @@ async def test_artisan_create_and_browse_product(client: AsyncClient):
         ],
     }
 
-    create_res = await client.post("/api/v1/products", json=product_payload, headers=headers)
-    assert create_res.status_code == 201
-    prod = create_res.json()
+    from product_helpers import seed_published_product
+    prod = await seed_published_product(client, db_session, headers, product_payload)
     assert prod["title_en"] == "Handcrafted Clay Water Jug (Surahi)"
     assert prod["price"] == 450.0
     assert prod["stock"] == 10
     product_id = prod["id"]
+
+    direct_publish = await client.post(
+        "/api/v1/products", json=product_payload, headers=headers
+    )
+    assert direct_publish.status_code == 409
 
     # 3. Public buyers can browse products
     browse_res = await client.get("/api/v1/products")

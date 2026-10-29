@@ -14,23 +14,21 @@ async def get_user_token(client: AsyncClient, phone: str, role: str, name: str) 
 
 
 @pytest.mark.asyncio
-async def test_b2b_inquiry_flow(client: AsyncClient):
+async def test_b2b_inquiry_flow(client: AsyncClient, db_session):
     # 1. Artisan creates product
     artisan_token = await get_user_token(client, "+919444444444", "artisan", "Rameshwar Chitrakar")
     artisan_headers = {"Authorization": f"Bearer {artisan_token}"}
 
-    prod_res = await client.post(
-        "/api/v1/products",
-        json={
+    from product_helpers import seed_published_product
+    prod = await seed_published_product(
+        client, db_session, artisan_headers, {
             "title_en": "Madhubani Tree of Life Painting",
             "price": 3500.0,
             "stock": 10,
             "status": "published",
         },
-        headers=artisan_headers,
     )
-    assert prod_res.status_code == 201
-    product_id = prod_res.json()["id"]
+    product_id = prod["id"]
 
     # 2. Buyer submits B2B inquiry
     buyer_token = await get_user_token(client, "+919555555555", "buyer", "FabIndia Procurement")

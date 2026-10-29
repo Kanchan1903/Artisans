@@ -79,7 +79,7 @@ class ProductCreate(BaseModel):
     seo_keywords: list[str] | None = None
     price: float = Field(..., ge=0.0)
     stock: int = Field(default=1, ge=0)
-    status: ProductStatus = ProductStatus.published
+    status: ProductStatus = ProductStatus.draft
     voice_transcript: str | None = None
     voice_language: str | None = Field(default=None, min_length=2, max_length=5)
     ai_generated: bool = False
@@ -93,6 +93,7 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     category_id: int | None = None
+    category_slug: str | None = Field(default=None, min_length=1, max_length=100)
     title_en: str | None = None
     description_en: str | None = None
     title_hi: str | None = None
@@ -106,6 +107,16 @@ class ProductUpdate(BaseModel):
     price: float | None = None
     stock: int | None = None
     status: ProductStatus | None = None
+    translations: list[ProductTranslationCreate] | None = None
+
+
+class ProductPublishIn(BaseModel):
+    price: float = Field(..., gt=0, le=1_000_000_000)
+    price_confirmed: bool
+    description_confirmed: bool
+    image_job_id: str = Field(..., min_length=1, max_length=64)
+    selected_variant_ids: list[str] = Field(..., min_length=3, max_length=3)
+    idempotency_key: str = Field(..., min_length=8, max_length=100)
 
 
 class ProductStockUpdate(BaseModel):

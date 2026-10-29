@@ -603,10 +603,22 @@ export async function createProduct(
   return res.json();
 }
 
-export async function publishProduct(productId: number | string, token: string): Promise<Product> {
+export async function publishProduct(
+  productId: number | string,
+  token: string,
+  review: {
+    price: number;
+    price_confirmed: boolean;
+    description_confirmed: boolean;
+    image_job_id: string;
+    selected_variant_ids: string[];
+    idempotency_key: string;
+  }
+): Promise<Product> {
   const res = await fetch(`${API_BASE_URL}/products/${productId}/publish`, {
     method: "POST",
     headers: authHeaders(token),
+    body: JSON.stringify(review),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
