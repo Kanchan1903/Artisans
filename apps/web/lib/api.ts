@@ -5,8 +5,25 @@
  * All functions that require auth accept an optional token parameter.
  */
 
-export const API_BASE_URL =
+const configuredApiUrl =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+// Vercel can retain a local development URL in NEXT_PUBLIC_API_URL. A browser
+// deployed on Vercel cannot reach its own visitor's localhost, so route that
+// misconfiguration to the production API. Local development still uses the
+// local backend as usual.
+const isLocalApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(
+  configuredApiUrl,
+);
+const isLocalBrowser =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
+
+export const API_BASE_URL =
+  isLocalApiUrl && typeof window !== "undefined" && !isLocalBrowser
+    ? "https://kalasathi-api.onrender.com/api/v1"
+    : configuredApiUrl;
 
 // ─── Type Definitions ─────────────────────────────────────────────────────────
 
