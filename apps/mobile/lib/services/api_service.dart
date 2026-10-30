@@ -13,13 +13,12 @@ class ApiService {
 
   static String _activeApiBaseUrl = '';
 
-  // On a physical phone, 127.0.0.1 points to the phone itself. Pass API_URL
-  // for Wi-Fi testing or use `adb reverse tcp:8000 tcp:8000` over USB.
+  // Use the deployed API by default so installed builds can reach the backend.
+  // Override API_URL with --dart-define for local development.
   static String get apiBaseUrl {
     if (_customApiUrl.isNotEmpty) return _customApiUrl;
     if (_activeApiBaseUrl.isNotEmpty) return _activeApiBaseUrl;
-    if (kIsWeb) return 'http://localhost:8000/api/v1';
-    return 'http://127.0.0.1:8000/api/v1';
+    return 'https://kalasathi-api.onrender.com/api/v1';
   }
 
   static void setActiveBaseUrl(String url) {
@@ -37,10 +36,9 @@ class ApiService {
   static Exception _serverConnectionError(Object error) {
     if (error is http.ClientException || error is TimeoutException) {
       return Exception(
-        'Cannot reach the KalaSathi API at $apiBaseUrl. Start the backend. '
-        'For a physical phone on Wi-Fi, run Flutter with '
-        '--dart-define=API_URL=http://<laptop-ip>:8000/api/v1; '
-        'over USB, run `adb reverse tcp:8000 tcp:8000`.',
+        'Cannot reach the KalaSathi API at $apiBaseUrl. Check your internet '
+        'connection and try again. For local development, set API_URL to your '
+        'computer address (or use `adb reverse tcp:8000 tcp:8000` over USB).',
       );
     }
     return Exception(error.toString());
