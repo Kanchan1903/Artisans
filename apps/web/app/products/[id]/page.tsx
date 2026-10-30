@@ -2,14 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Sparkles,
   MapPin,
   ShieldCheck,
   Globe2,
-  ShoppingCart,
-  Zap,
   Package,
   Award,
   Clock,
@@ -28,7 +25,6 @@ import {
   ProductTranslation,
   submitB2BInquiry,
 } from "@/lib/api";
-import { useCart } from "@/lib/cart-context";
 
 const LANGUAGES_12 = [
   { code: "en", name: "English", native: "English" },
@@ -46,20 +42,18 @@ const LANGUAGES_12 = [
 ];
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
-  const router = useRouter();
   const productId = Number(params.id);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
-  const [quantity, setQuantity] = useState<number>(1);
   const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
   const [showInquiryModal, setShowInquiryModal] = useState<boolean>(false);
 
   // B2B Inquiry form state
   const [inquiryName, setInquiryName] = useState("");
   const [inquiryEmail, setInquiryEmail] = useState("");
-  const [inquiryQty, setInquiryQty] = useState(25);
+  const [inquiryQty, setInquiryQty] = useState(1);
   const [inquiryMsg, setInquiryMsg] = useState("");
   const [inquirySuccess, setInquirySuccess] = useState(false);
   const [inquiryLoading, setInquiryLoading] = useState(false);
@@ -102,9 +96,6 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     setNewReviewCity("");
     setNewReviewComment("");
   };
-
-  const { addToCart } = useCart();
-  const [addedNotice, setAddedNotice] = useState(false);
 
   const [notFound, setNotFound] = useState(false);
 
@@ -177,17 +168,6 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     product.images?.[selectedImageIdx]?.url ||
     product.images?.[0]?.url ||
     null;
-
-  const handleAddToCart = () => {
-    addToCart(product, quantity);
-    setAddedNotice(true);
-    setTimeout(() => setAddedNotice(false), 2000);
-  };
-
-  const handleBuyNow = () => {
-    addToCart(product, quantity);
-    router.push("/checkout");
-  };
 
   const handleB2BSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -373,7 +353,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   </span>
                 ) : (
                   <span className="text-xs text-rose-600 font-medium ml-auto">
-                    Crafting in progress (Out of stock)
+                    Ask the artisan about availability
                   </span>
                 )}
               </div>
@@ -444,58 +424,18 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
 
-            {/* Actions: Quantity + Add to Cart + Buy Now + B2B Wholesale */}
+            {/* Contact the artisan directly about this product. */}
             <div className="pt-4 border-t border-stone-200 space-y-4">
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                {/* Quantity */}
-                <div className="flex items-center border border-stone-300 rounded-xl bg-white p-1">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-8 h-8 flex items-center justify-center text-stone-600 hover:bg-stone-100 rounded-lg font-bold"
-                  >
-                    -
-                  </button>
-                  <span className="w-10 text-center font-semibold text-stone-800 text-sm">
-                    {quantity}
-                  </span>
-                  <button
-                    onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                    className="w-8 h-8 flex items-center justify-center text-stone-600 hover:bg-stone-100 rounded-lg font-bold"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {/* Add to Cart */}
-                <button
-                  onClick={handleAddToCart}
-                  className="flex-1 w-full sm:w-auto py-3.5 px-6 rounded-xl bg-stone-900 text-white font-semibold text-sm hover:bg-stone-800 transition-colors flex items-center justify-center space-x-2 shadow-sm"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  <span>{addedNotice ? "Added to Cart!" : "Add to Cart"}</span>
-                </button>
-
-                {/* Buy Now */}
-                <button
-                  onClick={handleBuyNow}
-                  className="flex-1 w-full sm:w-auto py-3.5 px-6 rounded-xl bg-[#C85A32] text-white font-semibold text-sm hover:bg-[#B34D28] transition-colors flex items-center justify-center space-x-2 shadow-sm"
-                >
-                  <Zap className="w-4 h-4 fill-white" />
-                  <span>Buy Now</span>
-                </button>
-              </div>
-
-              {/* B2B Wholesale Inquiry Button */}
-              <div className="flex justify-between items-center text-xs pt-1">
-                <span className="text-stone-500">Need 20+ pieces for corporate gifting or retail?</span>
-                <button
-                  onClick={() => setShowInquiryModal(true)}
-                  className="text-[#2C3E6B] font-bold hover:underline flex items-center space-x-1"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Request Wholesale Quote</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowInquiryModal(true)}
+                className="w-full py-3.5 px-6 rounded-xl bg-[#C85A32] text-white font-semibold text-sm hover:bg-[#B34D28] transition-colors flex items-center justify-center space-x-2 shadow-sm"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Contact Artisan</span>
+              </button>
+              <p className="text-center text-xs text-stone-500">
+                Ask about availability, customizations, or delivery directly from the artisan.
+              </p>
             </div>
           </div>
         </div>
@@ -620,13 +560,13 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
             <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-[#C85A32] mb-1">
               <Package className="w-4 h-4" />
-              <span>B2B Bulk & Corporate Inquiry</span>
+              <span>Contact the Artisan</span>
             </div>
             <h3 className="font-serif text-2xl font-bold text-stone-900 mb-2">
-              Order Wholesale Direct
+              Ask about this handcrafted product
             </h3>
             <p className="text-xs text-stone-600 mb-6">
-              Your inquiry will be automatically translated into the artisan&apos;s native dialect ({product.artisan?.state}) and sent directly to their app.
+              Send a message to {product.artisan?.name || "the artisan"} about availability, customization, or delivery.
             </p>
 
             {inquirySuccess ? (
@@ -634,21 +574,21 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                 <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
                 <h4 className="font-bold text-emerald-900 text-base">Inquiry Dispatched!</h4>
                 <p className="text-xs text-emerald-700">
-                  {product.artisan?.name} has received your inquiry in their native language app. Our guild manager will follow up with you.
+                  {product.artisan?.name || "The artisan"} has received your inquiry. They can follow up using the email address you provided.
                 </p>
               </div>
             ) : (
               <form onSubmit={handleB2BSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Your Name / Organization *
+                    Your Name *
                   </label>
                   <input
                     type="text"
                     required
                     value={inquiryName}
                     onChange={(e) => setInquiryName(e.target.value)}
-                    placeholder="e.g. Ananya Roy / Craftroots Exports"
+                    placeholder="Your name"
                     className="w-full px-3 py-2 text-sm border border-stone-300 rounded-xl focus:ring-2 focus:ring-[#C85A32] focus:outline-none"
                   />
                 </div>
@@ -669,11 +609,11 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Estimated Quantity
+                    Quantity you are interested in
                   </label>
                   <input
                     type="number"
-                    min="10"
+                    min="1"
                     max="1000"
                     value={inquiryQty}
                     onChange={(e) => setInquiryQty(Number(e.target.value))}
@@ -683,13 +623,13 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Customization or Timeline Requirements
+                    Message to the artisan
                   </label>
                   <textarea
                     rows={3}
                     value={inquiryMsg}
                     onChange={(e) => setInquiryMsg(e.target.value)}
-                    placeholder="Special packaging, custom dimensions, or target delivery date..."
+                    placeholder="Ask about availability, customization, pricing, or delivery..."
                     className="w-full px-3 py-2 text-sm border border-stone-300 rounded-xl focus:ring-2 focus:ring-[#C85A32] focus:outline-none"
                   />
                 </div>
@@ -700,7 +640,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   className="w-full py-3 bg-[#C85A32] text-white rounded-xl font-semibold text-sm hover:bg-[#B34D28] transition-colors flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
-                  <span>{inquiryLoading ? "Submitting..." : "Send Translated Inquiry to Artisan"}</span>
+                  <span>{inquiryLoading ? "Sending..." : "Send Message to Artisan"}</span>
                 </button>
               </form>
             )}

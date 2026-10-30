@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
   Heart,
-  ShoppingBag,
+  MessageSquare,
   Gift,
-  Check,
   Lock,
   Tag,
   Award,
@@ -27,7 +27,6 @@ import {
   ArtisanPublic,
   API_BASE_URL,
 } from "@/lib/api";
-import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
 
@@ -41,7 +40,7 @@ const CATEGORY_IMAGES: Record<string, string> = {
 };
 
 export default function HomePage() {
-  const { addToCart } = useCart();
+  const router = useRouter();
   const { isLoggedIn, token } = useAuth();
   const { t } = useLanguage();
 
@@ -49,7 +48,6 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [artisans, setArtisans] = useState<ArtisanPublic[]>([]);
   const [wishlistIds, setWishlistIds] = useState<Set<number>>(new Set());
-  const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [liveNotification, setLiveNotification] = useState<string | null>(null);
 
   // Load real products & categories from backend
@@ -130,18 +128,10 @@ export default function HomePage() {
     } catch (_) {}
   };
 
-  const handleAddToCart = (e: React.MouseEvent, prod: Product) => {
+  const handleContactArtisan = (e: React.MouseEvent, prod: Product) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(prod, 1);
-    setAddedIds((prev) => new Set(prev).add(prod.id));
-    setTimeout(() => {
-      setAddedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(prod.id);
-        return next;
-      });
-    }, 1500);
+    router.push(`/products/${prod.id}`);
   };
 
   // Distinct curated collections without repetition
@@ -537,7 +527,6 @@ export default function HomePage() {
       prod.images?.[0]?.url ||
       "https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800&auto=format&fit=crop&q=80";
     const isWishlisted = wishlistIds.has(prod.id);
-    const isAdded = addedIds.has(prod.id);
 
     return (
       <div
@@ -600,7 +589,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Price & Add to Cart Action */}
+        {/* Price & Artisan Contact Action */}
         <div className="p-4 pt-0 border-t border-[#FAF7F2] flex items-center justify-between mt-2">
           <div>
             <span className="text-[10px] uppercase font-bold text-[#8C827A] block">
@@ -610,15 +599,12 @@ export default function HomePage() {
           </div>
 
           <button
-            onClick={(e) => handleAddToCart(e, prod)}
-            className={`p-2.5 rounded-xl transition flex items-center justify-center shadow ${
-              isAdded
-                ? "bg-emerald-600 text-white"
-                : "bg-[#C85A32] hover:bg-[#9E3A19] text-white"
-            }`}
-            title={isAdded ? "Added to Cart" : t("addToCart", "Add to Cart")}
+            onClick={(e) => handleContactArtisan(e, prod)}
+            className="px-3 py-2 rounded-xl transition flex items-center justify-center gap-1.5 shadow bg-[#C85A32] hover:bg-[#9E3A19] text-white text-xs font-semibold"
+            title="Contact Artisan"
           >
-            {isAdded ? <Check className="w-4 h-4" /> : <ShoppingBag className="w-4 h-4" />}
+            <MessageSquare className="w-4 h-4" />
+            <span>Contact Artisan</span>
           </button>
         </div>
       </div>

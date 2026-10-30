@@ -10,9 +10,9 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ShoppingBag, Heart, Star, AlertCircle, RefreshCw, Package, Search, CheckCircle, XCircle, Info } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { MessageSquare, Heart, Star, AlertCircle, RefreshCw, Package, Search, CheckCircle, XCircle, Info } from "lucide-react";
 import { Product } from "@/lib/api";
-import { useCart } from "@/lib/cart-context";
 
 // ─── Product Card Skeleton ─────────────────────────────────────────────────────
 
@@ -204,8 +204,7 @@ export function ToastContainer() {
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
 export function ProductCard({ product }: { product: Product }) {
-  const { addToCart } = useCart();
-  const [adding, setAdding] = useState(false);
+  const router = useRouter();
   const [wishlisted, setWishlisted] = useState(false);
 
   const primaryImage = product.images?.find((i) => i.is_primary)?.url
@@ -219,14 +218,10 @@ export function ProductCard({ product }: { product: Product }) {
 
   const inStock = product.stock > 0;
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleContactArtisan = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!inStock || adding) return;
-    setAdding(true);
-    addToCart(product, 1);
-    toast.success(`"${product.title_en.slice(0, 30)}…" added to cart`);
-    setTimeout(() => setAdding(false), 1000);
+    router.push(`/products/${product.id}?contact=1`);
   };
 
   return (
@@ -244,11 +239,6 @@ export function ProductCard({ product }: { product: Product }) {
           />
           {/* Badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-1">
-            {!inStock && (
-              <span className="px-2 py-0.5 bg-stone-800/80 text-white text-[10px] font-bold rounded-full">
-                Out of Stock
-              </span>
-            )}
             {product.ai_generated && (
               <span className="px-2 py-0.5 bg-[#2C3E6B]/80 text-white text-[10px] font-bold rounded-full">
                 ✦ AI Crafted
@@ -284,21 +274,17 @@ export function ProductCard({ product }: { product: Product }) {
               ₹{product.price.toLocaleString("en-IN")}
             </span>
             <button
-              onClick={handleAddToCart}
-              disabled={!inStock || adding}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition shadow-sm ${
-                inStock
-                  ? "bg-[#C85A32] text-white hover:bg-[#B34D28]"
-                  : "bg-stone-200 text-stone-400 cursor-not-allowed"
-              }`}
-              title={inStock ? "Add to cart" : "Out of stock"}
+              onClick={handleContactArtisan}
+              className="px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold transition shadow-sm bg-[#C85A32] text-white hover:bg-[#B34D28]"
+              title="Contact artisan"
             >
-              <ShoppingBag className="w-3.5 h-3.5" />
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Contact Artisan</span>
             </button>
           </div>
-          {inStock && product.stock <= 5 && (
+          {!inStock && (
             <p className="text-[10px] text-amber-600 font-semibold mt-1">
-              Only {product.stock} left!
+              Ask the artisan about availability
             </p>
           )}
         </div>

@@ -2,13 +2,12 @@
 
 import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Filter, Search, SlidersHorizontal, Sparkles, MapPin,
-  ShoppingCart, Check, Star, ArrowUpDown, RefreshCw, Package,
+  MessageSquare, Star, ArrowUpDown, RefreshCw, Package,
 } from "lucide-react";
 import { fetchProducts, fetchCategories, Product, Category } from "@/lib/api";
-import { useCart } from "@/lib/cart-context";
 import { useLanguage } from "@/lib/language-context";
 
 // ─── State: no SAMPLE_PRODUCTS ever used here ─────────────────────────────────
@@ -17,6 +16,7 @@ type LoadState = "loading" | "ready" | "error";
 
 function ProductsContent() {
   const { t } = useLanguage();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") || searchParams.get("category_id") || "";
   const initialSearch = searchParams.get("q") || searchParams.get("search") || "";
@@ -37,9 +37,6 @@ function ProductsContent() {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
-
-  const { addToCart } = useCart();
-  const [addedId, setAddedId] = useState<number | null>(null);
 
   // Fetch real products from backend
   const loadData = useCallback(async (reset = true) => {
@@ -125,12 +122,10 @@ function ProductsContent() {
 
   const hasMore = totalFromApi > products.length;
 
-  const handleAddToCart = (e: React.MouseEvent, p: Product) => {
+  const handleContactArtisan = (e: React.MouseEvent, p: Product) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(p, 1);
-    setAddedId(p.id);
-    setTimeout(() => setAddedId(null), 1500);
+    router.push(`/products/${p.id}`);
   };
 
   const resetFilters = () => {
@@ -393,11 +388,6 @@ function ProductsContent() {
                                 <span>AI Studio</span>
                               </span>
                             )}
-                            {!inStock && (
-                              <span className="absolute top-3 right-3 px-2 py-0.5 bg-stone-800/80 text-white text-[10px] font-bold rounded-full">
-                                {t("outOfStock", "Out of Stock")}
-                              </span>
-                            )}
                             <span className="absolute bottom-3 left-3 inline-flex items-center space-x-1 bg-stone-900/75 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] text-white font-medium">
                               <MapPin className="w-3 h-3 text-amber-400" />
                               <span>{p.artisan?.state || "India"}</span>
@@ -414,9 +404,9 @@ function ProductsContent() {
                             <p className="text-xs text-stone-500">
                               {t("byArtisan", "By")} <span className="font-medium text-stone-700">{p.artisan?.name || "Master Artisan"}</span>
                             </p>
-                            {inStock && p.stock <= 5 && (
+                            {!inStock && (
                               <p className="text-[11px] text-amber-600 font-semibold mt-1">
-                                Only {p.stock} left!
+                                Ask the artisan about availability
                               </p>
                             )}
                           </div>
@@ -430,21 +420,11 @@ function ProductsContent() {
                             </span>
                           </div>
                           <button
-                            onClick={(e) => handleAddToCart(e, p)}
-                            disabled={!inStock}
-                            className={`p-2.5 rounded-xl transition-all flex items-center space-x-1.5 text-xs font-semibold ${
-                              !inStock
-                                ? "bg-stone-200 text-stone-400 cursor-not-allowed"
-                                : addedId === p.id
-                                ? "bg-emerald-600 text-white"
-                                : "bg-[#C85A32] text-white hover:bg-[#B34D28] shadow-sm"
-                            }`}
+                            onClick={(e) => handleContactArtisan(e, p)}
+                            className="p-2.5 rounded-xl transition-all flex items-center space-x-1.5 text-xs font-semibold bg-[#C85A32] text-white hover:bg-[#B34D28] shadow-sm"
                           >
-                            {addedId === p.id ? (
-                              <><Check className="w-4 h-4" /><span>{t("added", "Added")}</span></>
-                            ) : (
-                              <><ShoppingCart className="w-4 h-4" /><span>{t("addToCart", "Add")}</span></>
-                            )}
+                            <MessageSquare className="w-4 h-4" />
+                            <span>Contact Artisan</span>
                           </button>
                         </div>
                       </Link>
