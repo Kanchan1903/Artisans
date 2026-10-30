@@ -1,5 +1,6 @@
 # Node / Web
 node_modules/
+.npm-cache/
 .next/
 out/
 build/
@@ -54,3 +55,4 @@ Thumbs.db
 _tmp/
 .tmp/
 scratch/
+.neon

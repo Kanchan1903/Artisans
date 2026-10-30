@@ -19,8 +19,8 @@ services:
         fromDatabase:
           name: kalasathi-db
           property: connectionString
-        # Render gives a postgres:// URL; convert protocol for asyncpg
-        # We handle this conversion in the start command below via envVars transform
+        # Render gives a postgres:// URL; Settings.async_database_url converts
+        # it to postgresql+asyncpg:// for the API and Alembic.
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: JWT_ALGORITHM
