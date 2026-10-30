@@ -12,8 +12,18 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     CURRENCY_CODE: str = "INR"
 
-    # Database
+    # Database — Render provides postgres://, asyncpg needs postgresql+asyncpg://
     DATABASE_URL: str = "postgresql+asyncpg://kalasathi:kalasathi_secret@localhost:5432/kalasathi"
+
+    @property
+    def async_database_url(self) -> str:
+        """Return DATABASE_URL with asyncpg scheme, fixing Render's postgres:// URLs."""
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://") and "+asyncpg" not in url:
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
 
     # Redis
     REDIS_URL: str = "redis://:redis_secret@localhost:6379/0"
@@ -71,6 +81,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8000",
         "http://127.0.0.1:8080",
+        "https://*.vercel.app",
+        "https://*.onrender.com",
     ]
 
     model_config = {"env_file": ".env", "extra": "ignore"}

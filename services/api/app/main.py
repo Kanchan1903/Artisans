@@ -39,9 +39,9 @@ app = FastAPI(
 )
 
 # CORS — allow all localhost ports (dev) plus any explicit production origins in settings.
-# NOTE: allow_origin_regex is intentionally removed; combining it with allow_credentials
-# causes Starlette to drop preflight responses on some versions.
-_cors_origins = list(settings.ALLOWED_ORIGINS)
+# Wildcard strings (https://*.vercel.app) are stripped from the list — they don't work
+# with Starlette's allow_origins. Instead we use allow_origin_regex for those patterns.
+_cors_origins = [o for o in settings.ALLOWED_ORIGINS if not o.startswith("https://*")]
 if settings.ENVIRONMENT.lower() != "production":
     # In development, whitelist every common localhost port the browser might use
     for _port in [3000, 3001, 4000, 5173, 8000, 8080, 19006]:
@@ -51,9 +51,13 @@ if settings.ENVIRONMENT.lower() != "production":
                 if _o not in _cors_origins:
                     _cors_origins.append(_o)
 
+# Allow Vercel preview and Render service URLs via regex
+_cors_regex = r"https://.*\.(vercel\.app|onrender\.com)$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=_cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

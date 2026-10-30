@@ -1,0 +1,65 @@
+databases:
+  - name: kalasathi-db
+    databaseName: kalasathi
+    user: kalasathi
+    plan: free
+
+services:
+  - type: web
+    name: kalasathi-api
+    runtime: docker
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: ./services/api
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kalasathi-db
+          property: connectionString
+        # Render gives a postgres:// URL; convert protocol for asyncpg
+        # We handle this conversion in the start command below via envVars transform
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "10080"
+      - key: OTP_PROVIDER
+        value: mock
+      - key: AI_MOCK_MODE
+        value: "true"
+      - key: MONGODB_REQUIRED
+        value: "false"
+      - key: MONGODB_URI
+        value: ""
+      - key: MONGODB_DB_NAME
+        value: kalasathi
+      - key: MINIO_ENDPOINT
+        value: ""
+      - key: MINIO_ACCESS_KEY
+        value: ""
+      - key: MINIO_SECRET_KEY
+        value: ""
+      - key: MINIO_BUCKET
+        value: kalasathi-media
+      - key: MINIO_USE_SSL
+        value: "false"
+      - key: REDIS_URL
+        value: ""
+      - key: CREWAI_API_BASE_URL
+        value: https://karigarai-product-image-processing-agent-v1-4812b293.crewai.com
+      - key: CREWAI_BEARER_TOKEN
+        value: ""
+      - key: CLOUDINARY_CLOUD_NAME
+        value: ""
+      - key: CLOUDINARY_API_KEY
+        value: ""
+      - key: CLOUDINARY_API_SECRET
+        value: ""
+      - key: PUBLIC_API_URL
+        value: https://kalasathi-api.onrender.com
+      - key: MINIO_PUBLIC_URL
+        value: ""

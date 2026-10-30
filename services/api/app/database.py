@@ -9,12 +9,12 @@ engine_kwargs = {
 }
 
 # Only pass connection pool sizes for non-SQLite databases
-if "sqlite" not in settings.DATABASE_URL:
+if "sqlite" not in settings.async_database_url:
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.async_database_url,
     **engine_kwargs,
 )
 
@@ -87,13 +87,13 @@ async def init_db():
             await conn.run_sync(Base.metadata.create_all)
             await conn.run_sync(_apply_compatibility_migrations)
     except Exception as e:
-        if "sqlite" not in settings.DATABASE_URL:
+        if "sqlite" not in settings.async_database_url:
             import logging
             logging.getLogger("database").warning(
                 "PostgreSQL connection unavailable (%s). Falling back to SQLite (kalasathi.db)...", e
             )
             settings.DATABASE_URL = "sqlite+aiosqlite:///./kalasathi.db"
-            engine = create_async_engine(settings.DATABASE_URL, echo=False)
+            engine = create_async_engine(settings.async_database_url, echo=False)
             AsyncSessionLocal = async_sessionmaker(
                 engine,
                 class_=AsyncSession,

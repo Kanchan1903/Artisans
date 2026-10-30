@@ -49,3 +49,8 @@ Thumbs.db
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Scratch / temp
+_tmp/
+.tmp/
+scratch/
