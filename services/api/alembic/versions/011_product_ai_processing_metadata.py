@@ -5,7 +5,9 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "011_product_ai_processing_metadata"
+# Alembic's default PostgreSQL alembic_version.version_num column is VARCHAR(32).
+# Keep this revision identifier within that limit.
+revision: str = "011_product_ai_metadata"
 down_revision: Union[str, None] = "010_demo_catalog"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
