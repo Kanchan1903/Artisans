@@ -388,6 +388,39 @@ class ApiService {
         error['detail'] ?? 'Product save failed (${res.statusCode})');
   }
 
+  static Future<Map<String, dynamic>> startCatalogBuilder({
+    required String token,
+    required int productId,
+    bool retry = false,
+  }) async {
+    final suffix = retry ? '/retry' : '';
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/products/$productId/catalog-builder$suffix'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 60));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['detail'] ?? 'Catalog generation could not start');
+    }
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
+  static Future<Map<String, dynamic>> getCatalogBuilderStatus({
+    required String token,
+    required int productId,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/products/$productId/catalog-builder'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(
+          body['detail'] ?? 'Catalog generation status unavailable');
+    }
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+  }
+
   static Future<Map<String, dynamic>> updateProduct({
     required String token,
     required int productId,

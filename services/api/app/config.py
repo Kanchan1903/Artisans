@@ -49,6 +49,17 @@ class Settings(BaseSettings):
     CREWAI_API_BASE_URL: str = "https://karigarai-product-image-processing-agent-v1-4812b293.crewai.com"
     CREWAI_BEARER_TOKEN: str = ""
 
+    # Optional second CrewAI crew for catalog-content generation. It reuses the
+    # existing organization bearer token unless a deployment-specific token is set.
+    CATALOG_BUILDER_API_BASE_URL: str = (
+        "https://karigar-ai-catalog-builder-v1-81689866-4e40-5b66d911.crewai.com"
+    )
+    CATALOG_BUILDER_BEARER_TOKEN: str = ""
+
+    @property
+    def catalog_builder_bearer_token(self) -> str:
+        return self.CATALOG_BUILDER_BEARER_TOKEN or self.CREWAI_BEARER_TOKEN
+
     # MongoDB
     MONGODB_URI: str = "mongodb://localhost:27017/kalasathi"
     MONGODB_DB_NAME: str = "kalasathi"

@@ -129,11 +129,20 @@ class ProductWizardProvider extends ChangeNotifier {
   int? _draftProductId;
   String? _publishError;
   int _inventoryStock = 5;
+  bool _isCatalogBuilderProcessing = false;
+  String _catalogBuilderState = 'draft';
+  String? _catalogBuilderError;
+  Map<String, dynamic> _catalogBuilderOutput = {};
 
   // Getters
   int get currentStep => _currentStep;
   int? get draftProductId => _draftProductId;
   String? get publishError => _publishError;
+  bool get isCatalogBuilderProcessing => _isCatalogBuilderProcessing;
+  String get catalogBuilderState => _catalogBuilderState;
+  String? get catalogBuilderError => _catalogBuilderError;
+  Map<String, dynamic> get catalogBuilderOutput =>
+      Map.unmodifiable(_catalogBuilderOutput);
   int get inventoryStock => _inventoryStock;
   bool get isProcessingAI => _isProcessingAI;
   String? get imageJobStatus => _imageJobStatus;
@@ -1424,6 +1433,86 @@ class ProductWizardProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> generateCatalogContent(String token,
+      {bool retry = false}) async {
+    if (_isCatalogBuilderProcessing) return false;
+    if (_draftProductId == null) {
+      _catalogBuilderError =
+          'Save the draft before generating catalog content.';
+      notifyListeners();
+      return false;
+    }
+    _isCatalogBuilderProcessing = true;
+    _catalogBuilderError = null;
+    notifyListeners();
+    try {
+      var response = await ApiService.startCatalogBuilder(
+        token: token,
+        productId: _draftProductId!,
+        retry: retry,
+      );
+      var state = response['catalog_builder'] is Map
+          ? Map<String, dynamic>.from(response['catalog_builder'] as Map)
+          : <String, dynamic>{};
+      _catalogBuilderState = state['state']?.toString() ?? 'processing';
+
+      for (var attempt = 0;
+          _catalogBuilderState == 'processing' && attempt < 150;
+          attempt++) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        response = await ApiService.getCatalogBuilderStatus(
+          token: token,
+          productId: _draftProductId!,
+        );
+        state = response['catalog_builder'] is Map
+            ? Map<String, dynamic>.from(response['catalog_builder'] as Map)
+            : <String, dynamic>{};
+        _catalogBuilderState = state['state']?.toString() ?? 'processing';
+        notifyListeners();
+      }
+
+      if (_catalogBuilderState == 'ready') {
+        final output = state['output'] is Map
+            ? Map<String, dynamic>.from(state['output'] as Map)
+            : <String, dynamic>{};
+        final title = output['title_en']?.toString().trim() ?? '';
+        final description = output['description_en']?.toString().trim() ?? '';
+        if (title.isEmpty || description.isEmpty) {
+          throw Exception(
+              'The catalog builder returned incomplete product content.');
+        }
+        _titleEn = title;
+        _descriptionEn = description;
+        if (output['seo_keywords'] is List) {
+          _seoKeywords = (output['seo_keywords'] as List)
+              .map((item) => item.toString())
+              .toList();
+        }
+        _catalogBuilderOutput = output;
+        _englishDescriptionConfirmed = false;
+        _finalDescriptionConfirmed = false;
+        _catalogBuilderError = null;
+        _isDraftSaved = false;
+        notifyListeners();
+        return true;
+      }
+      if (_catalogBuilderState == 'failed') {
+        _catalogBuilderError = state['error']?.toString() ??
+            'The catalog builder could not process this product. Your draft is preserved.';
+        return false;
+      }
+      _catalogBuilderError =
+          'The catalog builder is still processing. Select Check status to continue.';
+      return false;
+    } catch (error) {
+      _catalogBuilderError = error.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _isCatalogBuilderProcessing = false;
+      notifyListeners();
+    }
+  }
+
   // ─── Step 5: Publish to Website Live ───────────────────────────────────────
   Future<bool> publishProduct(String token) async {
     if (_isPublished) return true;
@@ -1588,6 +1677,10 @@ class ProductWizardProvider extends ChangeNotifier {
     _finalPriceConfirmed = false;
     _draftProductId = null;
     _publishError = null;
+    _isCatalogBuilderProcessing = false;
+    _catalogBuilderState = 'draft';
+    _catalogBuilderError = null;
+    _catalogBuilderOutput = {};
     _inventoryStock = 5;
     _titleEn = "";
     _titleHi = "";

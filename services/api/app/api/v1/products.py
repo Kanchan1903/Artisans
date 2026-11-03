@@ -42,6 +42,12 @@ from app.models.user import UserRole
 from app.utils.storage import storage
 from app.utils.events import event_broker
 from app.utils.image_jobs import apply_variant_selection, get_job_for_artisan, selected_variant_records
+from app.utils.catalog_builder import (
+    CatalogBuilderContractError,
+    build_catalog_inputs,
+    parse_catalog_builder_status,
+)
+from app.utils.catalog_builder_client import catalog_builder_client
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -466,6 +472,175 @@ async def _link_job_to_product(job_id: str | None, artisan_id: int, product_id: 
         from app.config import settings
         if settings.MONGODB_REQUIRED:
             raise HTTPException(status_code=503, detail="Image job output could not be synchronized to MongoDB") from exc
+
+
+def _catalog_builder_record(product: Product) -> dict:
+    stored = product.ai_processing_result if isinstance(product.ai_processing_result, dict) else {}
+    record = stored.get("catalog_builder")
+    return record if isinstance(record, dict) else {}
+
+
+def _catalog_builder_response(product: Product) -> dict:
+    return {
+        "product_id": product.id,
+        "processing_status": product.processing_status,
+        "catalog_builder": _catalog_builder_record(product),
+        "title_en": product.title_en,
+        "description_en": product.description_en,
+        "seo_keywords": product.seo_keywords or [],
+    }
+
+
+async def _owned_product_for_catalog_builder(
+    product_id: int, artisan_id: int, db: AsyncSession, *, for_update: bool = False
+) -> Product:
+    query = (
+        select(Product)
+        .where(Product.id == product_id, Product.artisan_id == artisan_id)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.category),
+            selectinload(Product.artisan).selectinload(ArtisanProfile.user),
+        )
+    )
+    if for_update:
+        query = query.with_for_update()
+    result = await db.execute(query)
+    product = result.scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product draft not found.")
+    if product.status != ProductStatus.draft:
+        raise HTTPException(status_code=409, detail="Catalog content can only be generated for a draft.")
+    return product
+
+
+async def _start_catalog_builder(
+    product: Product, db: AsyncSession, *, retry: bool = False
+) -> dict:
+    previous = _catalog_builder_record(product)
+    if previous.get("state") in {"processing", "ready"}:
+        return _catalog_builder_response(product)
+    if previous.get("state") == "failed" and not retry:
+        return _catalog_builder_response(product)
+
+    if not catalog_builder_client.is_configured():
+        state = {
+            "state": "failed",
+            "error": "Catalog builder is not configured. Set the backend CREWAI_BEARER_TOKEN.",
+        }
+    else:
+        try:
+            required_names = await catalog_builder_client.get_inputs()
+            if not required_names:
+                raise CatalogBuilderContractError(
+                    "Catalog builder did not return any required input fields from /inputs."
+                )
+            image_urls = [image.url for image in product.images if image.url]
+            inputs = build_catalog_inputs(
+                product,
+                product.artisan,
+                product.category,
+                image_urls,
+                required_names,
+            )
+            execution_id = await catalog_builder_client.kickoff(inputs)
+            state = {
+                "state": "processing",
+                "execution_id": execution_id,
+                "required_inputs": required_names,
+            }
+        except Exception as exc:
+            # Keep the product and original text intact; the artisan can retry after
+            # credentials or the deployed crew contract are corrected.
+            state = {"state": "failed", "error": str(exc)}
+
+    stored = dict(product.ai_processing_result or {}) if isinstance(product.ai_processing_result, dict) else {
+        "previous_ai_result": product.ai_processing_result
+    }
+    stored["catalog_builder"] = state
+    product.ai_processing_result = stored
+    product.processing_status = state["state"]
+    await db.commit()
+    return _catalog_builder_response(product)
+
+
+@router.post("/{product_id}/catalog-builder")
+async def start_product_catalog_builder(
+    product_id: int,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Start the authenticated CrewAI catalog builder for an artisan-owned draft."""
+    _, profile = artisan_tuple
+    product = await _owned_product_for_catalog_builder(
+        product_id, profile.id, db, for_update=True
+    )
+    return await _start_catalog_builder(product, db)
+
+
+@router.get("/{product_id}/catalog-builder")
+async def get_product_catalog_builder_status(
+    product_id: int,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Poll the CrewAI execution and persist validated catalog content."""
+    _, profile = artisan_tuple
+    product = await _owned_product_for_catalog_builder(product_id, profile.id, db)
+    record = _catalog_builder_record(product)
+    if record.get("state") != "processing" or not record.get("execution_id"):
+        return _catalog_builder_response(product)
+
+    try:
+        payload = await catalog_builder_client.get_status(str(record["execution_id"]))
+        parsed = parse_catalog_builder_status(payload)
+    except CatalogBuilderContractError as exc:
+        parsed = {"state": "failed", "error": str(exc)}
+    except Exception as exc:
+        # Polling failures can be transient. Preserve PROCESSING and let the client retry.
+        record = {**record, "last_poll_error": str(exc)}
+        stored = dict(product.ai_processing_result or {})
+        stored["catalog_builder"] = record
+        product.ai_processing_result = stored
+        await db.commit()
+        return _catalog_builder_response(product)
+
+    if parsed["state"] == "completed":
+        output = parsed["output"]
+        product.title_en = output["title_en"]
+        product.description_en = output["description_en"]
+        if isinstance(output.get("seo_keywords"), list):
+            product.seo_keywords = output["seo_keywords"]
+        product.ai_generated = True
+        product.processing_status = "ready"
+        record = {**record, "state": "ready", "output": output}
+    elif parsed["state"] == "failed":
+        product.processing_status = "failed"
+        record = {**record, **parsed}
+    else:
+        record = {**record, **parsed}
+
+    stored = dict(product.ai_processing_result or {})
+    stored["catalog_builder"] = record
+    product.ai_processing_result = stored
+    await db.commit()
+    if product.processing_status == "ready":
+        await _sync_product_to_mongo(product)
+    return _catalog_builder_response(product)
+
+
+@router.post("/{product_id}/catalog-builder/retry")
+async def retry_product_catalog_builder(
+    product_id: int,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retry a failed catalog run without duplicating an active execution."""
+    _, profile = artisan_tuple
+    product = await _owned_product_for_catalog_builder(
+        product_id, profile.id, db, for_update=True
+    )
+    return await _start_catalog_builder(product, db, retry=True)
 
 
 @router.get("/categories", response_model=list[CategoryOut])
