@@ -39,4 +39,4 @@ async def generate_catalog(payload: CatalogRequest):
         )
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Catalog generation error: {str(e)}")
+        raise HTTPException(status_code=503, detail=str(e))

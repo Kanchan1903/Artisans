@@ -6,8 +6,56 @@ import io
 import base64
 import numpy as np
 import cv2
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from app.utils.storage import storage
+
+
+def decode_product_image(raw_image_bytes: bytes) -> tuple[Image.Image, str, str]:
+    """Decode and normalize an artisan image with Pillow and NumPy.
+
+    EXIF rotation is applied before any processing. NumPy verifies a concrete,
+    contiguous RGB pixel buffer so OpenCV never receives malformed image data.
+    The original upload itself remains stored byte-for-byte by the product API.
+    """
+    if not raw_image_bytes:
+        raise ValueError("Uploaded image is empty")
+    try:
+        with Image.open(io.BytesIO(raw_image_bytes)) as source:
+            source_format = (source.format or "").upper()
+            mime_types = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+            if source_format not in mime_types:
+                raise ValueError("Use a JPEG, PNG, or WebP image")
+            image = ImageOps.exif_transpose(source).convert("RGB")
+            image.load()
+    except (Image.DecompressionBombError, OSError) as exc:
+        raise ValueError("The uploaded image could not be decoded") from exc
+
+    pixels = np.asarray(image)
+    if (
+        pixels.ndim != 3
+        or pixels.shape[2] != 3
+        or pixels.dtype != np.uint8
+        or pixels.shape[0] < 2
+        or pixels.shape[1] < 2
+        or pixels.shape[0] * pixels.shape[1] > 40_000_000
+    ):
+        raise ValueError("Image dimensions or pixel data are invalid")
+    normalized = Image.fromarray(np.ascontiguousarray(pixels), mode="RGB")
+    return normalized, source_format, mime_types[source_format]
+
+
+def enhance_product_image(raw_image_bytes: bytes, aspect_ratio: str = "1:1") -> tuple[bytes, int, int]:
+    """Create a real studio-ready image; never return the untouched upload as success."""
+    if aspect_ratio not in {"1:1", "4:5"}:
+        raise ValueError("Aspect ratio must be 1:1 or 4:5")
+    image, _, _ = decode_product_image(raw_image_bytes)
+    lit = correct_lighting_and_white_balance(image)
+    cutout = remove_background(lit)
+    size = (1024, 1024) if aspect_ratio == "1:1" else (1024, 1280)
+    composed = create_variation_composition(cutout, target_size=size)
+    output = io.BytesIO()
+    composed.save(output, format="JPEG", quality=90, optimize=True)
+    return output.getvalue(), *size
 
 
 def remove_background(image: Image.Image) -> Image.Image:
@@ -300,11 +348,13 @@ async def process_and_generate_10_variations(
     4. Generates exactly 10 distinct, product-preserving studio compositions.
     5. Saves all variations to storage and returns complete URLs & data URIs.
     """
-    # 1. Save original photo
-    original_url = await storage.upload_file(raw_image_bytes, f"orig_{original_filename}", "image/jpeg")
+    # 1. Decode with Pillow/NumPy and save the untouched original bytes.
+    raw_pil, _, original_content_type = decode_product_image(raw_image_bytes)
+    original_url = await storage.upload_file(
+        raw_image_bytes, f"orig_{original_filename}", original_content_type
+    )
 
-    # 2. Decode & enhance
-    raw_pil = Image.open(io.BytesIO(raw_image_bytes))
+    # 2. Enhance only the derived studio images; retain the original above.
     lit_pil = correct_lighting_and_white_balance(raw_pil)
     cutout_pil = remove_background(lit_pil)
 

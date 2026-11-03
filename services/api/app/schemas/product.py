@@ -75,6 +75,9 @@ class ProductCreate(BaseModel):
     description_hi: str | None = None
     material: str | None = None
     technique: str | None = None
+    dimensions: str | None = Field(default=None, max_length=100)
+    weight_grams: float | None = Field(default=None, ge=0, le=1_000_000)
+    additional_details: dict | None = None
     care_instructions: str | None = None
     seo_keywords: list[str] | None = None
     price: float = Field(..., ge=0.0)
@@ -102,6 +105,9 @@ class ProductUpdate(BaseModel):
     voice_language: str | None = Field(default=None, min_length=2, max_length=5)
     material: str | None = None
     technique: str | None = None
+    dimensions: str | None = Field(default=None, max_length=100)
+    weight_grams: float | None = Field(default=None, ge=0, le=1_000_000)
+    additional_details: dict | None = None
     care_instructions: str | None = None
     seo_keywords: list[str] | None = None
     price: float | None = None
@@ -135,11 +141,16 @@ class ProductOut(BaseModel):
     description_hi: str | None = None
     material: str | None = None
     technique: str | None = None
+    dimensions: str | None = None
+    weight_grams: float | None = None
+    additional_details: dict | None = None
     care_instructions: str | None = None
     seo_keywords: list[str] | None = None
     price: float
     stock: int
     status: ProductStatus
+    processing_status: str = "draft"
+    ai_processing_result: dict | None = None
     voice_transcript: str | None = None
     voice_language: str | None = None
     ai_generated: bool

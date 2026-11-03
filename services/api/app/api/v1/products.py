@@ -4,6 +4,7 @@ import httpx
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from sqlalchemy import select, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -387,6 +388,11 @@ async def _sync_product_to_mongo(prod: Product, image_job_id: str | None = None)
             "name": prod.title_en,
             "category": cat_name,
             "description": prod.description_en or "",
+            "dimensions": prod.dimensions,
+            "weight_grams": prod.weight_grams,
+            "additional_details": prod.additional_details or {},
+            "processing_status": prod.processing_status,
+            "ai_processing_result": prod.ai_processing_result,
             "image_job_id": image_job_id or getattr(prod, "image_job_id", None),
             "images": images_list,
             "primary_image_url": primary_url,
@@ -397,6 +403,17 @@ async def _sync_product_to_mongo(prod: Product, image_job_id: str | None = None)
         await save_product_mongo(doc)
     except Exception:
         pass
+
+
+def _product_processing_status(job_status: str | None) -> str:
+    status_value = (job_status or "").lower()
+    if status_value in {"completed", "ready"}:
+        return "ready"
+    if status_value in {"failed", "retake_required"}:
+        return "failed"
+    if status_value in {"queued", "running", "uploading", "processing"}:
+        return "processing"
+    return "draft"
 
 
 
@@ -474,11 +491,20 @@ def _validate_product_image(file_bytes: bytes) -> tuple[str, str]:
         raise HTTPException(status_code=413, detail="Image must be 10 MB or smaller.")
 
     try:
-        from PIL import Image
+        import numpy as np
+        from PIL import Image, ImageOps
         with Image.open(io.BytesIO(file_bytes)) as image:
             image_format = image.format
-            width, height = image.size
-            image.verify()
+            normalized = ImageOps.exif_transpose(image)
+            normalized.load()
+            # Decode through NumPy as a pixel-level integrity check. Keep the
+            # stored upload bytes untouched so the artisan's original survives.
+            pixels = np.asarray(
+                normalized.convert("RGBA" if "A" in normalized.getbands() else "RGB")
+            )
+            height, width = pixels.shape[:2]
+            if pixels.ndim != 3 or pixels.shape[2] not in (3, 4) or pixels.dtype != np.uint8:
+                raise ValueError("Unsupported decoded pixel layout")
         if image_format not in SUPPORTED_PRODUCT_IMAGE_FORMATS:
             raise HTTPException(status_code=415, detail="Use a JPEG, PNG, or WebP image.")
         if width <= 0 or height <= 0 or width * height > 40_000_000:
@@ -565,20 +591,40 @@ async def upload_product_image(
         db.add(product)
         await db.flush()
 
-    # Keep the uploaded original as the single image on a draft; later AI variants
-    # can replace it through the existing image-job and publishing workflow.
-    previous_urls = [image.url for image in product.images]
-    product.images.clear()
+    if len(product.images) >= 5:
+        await storage.delete_file(url)
+        raise HTTPException(status_code=400, detail="A product can have at most five original photos.")
     image = ProductImage(
         product_id=product.id,
         url=url,
-        is_primary=True,
-        order_index=0,
+        is_primary=not product.images,
+        order_index=max((item.order_index for item in product.images), default=-1) + 1,
         upload_key=upload_id,
     )
     product.images.append(image)
     try:
         await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        await storage.delete_file(url)
+        duplicate_result = await db.execute(
+            select(ProductImage, Product)
+            .join(Product, Product.id == ProductImage.product_id)
+            .where(ProductImage.upload_key == upload_id)
+        )
+        duplicate = duplicate_result.first()
+        if duplicate:
+            duplicate_image, duplicate_product = duplicate
+            if duplicate_product.artisan_id == profile.id and (
+                product_id is None or duplicate_product.id == product_id
+            ):
+                return {
+                    "product_id": duplicate_product.id,
+                    "image_id": duplicate_image.id,
+                    "image_url": duplicate_image.url,
+                    "status": duplicate_product.status.value,
+                }
+        raise HTTPException(status_code=409, detail="This upload ID is already in use.")
     except Exception:
         await db.rollback()
         await storage.delete_file(url)
@@ -592,9 +638,6 @@ async def upload_product_image(
     product = saved_result.scalar_one()
     await db.refresh(image)
     await _sync_product_to_mongo(product)
-    for old_url in previous_urls:
-        if old_url != url:
-            await storage.delete_file(old_url)
     return {
         "product_id": product.id,
         "image_id": image.id,
@@ -836,6 +879,9 @@ async def create_product(
             draft_prod.description_hi = payload.description_hi
             draft_prod.material = payload.material
             draft_prod.technique = payload.technique
+            draft_prod.dimensions = payload.dimensions
+            draft_prod.weight_grams = payload.weight_grams
+            draft_prod.additional_details = payload.additional_details
             draft_prod.care_instructions = payload.care_instructions
             draft_prod.seo_keywords = payload.seo_keywords or []
             draft_prod.price = payload.price
@@ -844,6 +890,11 @@ async def create_product(
             draft_prod.voice_transcript = payload.voice_transcript
             draft_prod.voice_language = payload.voice_language
             draft_prod.ai_generated = payload.ai_generated
+            if payload.image_job_id:
+                image_job = await get_job_for_artisan(db, payload.image_job_id, profile.id)
+                if image_job:
+                    draft_prod.processing_status = _product_processing_status(image_job.status)
+                    draft_prod.ai_processing_result = image_job.output_json
             if payload.idempotency_key:
                 draft_prod.idempotency_key = payload.idempotency_key
             if payload.status == ProductStatus.published and not draft_prod.published_at:
@@ -914,6 +965,9 @@ async def create_product(
         description_hi=payload.description_hi,
         material=payload.material,
         technique=payload.technique,
+        dimensions=payload.dimensions,
+        weight_grams=payload.weight_grams,
+        additional_details=payload.additional_details,
         care_instructions=payload.care_instructions,
         seo_keywords=payload.seo_keywords or [],
         price=payload.price,
@@ -922,6 +976,7 @@ async def create_product(
         voice_transcript=payload.voice_transcript,
         voice_language=payload.voice_language,
         ai_generated=payload.ai_generated,
+        processing_status="draft",
         published_at=now if payload.status == ProductStatus.published else None,
         idempotency_key=payload.idempotency_key,
     )
@@ -1066,6 +1121,7 @@ async def publish_draft_product(
     product.idempotency_key = payload.idempotency_key
 
     product.status = ProductStatus.published
+    product.processing_status = "ready"
     product.published_at = datetime.now(timezone.utc)
     await db.commit()
     from app.mongodb import publish_product_mongo

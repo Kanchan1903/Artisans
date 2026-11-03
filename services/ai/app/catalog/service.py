@@ -327,14 +327,13 @@ async def catalog_from_voice_and_image(
     clarification: str | None = None,
 ) -> CatalogExtractionResult:
     """Multimodal or structured voice catalog extraction pipeline."""
-    # Check if Gemini multimodal pipeline can be invoked
-    if not ai_settings.AI_MOCK_MODE and ai_settings.GEMINI_API_KEY:
-        try:
-            return await _gemini_catalog_pipeline(transcript, image_bytes, preferred_language, clarification)
-        except Exception as e:
-            logger.warning(f"Gemini catalog extraction failed: {e}. Falling back to rule-based engine.")
-
-    return catalog_from_voice(transcript, preferred_language, clarification)
+    if ai_settings.AI_MOCK_MODE or not ai_settings.GEMINI_API_KEY:
+        raise RuntimeError("Live catalog AI is not configured; no generated catalog was returned.")
+    try:
+        return await _gemini_catalog_pipeline(transcript, image_bytes, preferred_language, clarification)
+    except Exception as exc:
+        logger.warning("Gemini catalog extraction failed: %s", exc)
+        raise RuntimeError("Live catalog AI processing failed; retry or enter the product details manually.") from exc
 
 
 async def _gemini_catalog_pipeline(

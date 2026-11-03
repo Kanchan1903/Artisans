@@ -176,50 +176,13 @@ async def extract_catalog(payload: CatalogPayload):
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             res = await client.post(f"{settings.AI_SERVICE_URL}/ai/catalog", json=payload.model_dump())
-            if res.status_code == 200:
-                return res.json()
-    except Exception:
-        pass
-
-    # Resilient local fallback that also respects missing specs rule!
-    text_lower = f"{payload.transcript} {payload.clarification or ''}".lower()
-    has_mat = any(k in text_lower for k in ["clay", "मिट्टी", "माती", "कैनवास", "canvas", "wood", "silk", "cotton"])
-    has_tech = any(k in text_lower for k in ["painting", "चित्र", "रंगवले", "wheel", "चाक", "carved", "weaving"])
-
-    missing = []
-    if not has_mat:
-        missing.append("material")
-    if not has_tech:
-        missing.append("technique")
-
-    prompt = None
-    if missing:
-        prompt = "कृपया सांगा: आपण हे बनवण्यासाठी कोणते साहित्य (material) आणि कला पद्धत (technique) वापरली आहे?" if payload.language == "mr" else "कृपया बताएं: इस शिल्प में कौन-सी सामग्री और तकनीक उपयोग की गई है?"
-
-    all_12 = ["en", "hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or", "as"]
-    translations = [
-        {"language": l, "title": f"Handcrafted Creation ({l.upper()})", "short_description": "Handcrafted authentic craft", "description": "Handcrafted creation made with traditional techniques."}
-        for l in all_12
-    ]
-
-    return {
-        "title_en": "Handcrafted Terracotta Creation",
-        "title_hi": "हस्तनिर्मित पारंपरिक टेराकोटा शिल्प",
-        "short_description_en": "Handcrafted natural creation.",
-        "short_description_hi": "प्राकृतिक पारंपरिक शिल्प।",
-        "description_en": "Authentic earthen creation keeping drinking water naturally chilled and alkaline.",
-        "description_hi": "प्राकृतिक शुद्ध नदी की मिट्टी से बना पारंपरिक जलपात्र।",
-        "material": "Riverbed Clay" if has_mat else None,
-        "technique": "Potter's Wheel Shaping" if has_tech else None,
-        "category_slug": "pottery",
-        "care_instructions": "Rinse thoroughly with plain water.",
-        "seo_keywords": ["terracotta", "handcrafted", "pottery"],
-        "estimated_material_cost": 85.0,
-        "estimated_labor_hours": 4.5,
-        "missing_fields": missing,
-        "missing_info_prompt": prompt,
-        "translations": translations,
-    }
+            res.raise_for_status()
+            return res.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="AI catalog generation is unavailable. Your original description is preserved; enter or edit the product details and retry.",
+        ) from exc
 
 
 @router.get("/price/evaluation")
@@ -259,8 +222,12 @@ async def enhance_image(
     file: UploadFile = File(...),
     aspect_ratio: str = Form("1:1"),
 ):
-    """Proxies image studio enhancement to AI microservice."""
-    file_bytes = await file.read()
+    """Enhance a product image using the AI service or the local Pillow/OpenCV pipeline."""
+    file_bytes = await file.read(10 * 1024 * 1024 + 1)
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty")
+    if len(file_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 10 MB or smaller")
     try:
         files = {"file": (file.filename or "image.jpg", file_bytes, file.content_type or "image/jpeg")}
         data = {"aspect_ratio": aspect_ratio}
@@ -269,15 +236,24 @@ async def enhance_image(
             if res.status_code == 200:
                 return res.json()
     except Exception:
+        # Use the in-process image studio below when the separate AI service is
+        # not deployed. The original bytes are never reported as enhanced data.
         pass
-
-    b64 = base64.b64encode(file_bytes).decode("utf-8")
-    return {
-        "status": "success",
-        "enhanced_image_base64": f"data:image/jpeg;base64,{b64}",
-        "width": 1024,
-        "height": 1024,
-    }
+    try:
+        from app.utils.image_studio import enhance_product_image
+        output, width, height = enhance_product_image(file_bytes, aspect_ratio)
+        data_uri = "data:image/jpeg;base64," + base64.b64encode(output).decode("ascii")
+        return {
+            "status": "success",
+            "aspect_ratio": aspect_ratio,
+            "width": width,
+            "height": height,
+            "enhanced_image_base64": data_uri,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Image processing is unavailable. The original upload is preserved; retry shortly.") from exc
 
 
 @router.post("/generate-variations")
@@ -289,35 +265,24 @@ async def generate_variations(
     Generates exactly 10 distinct, selectable product photography variations
     preserving the genuine handcrafted craft's identity, color, and texture.
     """
-    file_bytes = await file.read()
+    file_bytes = await file.read(10 * 1024 * 1024 + 1)
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(file_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 10 MB or smaller")
 
     try:
-        from app.utils.image_studio import process_and_generate_10_variations
+        from app.utils.image_studio import decode_product_image, process_and_generate_10_variations
+        decode_product_image(file_bytes)
         result = await process_and_generate_10_variations(file_bytes, file.filename or "craft.jpg")
+        if result.get("status") != "completed" or not result.get("variations"):
+            raise RuntimeError("Image processor returned no completed variations")
         return result
-    except Exception as e:
-        # Graceful fallback if processing hits an edge case
-        b64 = base64.b64encode(file_bytes).decode("utf-8")
-        data_uri = f"data:image/jpeg;base64,{b64}"
-        mock_variations = [
-            {
-                "id": f"var_{i}",
-                "style": f"style_{i}",
-                "title": f"Studio Variation {i}",
-                "title_hi": f"स्टूडियो विकल्प {i}",
-                "title_mr": f"स्टुडिओ पर्याय {i}",
-                "image_url": data_uri,
-                "data_uri": data_uri,
-                "is_primary": i == 1,
-            }
-            for i in range(1, 11)
-        ]
-        return {
-            "status": "completed",
-            "original_url": data_uri,
-            "total_variations": len(mock_variations),
-            "variations": mock_variations,
-        }
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Image processing failed. No variations were created; your original upload is preserved.",
+        ) from exc
 

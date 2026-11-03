@@ -84,20 +84,14 @@ async def test_speech_unsupported_language_and_simulated_fallback(ai_client: Asy
 
 
 @pytest.mark.asyncio
-async def test_catalog_never_invents_missing_specs(ai_client: AsyncClient):
-    # Voice note with NO material and NO technique
+async def test_catalog_requires_a_live_ai_provider(ai_client: AsyncClient):
     vague_voice_note = "मी एक सुंदर वस्तू बनवली आहे. घरी ठेवण्यासाठी खूप छान आहे."
     res = await ai_client.post(
         "/ai/catalog",
         json={"transcript": vague_voice_note, "language": "mr"},
     )
-    assert res.status_code == 200
-    catalog = res.json()
-
-    # Rule 8: NEVER invent missing product specifications
-    assert catalog["material"] is None
-    assert catalog["technique"] is None
-    assert "material" in catalog["missing_fields"]
+    assert res.status_code == 503
+    assert "no generated catalog was returned" in res.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -136,18 +130,6 @@ async def test_product_description_translation_never_returns_a_mock(ai_client: A
     finally:
         ai_settings.AI_MOCK_MODE = original_mock_mode
         ai_settings.GEMINI_API_KEY = original_key
-    assert "technique" in catalog["missing_fields"]
-
-    # Localized clarification prompt in Marathi
-    assert catalog["missing_info_prompt"] is not None
-    assert "कृपया" in catalog["missing_info_prompt"] or "साहित्य" in catalog["missing_info_prompt"]
-
-    # Check titles and short descriptions still present
-    assert catalog["title_en"] is not None
-    assert catalog["short_description_en"] is not None
-    assert len(catalog["translations"]) == 12
-
-
 @pytest.mark.asyncio
 async def test_catalog_clarification_resolves_missing_specs(ai_client: AsyncClient):
     # Initial transcript missing specs
@@ -158,13 +140,8 @@ async def test_catalog_clarification_resolves_missing_specs(ai_client: AsyncClie
         "/ai/catalog",
         json={"transcript": vague_voice_note, "language": "mr", "clarification": clarification},
     )
-    assert res.status_code == 200
-    catalog = res.json()
-
-    assert catalog["material"] is not None
-    assert catalog["technique"] is not None
-    assert len(catalog["missing_fields"]) == 0
-    assert catalog["missing_info_prompt"] is None
+    assert res.status_code == 503
+    assert "no generated catalog was returned" in res.json()["detail"]
 
 
 @pytest.mark.asyncio

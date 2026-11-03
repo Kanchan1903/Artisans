@@ -48,6 +48,9 @@ class Product(Base):
     # Craft metadata
     material: Mapped[str | None] = mapped_column(String(255), nullable=True)
     technique: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dimensions: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    weight_grams: Mapped[float | None] = mapped_column(Float, nullable=True)
+    additional_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     care_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     seo_keywords: Mapped[list | None] = mapped_column(JSON, nullable=True)  # stored as JSON array
 
@@ -55,6 +58,9 @@ class Product(Base):
     price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     stock: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[ProductStatus] = mapped_column(SAEnum(ProductStatus, native_enum=False), default=ProductStatus.draft)
+    # Internal AI lifecycle is separate from the commerce visibility state.
+    processing_status: Mapped[str] = mapped_column(String(20), default="draft", nullable=False)
+    ai_processing_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # AI metadata
     voice_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)

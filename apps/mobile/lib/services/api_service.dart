@@ -121,6 +121,43 @@ class ApiService {
 
   // ─── Products ───────────────────────────────────────────────────────────────
 
+  static Future<List<Map<String, dynamic>>> getProductCategories() async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse('$apiBaseUrl/products/categories'))
+            // Render free instances can take longer than the general API timeout
+            // to wake up. Retry transient failures without inventing categories.
+            .timeout(const Duration(seconds: 45));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is! List) {
+            throw const FormatException(
+                'The category response was not a list.');
+          }
+          return decoded
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+        }
+        final error =
+            _responseError(response, 'Could not load product categories');
+        if (response.statusCode < 500 || attempt == 1) {
+          throw Exception(error);
+        }
+        lastError = error;
+      } catch (error) {
+        lastError = error;
+        if (attempt == 1) break;
+      }
+      await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+    }
+    throw Exception(
+      'Could not load product categories from $apiBaseUrl/products/categories. '
+      'Check the connection and retry. ($lastError)',
+    );
+  }
+
   static Future<Map<String, dynamic>> uploadDraftProductImage({
     required String token,
     required List<int> imageBytes,
@@ -183,6 +220,7 @@ class ApiService {
   static Future<Map<String, dynamic>> startImageJob({
     required String token,
     required List<int> imageBytes,
+    required String contentType,
     required String productName,
     required String productCategory,
     int? productId,
@@ -201,8 +239,12 @@ class ApiService {
     request.files.add(http.MultipartFile.fromBytes(
       'file',
       imageBytes,
-      filename: 'craft.jpg',
-      contentType: MediaType('image', 'jpeg'),
+      filename: contentType == 'image/png'
+          ? 'craft.png'
+          : contentType == 'image/webp'
+              ? 'craft.webp'
+              : 'craft.jpg',
+      contentType: MediaType.parse(contentType),
     ));
     late final http.Response response;
     try {
@@ -232,6 +274,22 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(
           body['detail'] ?? 'Unable to retrieve image processing status');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> retryImageJob({
+    required String token,
+    required String jobId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/image-jobs/$jobId/retry'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 50));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(
+          body['detail'] ?? 'Product processing could not be retried');
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -528,24 +586,22 @@ class ApiService {
 
   static Future<Map<String, dynamic>> enhanceImageStudio(
       List<int> imageBytes) async {
-    try {
-      final req = http.MultipartRequest(
-          'POST', Uri.parse('$apiBaseUrl/ai/enhance-image'));
-      req.files.add(
-        http.MultipartFile.fromBytes('file', imageBytes, filename: 'craft.jpg'),
-      );
-      req.fields['aspect_ratio'] = '1:1';
-      final streamedRes = await req.send().timeout(aiTimeoutDuration);
-      final res = await http.Response.fromStream(streamedRes);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-    final b64 = base64Encode(imageBytes);
-    return {
-      'status': 'success',
-      'enhanced_image_base64': 'data:image/jpeg;base64,$b64',
-    };
+    final req = http.MultipartRequest(
+        'POST', Uri.parse('$apiBaseUrl/ai/enhance-image'));
+    req.files.add(
+      http.MultipartFile.fromBytes('file', imageBytes, filename: 'craft.jpg'),
+    );
+    req.fields['aspect_ratio'] = '1:1';
+    final streamedRes = await req.send().timeout(aiTimeoutDuration);
+    final res = await http.Response.fromStream(streamedRes);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode != 200 ||
+        data['status'] != 'success' ||
+        data['enhanced_image_base64'] is! String) {
+      throw Exception(data['detail'] ??
+          'Image enhancement failed. Your original image is unchanged.');
+    }
+    return data;
   }
 
   static Future<List<Map<String, dynamic>>> generateImageVariations(
@@ -595,95 +651,8 @@ class ApiService {
       }
     }
 
-    // High quality offline fallback with all 10 distinct studio variation styles
-    final b64 = base64Encode(imageBytes);
-    final dataUri = 'data:image/jpeg;base64,$b64';
-
-    final styles = [
-      {
-        'id': 'var_1',
-        'style': 'white_studio',
-        'title': 'Clean White Studio',
-        'title_mr': 'शुद्ध पांढरी स्टुडिओ',
-        'title_hi': 'शुद्ध सफेद स्टूडियो'
-      },
-      {
-        'id': 'var_2',
-        'style': 'warm_cream',
-        'title': 'Warm Cream Studio',
-        'title_mr': 'उबदार क्रीम स्टुडिओ',
-        'title_hi': 'वार्म क्रीम स्टूडियो'
-      },
-      {
-        'id': 'var_3',
-        'style': 'neutral_beige',
-        'title': 'Neutral Beige',
-        'title_mr': 'तटस्थ बेज पार्श्वभूमी',
-        'title_hi': 'न्यूट्रल बेज बैकग्राउंड'
-      },
-      {
-        'id': 'var_4',
-        'style': 'soft_daylight',
-        'title': 'Soft Natural Daylight',
-        'title_mr': 'मऊ नैसर्गिक सूर्यप्रकाश',
-        'title_hi': 'सॉफ्ट नेचुरल डेलाइट'
-      },
-      {
-        'id': 'var_5',
-        'style': 'studio_lighting',
-        'title': 'Studio Lighting & Exposure',
-        'title_mr': 'स्टुडिओ प्रकाश व स्पष्टता',
-        'title_hi': 'स्टूडियो लाइटिंग व एक्सपोज़र'
-      },
-      {
-        'id': 'var_6',
-        'style': 'front_angle',
-        'title': 'Front-Facing Product Angle',
-        'title_mr': 'समोरचा कोन (Front View)',
-        'title_hi': 'सामने का कोण'
-      },
-      {
-        'id': 'var_7',
-        'style': 'three_quarter',
-        'title': 'Three-Quarter Perspective',
-        'title_mr': 'तीन-चतुर्थांश कोन (3/4 View)',
-        'title_hi': 'तीन-चौथाई कोण'
-      },
-      {
-        'id': 'var_8',
-        'style': 'detail_macro',
-        'title': 'Side & Detail Macro View',
-        'title_mr': 'बारीक कोरीव काम व बाजू',
-        'title_hi': 'डिटेल मैक्रो व्यू'
-      },
-      {
-        'id': 'var_9',
-        'style': 'lifestyle_setting',
-        'title': 'Elegant Lifestyle Setting',
-        'title_mr': 'पारंपरिक घराची सजावट',
-        'title_hi': 'एलिगेंट लाइफस्टाइल सेटिंग'
-      },
-      {
-        'id': 'var_10',
-        'style': 'premium_catalogue',
-        'title': 'Premium Catalogue Composition',
-        'title_mr': 'प्रीमियम कॅटलॉग रचना',
-        'title_hi': 'प्रीमियम कैटलॉग व्यू'
-      },
-    ];
-
-    return styles
-        .map((s) => {
-              'id': s['id'],
-              'style': s['style'],
-              'title': s['title'],
-              'title_mr': s['title_mr'],
-              'title_hi': s['title_hi'],
-              'image_url': dataUri,
-              'data_uri': dataUri,
-              'is_primary': s['id'] == 'var_1',
-            })
-        .toList();
+    throw Exception(
+        'Studio image processing is unavailable. Your original photo is still saved; retry when the service is reachable.');
   }
 
   static Future<Map<String, dynamic>> translateProductDescription({
@@ -741,95 +710,24 @@ class ApiService {
     String? imageBase64,
     String? clarification,
   }) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse('$apiBaseUrl/ai/catalog'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'transcript': transcript,
-              'language': language,
-              'image_base64': imageBase64,
-              'clarification': clarification,
-            }),
-          )
-          .timeout(aiTimeoutDuration);
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-    } catch (_) {}
-
-    // Resilient fallback with missing specifications check
-    final textLower = '$transcript ${clarification ?? ''}'.toLowerCase();
-    final hasMat = textLower.contains('clay') ||
-        textLower.contains('मिट्टी') ||
-        textLower.contains('माती') ||
-        textLower.contains('कैनवास') ||
-        textLower.contains('पीठ') ||
-        textLower.contains('wood') ||
-        textLower.contains('silk');
-    final hasTech = textLower.contains('painting') ||
-        textLower.contains('चित्र') ||
-        textLower.contains('वारली') ||
-        textLower.contains('रंगवले') ||
-        textLower.contains('wheel') ||
-        textLower.contains('चाक');
-
-    final missing = <String>[];
-    if (!hasMat) missing.add('material');
-    if (!hasTech) missing.add('technique');
-
-    String? prompt;
-    if (missing.isNotEmpty) {
-      prompt = language == 'mr'
-          ? 'कृपया सांगा: आपण हे उत्पादन बनवण्यासाठी कोणते साहित्य (material) आणि कला पद्धत (technique) वापरली आहे?'
-          : 'कृपया बताएं: इस कलाकृति के निर्माण में कौन-सी सामग्री और तकनीक उपयोग की गई है?';
+    final response = await http
+        .post(
+          Uri.parse('$apiBaseUrl/ai/catalog'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'transcript': transcript,
+            'language': language,
+            'image_base64': imageBase64,
+            'clarification': clarification,
+          }),
+        )
+        .timeout(aiTimeoutDuration);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['detail'] ??
+          'AI catalog generation is unavailable. Your transcript is preserved.');
     }
-
-    final all12 = [
-      'en',
-      'hi',
-      'mr',
-      'bn',
-      'ta',
-      'te',
-      'kn',
-      'ml',
-      'gu',
-      'pa',
-      'or',
-      'as'
-    ];
-    return {
-      'title_en': 'Handmade Terracotta Water Pitcher',
-      'title_hi': 'हस्तनिर्मित पारंपरिक टेराकोटा जलपात्र',
-      'short_description_en':
-          'Pure riverbed clay pitcher keeping drinking water naturally chilled.',
-      'short_description_hi':
-          'प्राकृतिक नदी की मिट्टी से बना घड़ा जो पानी को ठंडा रखता है।',
-      'description_en':
-          'Handcrafted from fine riverbed clay naturally keeping water chilled and sweet.',
-      'description_hi':
-          'शुद्ध मिट्टी से बना पारंपरिक पात्र जो पानी को प्राकृतिक रूप से शीतल रखता है।',
-      'material': hasMat ? 'Natural Earthen Clay' : null,
-      'technique': hasTech ? "Potter's Wheel Shaping & Kiln Firing" : null,
-      'category_slug': 'pottery',
-      'care_instructions': 'Rinse thoroughly with clean water before use.',
-      'seo_keywords': ['terracotta', 'pottery', 'clay vessel'],
-      'estimated_material_cost': 85.0,
-      'estimated_labor_hours': 4.5,
-      'missing_fields': missing,
-      'missing_info_prompt': prompt,
-      'translations': all12
-          .map((l) => {
-                'language': l,
-                'title': 'Handcrafted Creation (${l.toUpperCase()})',
-                'short_description': 'Handcrafted authentic regional craft',
-                'description':
-                    'Handcrafted creation made with traditional techniques.',
-              })
-          .toList(),
-    };
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
   }
 
   static Future<Map<String, dynamic>> recommendProductPrice({

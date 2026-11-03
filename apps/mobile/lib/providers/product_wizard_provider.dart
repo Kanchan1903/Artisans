@@ -51,11 +51,11 @@ class ProductWizardProvider extends ChangeNotifier {
   bool _isUploadingPhoto = false;
   String? _photoUploadError;
   bool _photoUploadRequiresAuthentication = false;
-  String? _photoUploadId;
-  String? _attachedPhotoUploadId;
-  String? _photoFileName;
-  String? _photoContentType;
-  String? _originalImageUrl;
+  final List<String> _photoUploadIds = [];
+  final Set<String> _attachedPhotoUploadIds = {};
+  final List<String> _photoFileNames = [];
+  final List<String> _photoContentTypes = [];
+  final List<String?> _originalImageUrls = [];
   String _cameraGuidance = "Move closer to your craft";
 
   // Step 2: Studio Image Variations
@@ -74,10 +74,16 @@ class ProductWizardProvider extends ChangeNotifier {
   String _descriptionHi = "";
   String _material = "";
   String _technique = "";
+  String _dimensions = "";
+  double? _weightGrams;
+  String _additionalDetails = "";
   String _categorySlug = "pottery";
   String _careInstructions = "";
   List<String> _seoKeywords = [];
   List<Map<String, dynamic>> _translations = [];
+  List<Map<String, dynamic>> _categories = [];
+  bool _isLoadingCategories = false;
+  String? _categoriesError;
   List<String> _missingFields = [];
   String? _missingInfoPrompt;
   bool _isDraftSaved = false;
@@ -159,7 +165,13 @@ class ProductWizardProvider extends ChangeNotifier {
   String get descriptionHi => _descriptionHi;
   String get material => _material;
   String get technique => _technique;
+  String get dimensions => _dimensions;
+  double? get weightGrams => _weightGrams;
+  String get additionalDetails => _additionalDetails;
   String get categorySlug => _categorySlug;
+  List<Map<String, dynamic>> get categories => List.unmodifiable(_categories);
+  bool get isLoadingCategories => _isLoadingCategories;
+  String? get categoriesError => _categoriesError;
   String get careInstructions => _careInstructions;
   List<String> get seoKeywords => _seoKeywords;
   List<Map<String, dynamic>> get translations => _translations;
@@ -171,12 +183,14 @@ class ProductWizardProvider extends ChangeNotifier {
   bool get photoUploadRequiresAuthentication =>
       _photoUploadRequiresAuthentication;
   bool get canRetryPhotoUpload =>
-      _photoUploadId != null && _photoContentType != null;
+      _photos.isNotEmpty && _photoUploadIds.length == _photos.length;
   bool get isCurrentPhotoUploaded =>
-      _photoUploadId != null &&
-      _photoUploadId == _attachedPhotoUploadId &&
-      _originalImageUrl != null;
-  String? get originalImageUrl => _originalImageUrl;
+      _photos.isNotEmpty &&
+      _photoUploadIds.length == _photos.length &&
+      _photoUploadIds.every(_attachedPhotoUploadIds.contains) &&
+      _originalImageUrls.every((url) => url != null);
+  String? get originalImageUrl =>
+      _originalImageUrls.isEmpty ? null : _originalImageUrls.first;
 
   // Pricing Getters
   double get materialCost => _materialCost;
@@ -214,6 +228,9 @@ class ProductWizardProvider extends ChangeNotifier {
   bool get hasSuggestedPrice =>
       _pricingRevisionId != null && _suggestedPrice > 0;
 
+  Map<String, dynamic> _parseAdditionalDetails(String value) =>
+      value.trim().isEmpty ? <String, dynamic>{} : {'notes': value.trim()};
+
   // Publish Getters
   bool get isPublishing => _isPublishing;
   bool get isPublished => _isPublished;
@@ -221,6 +238,12 @@ class ProductWizardProvider extends ChangeNotifier {
 
   set titleEn(String val) {
     _titleEn = val;
+    notifyListeners();
+  }
+
+  void setTitleEn(String value) {
+    _titleEn = value;
+    _isDraftSaved = false;
     notifyListeners();
   }
 
@@ -287,7 +310,7 @@ class ProductWizardProvider extends ChangeNotifier {
       _imageJobStatus == 'completed' &&
       _imageProcessingMode != 'mock' &&
       hasSelectedExact3 &&
-      _originalImageUrl != null &&
+      originalImageUrl != null &&
       _acceptedPrice.isFinite &&
       _acceptedPrice > 0 &&
       _pricingRevisionId != null &&
@@ -325,10 +348,7 @@ class ProductWizardProvider extends ChangeNotifier {
 
   Future<bool> clearPhotos({required String? token}) async {
     if (_isUploadingPhoto) return false;
-    final uploadIds = {
-      if (_photoUploadId != null) _photoUploadId!,
-      if (_attachedPhotoUploadId != null) _attachedPhotoUploadId!,
-    };
+    final uploadIds = {..._photoUploadIds, ..._attachedPhotoUploadIds};
     if (uploadIds.isNotEmpty) {
       if (token == null || token.isEmpty) {
         _photoUploadError = 'Sign in to remove this uploaded photo.';
@@ -356,11 +376,11 @@ class ProductWizardProvider extends ChangeNotifier {
     _resetVariations();
     _lastCameraError = null;
     _photoUploadError = null;
-    _photoUploadId = null;
-    _attachedPhotoUploadId = null;
-    _photoFileName = null;
-    _photoContentType = null;
-    _originalImageUrl = null;
+    _photoUploadIds.clear();
+    _attachedPhotoUploadIds.clear();
+    _photoFileNames.clear();
+    _photoContentTypes.clear();
+    _originalImageUrls.clear();
     notifyListeners();
     return true;
   }
@@ -379,7 +399,7 @@ class ProductWizardProvider extends ChangeNotifier {
         imageQuality: 90,
       );
       if (image != null) {
-        return await _acceptPickedImage(image, token);
+        return await _acceptPickedImages([image], token);
       }
     } catch (e) {
       debugPrint('Error picking camera image: $e');
@@ -398,14 +418,13 @@ class ProductWizardProvider extends ChangeNotifier {
     _isUploadingPhoto = true;
     notifyListeners();
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
+      final List<XFile> images = await _picker.pickMultiImage(
         maxWidth: 1600,
         maxHeight: 1600,
         imageQuality: 90,
       );
-      if (image != null) {
-        return await _acceptPickedImage(image, token);
+      if (images.isNotEmpty) {
+        return await _acceptPickedImages(images, token);
       }
     } catch (e) {
       debugPrint('Error picking gallery image: $e');
@@ -417,27 +436,35 @@ class ProductWizardProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> _acceptPickedImage(XFile image, String? token) async {
-    final bytes = await image.readAsBytes();
-    final imageType = detectProductImageType(bytes);
-    if (imageType == null) {
-      _photoUploadError =
-          'Unsupported image. Choose a valid JPEG, PNG, or WebP photo.';
+  Future<bool> _acceptPickedImages(List<XFile> images, String? token) async {
+    if (_photos.length + images.length > 5) {
+      _photoUploadError = 'A product can have up to five photos.';
       return false;
     }
-    if (bytes.length > maxProductPhotoBytes) {
-      _photoUploadError =
-          'Image is too large. Choose a photo smaller than 10 MB.';
-      return false;
+    final pending = <(Uint8List, String, String, String)>[];
+    for (final image in images) {
+      final bytes = await image.readAsBytes();
+      final imageType = detectProductImageType(bytes);
+      if (imageType == null) {
+        _photoUploadError =
+            'Unsupported image. Choose JPEG, PNG, or WebP photos.';
+        return false;
+      }
+      if (bytes.length > maxProductPhotoBytes) {
+        _photoUploadError = 'Each photo must be smaller than 10 MB.';
+        return false;
+      }
+      pending.add((bytes, image.name, imageType.$2, imageType.$1));
     }
 
-    _photos
-      ..clear()
-      ..add(bytes);
+    for (final photo in pending) {
+      _photos.add(photo.$1);
+      _photoFileNames.add('product_photo.${photo.$4}');
+      _photoContentTypes.add(photo.$3);
+      _photoUploadIds.add(_newPhotoUploadId());
+      _originalImageUrls.add(null);
+    }
     _resetVariations();
-    _photoFileName = 'product_photo.${imageType.$1}';
-    _photoContentType = imageType.$2;
-    _photoUploadId = _newPhotoUploadId();
     _photoUploadError = null;
     _photoUploadRequiresAuthentication = false;
     _lastCameraError = null;
@@ -448,7 +475,12 @@ class ProductWizardProvider extends ChangeNotifier {
           'Sign in to upload and save this photo to your product draft.';
       return true;
     }
-    await _uploadCurrentPhoto(token);
+    for (var index = _photoUploadIds.length - pending.length;
+        index < _photoUploadIds.length;
+        index++) {
+      await _uploadPhotoAt(token, index);
+      if (_photoUploadError != null) break;
+    }
     return true;
   }
 
@@ -497,7 +529,7 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   Future<void> retryPhotoUpload(String? token) async {
-    if (_isUploadingPhoto || _photos.isEmpty || _photoUploadId == null) return;
+    if (_isUploadingPhoto || _photos.isEmpty) return;
     if (token == null || token.isEmpty) {
       _photoUploadError =
           'Sign in to upload and save this photo to your product draft.';
@@ -507,27 +539,32 @@ class ProductWizardProvider extends ChangeNotifier {
     _isUploadingPhoto = true;
     notifyListeners();
     try {
-      await _uploadCurrentPhoto(token);
+      for (var index = 0; index < _photos.length; index++) {
+        if (!_attachedPhotoUploadIds.contains(_photoUploadIds[index])) {
+          await _uploadPhotoAt(token, index);
+          if (_photoUploadError != null) break;
+        }
+      }
     } finally {
       _isUploadingPhoto = false;
       notifyListeners();
     }
   }
 
-  Future<void> _uploadCurrentPhoto(String token) async {
+  Future<void> _uploadPhotoAt(String token, int index) async {
     try {
       final result = await ApiService.uploadDraftProductImage(
         token: token,
-        imageBytes: _photos.first,
-        filename: _photoFileName!,
-        contentType: _photoContentType!,
-        uploadId: _photoUploadId!,
+        imageBytes: _photos[index],
+        filename: _photoFileNames[index],
+        contentType: _photoContentTypes[index],
+        uploadId: _photoUploadIds[index],
         productId: _draftProductId?.toString(),
         categorySlug: _categorySlug,
       );
       _draftProductId = result['product_id'] as int? ?? _draftProductId;
-      _originalImageUrl = result['image_url'] as String?;
-      _attachedPhotoUploadId = _photoUploadId;
+      _originalImageUrls[index] = result['image_url'] as String?;
+      _attachedPhotoUploadIds.add(_photoUploadIds[index]);
       _photoUploadError = null;
     } catch (error) {
       _photoUploadRequiresAuthentication = error is ApiAuthenticationException;
@@ -543,11 +580,11 @@ class ProductWizardProvider extends ChangeNotifier {
       _photos.clear();
       _photos.add(bytes);
       _resetVariations();
-      _photoUploadId = null;
-      _attachedPhotoUploadId = null;
-      _photoFileName = null;
-      _photoContentType = null;
-      _originalImageUrl = null;
+      _photoUploadIds.clear();
+      _attachedPhotoUploadIds.clear();
+      _photoFileNames.clear();
+      _photoContentTypes.clear();
+      _originalImageUrls.clear();
       _photoUploadError =
           'Sample photos are for preview only and are not uploaded to a product draft.';
       notifyListeners();
@@ -562,6 +599,7 @@ class ProductWizardProvider extends ChangeNotifier {
     if (_photos.isEmpty) return;
     if (_isProcessingAI) return;
     if (_imageVariations.isNotEmpty && !forceRegenerate) return;
+    final retryFailedJob = _imageJobStatus == 'failed' && _imageJobId != null;
     if (forceRegenerate) {
       _imageVariations.clear();
       _selectedVariationIds.clear();
@@ -578,15 +616,18 @@ class ProductWizardProvider extends ChangeNotifier {
     try {
       var current = <String, dynamic>{};
       if (_imageJobId != null) {
-        current =
-            await ApiService.getImageJob(token: token, jobId: _imageJobId!);
+        current = retryFailedJob
+            ? await ApiService.retryImageJob(token: token, jobId: _imageJobId!)
+            : await ApiService.getImageJob(token: token, jobId: _imageJobId!);
       } else {
         current = await ApiService.startImageJob(
           token: token,
           imageBytes: _photos[0],
-          uploadId: _photoUploadId == null
+          contentType: _photoContentTypes.first,
+          uploadId: _photoUploadIds.isEmpty
               ? null
-              : '${_photoUploadId}_${_imageJobAttempt}',
+              : '${_photoUploadIds.first}_ai_$_imageJobAttempt',
+          productId: _draftProductId,
           productName: _titleEn.isNotEmpty ? _titleEn : 'Handcrafted product',
           productCategory: _categorySlug,
         );
@@ -645,10 +686,6 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   Future<void> retryImageJob(String token) async {
-    if (_imageJobStatus == 'failed') {
-      _imageJobId = null;
-      _imageJobAttempt++;
-    }
     if (_imageJobStatus == 'retake_required') return;
     await processPhotoInAIStudio(token: token);
   }
@@ -830,6 +867,34 @@ class ProductWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadCategories() async {
+    if (_isLoadingCategories) return;
+    _isLoadingCategories = true;
+    _categoriesError = null;
+    notifyListeners();
+    try {
+      _categories = await ApiService.getProductCategories();
+      _categoriesError = null;
+      if (!_categories.any((category) => category['slug'] == _categorySlug) &&
+          _categories.isNotEmpty) {
+        _categorySlug = _categories.first['slug'].toString();
+      }
+    } catch (error) {
+      _categoriesError = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isLoadingCategories = false;
+      notifyListeners();
+    }
+  }
+
+  void setCategorySlug(String slug) {
+    if (_categories.any((category) => category['slug'] == slug)) {
+      _categorySlug = slug;
+      _isDraftSaved = false;
+      notifyListeners();
+    }
+  }
+
   void updateField({
     String? titleEn,
     String? titleHi,
@@ -839,6 +904,9 @@ class ProductWizardProvider extends ChangeNotifier {
     String? descriptionHi,
     String? material,
     String? technique,
+    String? dimensions,
+    double? weightGrams,
+    String? additionalDetails,
     String? careInstructions,
   }) {
     if (titleEn != null) _titleEn = titleEn;
@@ -849,6 +917,9 @@ class ProductWizardProvider extends ChangeNotifier {
     if (descriptionHi != null) _descriptionHi = descriptionHi;
     if (material != null) _material = material;
     if (technique != null) _technique = technique;
+    if (dimensions != null) _dimensions = dimensions;
+    if (weightGrams != null) _weightGrams = weightGrams;
+    if (additionalDetails != null) _additionalDetails = additionalDetails;
     if (careInstructions != null) _careInstructions = careInstructions;
     notifyListeners();
   }
@@ -888,12 +959,20 @@ class ProductWizardProvider extends ChangeNotifier {
     // Existing catalog enrichment can populate structured fields. Its fallback
     // text is never allowed to replace the faithfully translated description.
     final translatedDescription = _descriptionEn;
-    final catalog = await ApiService.catalogProduct(
-      transcript: transcript,
-      language: _voiceLanguage,
-      imageBase64: _enhancedImageBase64,
-      clarification: clarification,
-    );
+    late final Map<String, dynamic> catalog;
+    try {
+      catalog = await ApiService.catalogProduct(
+        transcript: transcript,
+        language: _voiceLanguage,
+        imageBase64: _enhancedImageBase64,
+        clarification: clarification,
+      );
+    } catch (error) {
+      _speechError = error.toString().replaceFirst('Exception: ', '');
+      _isProcessingAI = false;
+      notifyListeners();
+      return;
+    }
 
     _titleEn = catalog['title_en'] ?? 'Handmade Craft';
     _titleHi = catalog['title_hi'] ?? 'हस्तशिल्प';
@@ -954,6 +1033,11 @@ class ProductWizardProvider extends ChangeNotifier {
         'description': value,
       };
     }
+    notifyListeners();
+  }
+
+  void setWeightGrams(double? value) {
+    _weightGrams = value;
     notifyListeners();
   }
 
@@ -1045,6 +1129,9 @@ class ProductWizardProvider extends ChangeNotifier {
           'description_hi': _descriptionHi,
           'material': _material,
           'technique': _technique,
+          'dimensions': _dimensions,
+          'weight_grams': _weightGrams,
+          'additional_details': _parseAdditionalDetails(_additionalDetails),
           'care_instructions': _careInstructions,
           'voice_transcript': _voiceTranscript,
           'voice_language': _voiceLanguage,
@@ -1255,8 +1342,13 @@ class ProductWizardProvider extends ChangeNotifier {
 
   // ─── Save as Draft ─────────────────────────────────────────────────────────
   Future<bool> saveAsDraft(String token) async {
-    if (_voiceTranscript.trim().isNotEmpty &&
-        (!_englishDescriptionConfirmed || _descriptionEn.trim().isEmpty)) {
+    if (_titleEn.trim().length < 2 ||
+        _descriptionEn.trim().length < 10 ||
+        !_englishDescriptionConfirmed ||
+        _categorySlug.trim().isEmpty) {
+      _publishError =
+          'Add a product name, category, and description of at least 10 characters, then confirm the description.';
+      notifyListeners();
       return false;
     }
     final selectedImgs = selectedVariations.isNotEmpty
@@ -1278,6 +1370,9 @@ class ProductWizardProvider extends ChangeNotifier {
       'description_hi': _descriptionHi,
       'material': _material,
       'technique': _technique,
+      'dimensions': _dimensions,
+      'weight_grams': _weightGrams,
+      'additional_details': _parseAdditionalDetails(_additionalDetails),
       'care_instructions': _careInstructions,
       'price': _acceptedPrice,
       'stock': _inventoryStock,
@@ -1285,7 +1380,7 @@ class ProductWizardProvider extends ChangeNotifier {
       'category_slug': _categorySlug,
       'voice_transcript': _voiceTranscript,
       'voice_language': _voiceLanguage,
-      'ai_generated': true,
+      'ai_generated': false,
       'draft_product_id': _draftProductId,
       'idempotency_key':
           _draftProductId != null ? 'draft_$_draftProductId' : null,
@@ -1384,6 +1479,9 @@ class ProductWizardProvider extends ChangeNotifier {
         'category_slug': _categorySlug,
         'material': _material,
         'technique': _technique,
+        'dimensions': _dimensions,
+        'weight_grams': _weightGrams,
+        'additional_details': _parseAdditionalDetails(_additionalDetails),
         'care_instructions': _careInstructions,
         'stock': _inventoryStock,
         'voice_transcript': _voiceTranscript,
@@ -1467,11 +1565,11 @@ class ProductWizardProvider extends ChangeNotifier {
     _photos.clear();
     _isUploadingPhoto = false;
     _photoUploadError = null;
-    _photoUploadId = null;
-    _attachedPhotoUploadId = null;
-    _photoFileName = null;
-    _photoContentType = null;
-    _originalImageUrl = null;
+    _photoUploadIds.clear();
+    _attachedPhotoUploadIds.clear();
+    _photoFileNames.clear();
+    _photoContentTypes.clear();
+    _originalImageUrls.clear();
     _enhancedImageBase64 = null;
     _imageVariations.clear();
     _imageJobId = null;
@@ -1499,8 +1597,14 @@ class ProductWizardProvider extends ChangeNotifier {
     _descriptionHi = "";
     _material = "";
     _technique = "";
+    _dimensions = "";
+    _weightGrams = null;
+    _additionalDetails = "";
     _careInstructions = "";
     _translations = [];
+    _categories = [];
+    _isLoadingCategories = false;
+    _categoriesError = null;
     _missingFields = [];
     _missingInfoPrompt = null;
     _isDraftSaved = false;

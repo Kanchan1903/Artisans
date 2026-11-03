@@ -60,8 +60,8 @@ async def test_photo_upload_creates_owned_draft_and_is_idempotent(client: AsyncC
     assert replacement.status_code == 201, replacement.text
     assert replacement.json()["product_id"] == uploaded["product_id"]
     products = await client.get("/api/v1/products/artisan/me", headers=headers)
-    assert len(products.json()[0]["images"]) == 1
-    assert products.json()[0]["images"][0]["url"] == replacement.json()["image_url"]
+    assert len(products.json()[0]["images"]) == 2
+    assert products.json()[0]["images"][1]["url"] == replacement.json()["image_url"]
 
     removed = await client.delete(
         f"/api/v1/products/upload-image/{replacement_data['upload_id']}", headers=headers
@@ -73,7 +73,8 @@ async def test_photo_upload_creates_owned_draft_and_is_idempotent(client: AsyncC
     assert repeated_remove.status_code == 204
 
     products = await client.get("/api/v1/products/artisan/me", headers=headers)
-    assert products.json()[0]["images"] == []
+    assert len(products.json()[0]["images"]) == 1
+    assert products.json()[0]["images"][0]["url"] == uploaded["image_url"]
 
     other_token = await artisan_token(client, "+919555001236")
     collision = await client.post(
