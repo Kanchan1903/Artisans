@@ -51,6 +51,8 @@ services:
         value: ""
       - key: CREWAI_API_BASE_URL
         value: https://karigarai-product-image-processing-agent-v1-4812b293.crewai.com
+      - key: CATALOG_BUILDER_API_BASE_URL
+        value: https://karigar-ai-catalog-builder-v1-81689866-4e40-5b66d911.crewai.com
       - key: CREWAI_BEARER_TOKEN
         sync: false
       - key: CLOUDINARY_CLOUD_NAME

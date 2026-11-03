@@ -3756,6 +3756,96 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           const SizedBox(height: 14),
         ],
 
+        if (wizard.draftProductId != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.turmericLight,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.turmeric.withOpacity(0.45)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _localizedCopy(auth,
+                      english: 'AI catalog content',
+                      hindi: 'एआई कैटलॉग सामग्री',
+                      marathi: 'एआय कॅटलॉग मजकूर'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  wizard.catalogBuilderState == 'ready'
+                      ? _localizedCopy(auth,
+                          english:
+                              'Generated title and description are ready. Review and edit them below before publishing.',
+                          hindi:
+                              'तैयार शीर्षक और विवरण नीचे देखें और प्रकाशित करने से पहले संपादित करें।',
+                          marathi:
+                              'तयार शीर्षक आणि वर्णन खाली तपासा व प्रकाशित करण्यापूर्वी संपादित करा.')
+                      : _localizedCopy(auth,
+                          english:
+                              'Generate a polished title, description, keywords, and product highlights from your saved details.',
+                          hindi:
+                              'सेव किए गए विवरण से बेहतर शीर्षक, वर्णन, कीवर्ड और उत्पाद की खास बातें बनाएं।',
+                          marathi:
+                              'जतन केलेल्या माहितीवरून सुधारित शीर्षक, वर्णन, शोधशब्द आणि वैशिष्ट्ये तयार करा.'),
+                  style: const TextStyle(fontSize: 12, height: 1.35),
+                ),
+                if (wizard.isCatalogBuilderProcessing) ...[
+                  const SizedBox(height: 10),
+                  const LinearProgressIndicator(color: AppTheme.terracotta),
+                  const SizedBox(height: 5),
+                  Text(_localizedCopy(auth,
+                      english: 'Catalog builder is processing your product…',
+                      hindi: 'कैटलॉग बिल्डर आपके उत्पाद को प्रोसेस कर रहा है…',
+                      marathi:
+                          'कॅटलॉग बिल्डर तुमच्या उत्पादनावर प्रक्रिया करत आहे…')),
+                ],
+                if (wizard.catalogBuilderError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(wizard.catalogBuilderError!,
+                      style: TextStyle(color: Colors.red.shade800)),
+                ],
+                if (wizard.catalogBuilderState != 'ready') ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: wizard.isCatalogBuilderProcessing
+                        ? null
+                        : () => wizard.generateCatalogContent(
+                              auth.authToken ?? '',
+                              retry: wizard.catalogBuilderState == 'failed',
+                            ),
+                    icon: const Icon(Icons.auto_awesome_rounded),
+                    label: Text(wizard.isCatalogBuilderProcessing
+                        ? _localizedCopy(auth,
+                            english: 'Processing…',
+                            hindi: 'प्रोसेस हो रहा है…',
+                            marathi: 'प्रक्रिया सुरू आहे…')
+                        : wizard.catalogBuilderState == 'processing'
+                            ? _localizedCopy(auth,
+                                english: 'Check status',
+                                hindi: 'स्थिति देखें',
+                                marathi: 'स्थिती तपासा')
+                            : wizard.catalogBuilderState == 'failed'
+                                ? _localizedCopy(auth,
+                                    english: 'Retry catalog generation',
+                                    hindi: 'कैटलॉग फिर से बनाएं',
+                                    marathi: 'कॅटलॉग पुन्हा तयार करा')
+                                : _localizedCopy(auth,
+                                    english: 'Generate AI catalog content',
+                                    hindi: 'एआई कैटलॉग सामग्री बनाएं',
+                                    marathi: 'एआय कॅटलॉग मजकूर तयार करा')),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+
         // Product Summary Card with Actual Selected Image
         Container(
           padding: const EdgeInsets.all(16),
