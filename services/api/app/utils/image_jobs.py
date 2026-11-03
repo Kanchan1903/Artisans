@@ -11,10 +11,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.image_job import ImageJobStatus, ImageProcessingJob
+from app.models.product import Product
 from app.mongodb import (
     get_image_job_mongo,
     list_artisan_jobs_mongo,
@@ -293,16 +295,19 @@ async def build_kickoff_inputs(
         "background_colors": colors,
         "generate_variations": "true" if generate_variations else "false",
         "product_id": str(job.product_id or ""),
+        **(job.input_json or {}),
     }
-    try:
-        discovered = await client.get_inputs()
-        if discovered:
-            allowed = set(discovered)
-            filtered = {k: v for k, v in inputs.items() if k in allowed}
-            return filtered
-    except CrewAIError:
-        pass
-    return inputs
+    discovered = await client.get_inputs()
+    if not discovered:
+        raise CrewAIError("CrewAI /inputs returned no input schema")
+    allowed = set(discovered)
+    filtered = {k: v for k, v in inputs.items() if k in allowed}
+    missing = allowed.difference(filtered)
+    if missing:
+        raise CrewAIError(
+            "CrewAI requires unsupported inputs: " + ", ".join(sorted(missing))
+        )
+    return filtered
 
 
 async def create_and_kickoff_job(
@@ -317,6 +322,7 @@ async def create_and_kickoff_job(
     product_id: int | None,
     idempotency_key: str | None = None,
     generate_variations: bool = True,
+    product_context: dict[str, Any] | None = None,
     client: CrewAIClient | None = None,
 ) -> ImageProcessingJob:
     client = client or crewai_client
@@ -340,6 +346,7 @@ async def create_and_kickoff_job(
         product_id=product_id,
         product_name=product_name,
         product_category=product_category,
+        input_json=product_context or {},
         idempotency_key=idempotency_key,
         status=ImageJobStatus.queued.value,
         segmentation_status="pending",
@@ -353,7 +360,22 @@ async def create_and_kickoff_job(
         updated_at=now,
     )
     db.add(job)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        await storage.delete_file(photo_url)
+        if idempotency_key:
+            existing_result = await db.execute(
+                select(ImageProcessingJob).where(
+                    ImageProcessingJob.artisan_id == artisan_id,
+                    ImageProcessingJob.idempotency_key == idempotency_key,
+                )
+            )
+            existing_job = existing_result.scalar_one_or_none()
+            if existing_job is not None:
+                return existing_job
+        raise
 
     # Save initial job to MongoDB
     try:
@@ -362,22 +384,21 @@ async def create_and_kickoff_job(
         if settings.MONGODB_REQUIRED:
             job.status = ImageJobStatus.failed.value
             job.errors = ["MongoDB is unavailable; the image job could not be recorded"]
+            await _sync_product_processing_state(db, job)
             return job
 
-    if not client.is_configured():
-        # Mock mode is observable but never pretends that image processing succeeded.
-        from app.config import settings as _settings
-        if _settings.AI_MOCK_MODE:
-            job = _apply_mock_result(job)
-        else:
-            job.status = ImageJobStatus.failed.value
-            job.errors = ["CrewAI is not configured. Set CREWAI_BEARER_TOKEN on the backend."]
+    if settings.AI_MOCK_MODE:
+        job.status = ImageJobStatus.failed.value
+        job.errors = ["AI mock mode is enabled; no real product processing was performed. Disable AI_MOCK_MODE to use CrewAI."]
+    elif not client.is_configured():
+        job.status = ImageJobStatus.failed.value
+        job.errors = ["CrewAI is not configured. Set CREWAI_BEARER_TOKEN on the backend."]
+    if job.status == ImageJobStatus.failed.value:
+        await _sync_product_processing_state(db, job)
         try:
             await save_image_job_mongo(job_to_mongo_dict(job))
         except Exception:
-            if settings.MONGODB_REQUIRED:
-                job.status = ImageJobStatus.failed.value
-                job.errors = ["The mock job result could not be saved to MongoDB"]
+            pass
         return job
 
     host = (urlparse(photo_url).hostname or "").lower()
@@ -388,6 +409,7 @@ async def create_and_kickoff_job(
     if not photo_url.startswith("https://") or local_host:
         job.status = ImageJobStatus.failed.value
         job.errors = ["CrewAI cannot reach the uploaded photo. Configure a public HTTPS MINIO_PUBLIC_URL or PUBLIC_API_URL."]
+        await _sync_product_processing_state(db, job)
         try:
             await save_image_job_mongo(job_to_mongo_dict(job))
         except Exception:
@@ -403,12 +425,80 @@ async def create_and_kickoff_job(
         job.status = ImageJobStatus.failed.value
         job.errors = [str(exc)]
 
+    await _sync_product_processing_state(db, job)
+
     # Update MongoDB after kickoff
     try:
         await save_image_job_mongo(job_to_mongo_dict(job))
     except Exception:
         pass
     return job
+
+
+async def retry_existing_job(
+    db: AsyncSession,
+    job: ImageProcessingJob,
+    *,
+    client: CrewAIClient | None = None,
+) -> ImageProcessingJob:
+    """Retry a failed job in place using its already stored original photo."""
+    client = client or crewai_client
+    if job.status != ImageJobStatus.failed.value:
+        raise ValueError("Only failed image jobs can be retried")
+    job.status = ImageJobStatus.queued.value
+    job.errors = []
+    job.quality_warnings = []
+    job.requires_review = False
+    job.segmentation_status = "pending"
+    job.cutout_url = None
+    job.cutout_storage_key = None
+    job.variants = []
+    job.selected_variant_ids = []
+    job.crewai_execution_id = None
+    job.output_json = None
+    job.created_at = datetime.now(timezone.utc)
+    job.updated_at = job.created_at
+
+    if settings.AI_MOCK_MODE:
+        job.status = ImageJobStatus.failed.value
+        job.errors = ["AI mock mode is enabled; no real product processing was performed. Disable AI_MOCK_MODE to use CrewAI."]
+    elif not client.is_configured():
+        job.status = ImageJobStatus.failed.value
+        job.errors = ["CrewAI is not configured. Set CREWAI_BEARER_TOKEN on the backend."]
+    else:
+        try:
+            inputs = await build_kickoff_inputs(job, client=client)
+            job.crewai_execution_id = await client.kickoff(inputs)
+            job.status = ImageJobStatus.running.value
+        except CrewAIError as exc:
+            job.status = ImageJobStatus.failed.value
+            job.errors = [str(exc)]
+
+    job.updated_at = datetime.now(timezone.utc)
+    await _sync_product_processing_state(db, job)
+    try:
+        await save_image_job_mongo(job_to_mongo_dict(job))
+    except Exception:
+        if settings.MONGODB_REQUIRED:
+            job.status = ImageJobStatus.failed.value
+            job.errors = ["The retry could not be persisted; try again shortly."]
+    return job
+
+
+async def _sync_product_processing_state(db: AsyncSession, job: ImageProcessingJob) -> None:
+    if not job.product_id:
+        return
+    product = await db.get(Product, job.product_id)
+    if product is None or product.artisan_id != job.artisan_id:
+        return
+    if job.status == "completed" and not job.requires_review:
+        product.processing_status = "ready"
+        product.ai_processing_result = job.output_json
+    elif job.status in {"failed", "retake_required"}:
+        product.processing_status = "failed"
+        product.ai_processing_result = job.output_json
+    elif job.status in {"queued", "running", "awaiting_review"}:
+        product.processing_status = "processing"
 
 
 def _apply_mock_result(job: ImageProcessingJob) -> ImageProcessingJob:
@@ -460,6 +550,7 @@ async def refresh_job_from_crewai(
             job.requires_review = True
             job.errors = ["CrewAI image processing exceeded the 30 minute time limit"]
             job.updated_at = datetime.now(timezone.utc)
+            await _sync_product_processing_state(db, job)
             try:
                 await save_image_job_mongo(job_to_mongo_dict(job))
             except Exception:
@@ -481,6 +572,7 @@ async def refresh_job_from_crewai(
     status = str(payload.get("status") or "").lower()
     if status in ("running", "started", "pending", "queued", "in_progress"):
         job.status = ImageJobStatus.running.value
+        await _sync_product_processing_state(db, job)
         return job
 
     try:
@@ -489,6 +581,7 @@ async def refresh_job_from_crewai(
         job.status = ImageJobStatus.failed.value
         job.errors = [str(exc)]
         job.requires_review = True
+        await _sync_product_processing_state(db, job)
         try:
             await save_image_job_mongo(job_to_mongo_dict(job))
         except Exception:
@@ -497,6 +590,7 @@ async def refresh_job_from_crewai(
 
     await persist_normalized_result(job, parsed)
     job.updated_at = datetime.now(timezone.utc)
+    await _sync_product_processing_state(db, job)
     return job
 
 

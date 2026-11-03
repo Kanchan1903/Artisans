@@ -1,6 +1,8 @@
 """Unit and integration tests for Backend API AI endpoints & draft saving."""
 import pytest
 from httpx import AsyncClient
+from PIL import Image
+import io
 
 
 @pytest.mark.asyncio
@@ -35,14 +37,8 @@ async def test_ai_catalog_missing_specifications(client: AsyncClient):
         "/api/v1/ai/catalog",
         json={"transcript": "मी एक सुंदर वस्तू बनवली आहे.", "language": "mr"},
     )
-    assert res.status_code == 200
-    data = res.json()
-    assert data["material"] is None
-    assert data["technique"] is None
-    assert "material" in data["missing_fields"]
-    assert "technique" in data["missing_fields"]
-    assert data["missing_info_prompt"] is not None
-    assert len(data["translations"]) == 12
+    assert res.status_code == 503
+    assert "AI catalog generation is unavailable" in res.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -55,6 +51,27 @@ async def test_ai_synthesize_speech(client: AsyncClient):
     data = res.json()
     assert data["format"] == "audio/wav"
     assert len(data["audio_base64"]) > 50
+
+
+@pytest.mark.asyncio
+async def test_generate_variations_does_not_report_original_as_processed(
+    client: AsyncClient, monkeypatch
+):
+    from app.utils import image_studio
+
+    async def processing_failure(*args, **kwargs):
+        raise RuntimeError("image processor unavailable")
+
+    monkeypatch.setattr(image_studio, "process_and_generate_10_variations", processing_failure)
+    image_bytes = io.BytesIO()
+    Image.new("RGB", (8, 8), color="orange").save(image_bytes, format="PNG")
+    response = await client.post(
+        "/api/v1/ai/generate-variations",
+        files={"file": ("craft.png", image_bytes.getvalue(), "image/png")},
+    )
+
+    assert response.status_code == 503
+    assert "No variations were created" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

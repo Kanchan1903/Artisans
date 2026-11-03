@@ -30,7 +30,7 @@ services:
       - key: OTP_PROVIDER
         value: mock
       - key: AI_MOCK_MODE
-        value: "true"
+        value: "false"
       - key: MONGODB_REQUIRED
         value: "false"
       - key: MONGODB_URI
@@ -52,13 +52,13 @@ services:
       - key: CREWAI_API_BASE_URL
         value: https://karigarai-product-image-processing-agent-v1-4812b293.crewai.com
       - key: CREWAI_BEARER_TOKEN
-        value: ""
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
-        value: ""
+        sync: false
       - key: CLOUDINARY_API_KEY
-        value: ""
+        sync: false
       - key: CLOUDINARY_API_SECRET
-        value: ""
+        sync: false
       - key: PUBLIC_API_URL
         value: https://kalasathi-api.onrender.com
       - key: MINIO_PUBLIC_URL

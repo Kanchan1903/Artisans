@@ -31,6 +31,7 @@ class ImageProcessingJob(Base):
 
     product_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     product_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    input_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     status: Mapped[str] = mapped_column(String(40), default=ImageJobStatus.queued.value, index=True)

@@ -27,6 +27,7 @@ def mock_agent_image_downloads(monkeypatch):
 
     monkeypatch.setattr(image_jobs, "image_output_transport_factory", lambda: httpx.MockTransport(handler))
     monkeypatch.setattr("app.utils.crewai_client.CrewAIClient.get_inputs", lambda self: _empty_inputs())
+    monkeypatch.setattr("app.config.settings.AI_MOCK_MODE", False)
 
     async def mock_storage_upload(file_bytes, filename, content_type="image/jpeg"):
         return f"https://storage.example.test/uploads/{filename}"
@@ -65,7 +66,10 @@ def mock_agent_image_downloads(monkeypatch):
 
 
 async def _empty_inputs():
-    return []
+    return [
+        "job_id", "artisan_id", "photo_url", "product_name", "product_category",
+        "background_colors", "generate_variations", "product_id",
+    ]
 
 # Use in-memory SQLite for super-fast, isolated testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

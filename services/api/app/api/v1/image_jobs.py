@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
-from PIL import Image, UnidentifiedImageError
-import io
+import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,11 +22,13 @@ from app.utils.image_jobs import (
     job_to_dict,
     job_to_mongo_dict,
     refresh_job_from_crewai,
+    retry_existing_job,
 )
+from app.utils.product_image_processing import prepare_product_image
 
 router = APIRouter(prefix="/image-jobs", tags=["AI Image Jobs"])
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
-SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 def _to_out(job: ImageProcessingJob) -> ImageJobOut:
@@ -71,37 +72,86 @@ async def start_image_job(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     try:
-        with Image.open(io.BytesIO(file_bytes)) as image:
-            detected_type = Image.MIME.get(image.format)
-            if image.width * image.height > 40_000_000:
-                raise HTTPException(status_code=413, detail="Image dimensions exceed the 40 megapixel limit")
-            image.verify()
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
-    if detected_type != file.content_type:
-        raise HTTPException(status_code=415, detail="Image content does not match its declared file type")
-    if product_id is not None:
-        product_result = await db.execute(
-            select(Product).where(Product.id == product_id, Product.artisan_id == profile.id)
+        processing_bytes, processing_type, extension = prepare_product_image(
+            file_bytes, file.content_type or ""
         )
-        if product_result.scalar_one_or_none() is None:
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    if product_id is not None:
+        product_result = await db.execute(select(Product).where(
+            Product.id == product_id, Product.artisan_id == profile.id
+        ))
+        product = product_result.scalar_one_or_none()
+        if product is None:
             raise HTTPException(status_code=404, detail="Product not found for this artisan")
+        if product.status.value != "draft":
+            raise HTTPException(status_code=409, detail="AI processing can only run for a draft product")
+
+    product_context = {}
+    if product_id is not None:
+        product_context = {
+            "product_description": product.description_en or "",
+            "material": product.material or "",
+            "dimensions": product.dimensions or "",
+            "weight_grams": str(product.weight_grams) if product.weight_grams is not None else "",
+            "price": str(product.price),
+            "quantity": str(product.stock),
+            "additional_details": json.dumps(product.additional_details or {}, ensure_ascii=False),
+        }
 
     try:
         job = await create_and_kickoff_job(
             db,
             artisan_id=profile.id,
-            file_bytes=file_bytes,
-            filename=file.filename or "craft.jpg",
-            content_type=file.content_type or "image/jpeg",
+            file_bytes=processing_bytes,
+            filename=f"{(file.filename or 'craft').rsplit('.', 1)[0]}.{extension.lstrip('.')}",
+            content_type=processing_type,
             product_name=product_name or None,
             product_category=product_category or None,
             product_id=product_id,
             idempotency_key=upload_id.strip() if upload_id else None,
             generate_variations=generate_variations,
+            product_context=product_context,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Image storage is temporarily unavailable") from exc
+    if job.crewai_execution_id:
+        background_tasks.add_task(_background_refresh, job.id, profile.id)
+    if product_id is not None:
+        product = await db.get(Product, product_id)
+        if product is not None:
+            product.processing_status = "processing" if job.status in {"queued", "running"} else "failed"
+            product.ai_processing_result = job.output_json
+    return _to_out(job)
+
+
+@router.post("/{job_id}/retry", response_model=ImageJobOut)
+async def retry_image_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    artisan_tuple: tuple[User, ArtisanProfile] = Depends(get_current_artisan),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retry the existing failed job without creating another product or reuploading its original."""
+    _, profile = artisan_tuple
+    locked = await db.execute(
+        select(ImageProcessingJob)
+        .where(ImageProcessingJob.id == job_id, ImageProcessingJob.artisan_id == profile.id)
+        .with_for_update()
+    )
+    job = locked.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Image job not found")
+    if job.product_id:
+        product = await db.get(Product, job.product_id)
+        if product is None or product.artisan_id != profile.id:
+            raise HTTPException(status_code=404, detail="Product not found for this artisan")
+        if product.status.value != "draft":
+            raise HTTPException(status_code=409, detail="Only a draft product can be reprocessed")
+    try:
+        job = await retry_existing_job(db, job)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if job.crewai_execution_id:
         background_tasks.add_task(_background_refresh, job.id, profile.id)
     return _to_out(job)
@@ -224,9 +274,18 @@ async def review_image_job(
             raise HTTPException(status_code=409, detail="This result cannot be approved; retake the product photo")
         job.requires_review = False
         job.status = "completed"
+        if job.product_id:
+            product = await db.get(Product, job.product_id)
+            if product and product.artisan_id == profile.id:
+                product.processing_status = "ready"
+                product.ai_processing_result = job.output_json
     else:
         job.requires_review = True
         job.status = "retake_required"
+        if job.product_id:
+            product = await db.get(Product, job.product_id)
+            if product and product.artisan_id == profile.id:
+                product.processing_status = "failed"
     if job.output_json is not None:
         agent_output = {
             **job.output_json.get("agent_output", {}),
