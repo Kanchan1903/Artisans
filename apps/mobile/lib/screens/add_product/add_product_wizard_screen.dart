@@ -1679,15 +1679,59 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          l10n.translate('voicePrompt'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textCharcoal),
+        // Screen Header: Describe Your Product
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppTheme.terracottaLight.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.terracotta.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Text(
+                _localizedCopy(
+                  auth,
+                  english: 'Describe Your Product',
+                  hindi: 'अपने उत्पाद का विवरण दें',
+                  marathi: 'तुमच्या उत्पादनाचे वर्णन करा',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.terracotta,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.language_rounded, size: 16, color: AppTheme.indigo),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      _localizedCopy(
+                        auth,
+                        english: 'Speak in your own language (Marathi, Hindi, Tamil, Telugu, etc.)',
+                        hindi: 'अपनी भाषा में बोलें (मराठी, हिंदी, तमिल, तेलुगु, आदि)',
+                        marathi: 'तुमच्या स्वतःच्या भाषेत बोला (मराठी, हिंदी, तामिळ, तेलुगु, इ.)',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.indigo,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 12),
         Text(
           _localizedCopy(
             auth,
@@ -1699,7 +1743,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 "उदा. 'हा वारली कलेचा कॅनव्हास आहे. तांदळाच्या पिठाने रंगवला आहे. ६ तास लागले आणि १५० रुपये खर्च झाले.'",
           ),
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 14, color: AppTheme.textMuted),
+          style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
         ),
         const SizedBox(height: 16),
         Container(
@@ -2400,37 +2444,44 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Continue to image studio
+          // Approve & Continue to Fair Pricing
           ElevatedButton.icon(
-            icon: const Icon(Icons.arrow_forward_rounded, size: 24),
+            icon: const Icon(Icons.check_circle_rounded, size: 24),
             label: Text(
-                "${l10n.translate('continueBtn')} (${l10n.translate('stepStudio')})"),
+              _localizedCopy(
+                auth,
+                english: 'Approve Description & Continue to Pricing',
+                hindi: 'विवरण स्वीकृत करें और मूल्य निर्धारण पर जाएं',
+                marathi: 'वर्णन मंजूर करा आणि किंमत ठरवण्याकडे जा',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.terracotta,
               padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: () async {
               if (wizard.titleEn.trim().length < 2 ||
-                  wizard.descriptionEn.trim().length < 10 ||
+                  wizard.descriptionEn.trim().length < 5 ||
                   wizard.categorySlug.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text(
-                      'Enter a product name, description, and category before processing.'),
+                  content: Text('Please verify product name, description, and category before continuing.'),
                   backgroundColor: Colors.red,
                 ));
                 return;
               }
+              wizard.setDescriptionApproved(true);
+              wizard.confirmEnglishDescription(true);
               final saved = await wizard.saveAsDraft(auth.authToken ?? '');
               if (!mounted) return;
               if (!saved) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(wizard.publishError ??
-                      'Product details could not be saved.'),
+                  content: Text(wizard.publishError ?? 'Product details could not be saved.'),
                   backgroundColor: Colors.red,
                 ));
                 return;
               }
-              wizard.processPhotoInAIStudio(token: auth.authToken ?? '');
               wizard.nextStep();
             },
           ),

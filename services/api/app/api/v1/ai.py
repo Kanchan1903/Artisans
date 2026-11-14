@@ -392,3 +392,27 @@ async def generate_variations(
             detail="Image processing failed. No variations were created; your original upload is preserved.",
         ) from exc
 
+
+
+class VoiceDescriptionWorkflowPayload(BaseModel):
+    transcript: str = Field(..., min_length=1)
+    preferred_language: str | None = Field(default=None)
+    clarification: str | None = Field(default=None)
+
+
+@router.post("/voice-description-agent")
+async def process_voice_description_workflow(payload: VoiceDescriptionWorkflowPayload):
+    """
+    Multilingual AI Product Description Agent Workflow:
+    Coordinates Voice Agent, Product Information Agent, Research Agent,
+    Description Agent, Fact-Checking Agent, and Coordinator Agent.
+    Strictly preserves artisan voice facts without generative hallucinations.
+    """
+    from app.utils.voice_description_agents import VoiceDescriptionCoordinator
+    coordinator = VoiceDescriptionCoordinator()
+    result = await coordinator.execute_workflow(
+        transcript=payload.transcript,
+        preferred_language=payload.preferred_language,
+        clarification=payload.clarification,
+    )
+    return result

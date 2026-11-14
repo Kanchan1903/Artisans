@@ -80,6 +80,10 @@ class ProductWizardProvider extends ChangeNotifier {
   // Step 3: Voice & Catalog
   String _voiceTranscript = "";
   bool _isRecording = false;
+  bool _isAudioPlaying = false;
+  String? _detectedLanguage;
+  String? _detectedLanguageName;
+  bool _isDescriptionApproved = false;
   String _titleEn = "";
   String _titleHi = "";
   String _shortDescriptionEn = "";
@@ -188,6 +192,10 @@ class ProductWizardProvider extends ChangeNotifier {
   bool get speechAvailable => _speechAvailable;
   String? get speechError => _speechError;
   String get voiceLanguage => _voiceLanguage;
+  bool get isAudioPlaying => _isAudioPlaying;
+  String? get detectedLanguage => _detectedLanguage;
+  String? get detectedLanguageName => _detectedLanguageName;
+  bool get isDescriptionApproved => _isDescriptionApproved;
   bool get descriptionNeedsReview => _descriptionNeedsReview;
   bool get englishDescriptionConfirmed => _englishDescriptionConfirmed;
   bool get finalDescriptionConfirmed => _finalDescriptionConfirmed;
@@ -1137,6 +1145,18 @@ class ProductWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDescriptionApproved(bool approved) {
+    _isDescriptionApproved = approved;
+    _englishDescriptionConfirmed = approved;
+    _finalDescriptionConfirmed = approved;
+    notifyListeners();
+  }
+
+  void setIsAudioPlaying(bool playing) {
+    _isAudioPlaying = playing;
+    notifyListeners();
+  }
+
   Future<void> processVoiceNote(String language,
       {required String token, String? clarification}) async {
     if (_isProcessingAI) return;
@@ -1149,7 +1169,60 @@ class ProductWizardProvider extends ChangeNotifier {
     }
     _isProcessingAI = true;
     _speechError = null;
+    _isDescriptionApproved = false;
     notifyListeners();
+
+    try {
+      final agentResult = await ApiService.runVoiceDescriptionWorkflow(
+        transcript: transcript,
+        preferredLanguage: _voiceLanguage,
+        clarification: clarification,
+      );
+
+      if (agentResult['success'] == true) {
+        _detectedLanguage = agentResult['detected_language'] as String?;
+        _detectedLanguageName = agentResult['detected_language_name'] as String?;
+        _titleEn = agentResult['title'] as String? ?? _titleEn;
+        _titleHi = agentResult['title_hi'] as String? ?? _titleHi;
+        _shortDescriptionEn = agentResult['short_description'] as String? ?? _shortDescriptionEn;
+        _descriptionEn = agentResult['detailed_description'] as String? ?? _descriptionEn;
+        _categorySlug = agentResult['category_slug'] as String? ?? _categorySlug;
+        
+        final materialsList = (agentResult['materials'] as List?)?.map((e) => e.toString()).toList();
+        if (materialsList != null && materialsList.isNotEmpty) {
+          _material = materialsList.join(', ');
+        }
+        final techList = (agentResult['techniques'] as List?)?.map((e) => e.toString()).toList();
+        if (techList != null && techList.isNotEmpty) {
+          _technique = techList.join(', ');
+        }
+        if (agentResult['dimensions'] != null) {
+          _dimensions = agentResult['dimensions'].toString();
+        }
+
+        final kw = (agentResult['seo_keywords'] as List?)?.map((e) => e.toString()).toList();
+        if (kw != null && kw.isNotEmpty) {
+          _seoKeywords = kw;
+        }
+
+        if (agentResult['needs_clarification'] == true) {
+          _missingFields = ['material'];
+          _missingInfoPrompt = agentResult['clarification_prompt'] as String?;
+        } else {
+          _missingFields.clear();
+          _missingInfoPrompt = null;
+        }
+
+        _descriptionNeedsReview = true;
+        _descriptionManuallyEdited = false;
+        _englishDescriptionConfirmed = false;
+        _isProcessingAI = false;
+        notifyListeners();
+        return;
+      }
+    } catch (e) {
+      debugPrint('Voice description workflow network error: $e');
+    }
 
     try {
       final translated = await ApiService.translateProductDescription(

@@ -690,6 +690,43 @@ class ApiService {
     throw Exception('Background composition service is temporarily unreachable.');
   }
 
+  static Future<Map<String, dynamic>> runVoiceDescriptionWorkflow({
+    required String transcript,
+    String? preferredLanguage,
+    String? clarification,
+  }) async {
+    final candidateBases = [
+      apiBaseUrl,
+      'http://127.0.0.1:8000/api/v1',
+      'http://localhost:8000/api/v1',
+      'http://10.0.2.2:8000/api/v1',
+    ];
+    final uniqueBases = candidateBases.toSet().toList();
+
+    for (final base in uniqueBases) {
+      try {
+        final res = await http.post(
+          Uri.parse('$base/ai/voice-description-agent'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'transcript': transcript,
+            'preferred_language': preferredLanguage,
+            'clarification': clarification,
+          }),
+        ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          _activeApiBaseUrl = base;
+          return data;
+        }
+      } catch (e) {
+        debugPrint('Voice-agent candidate $base failed: $e');
+      }
+    }
+    throw Exception('Voice-to-Description service is temporarily unreachable.');
+  }
+
   static Future<Map<String, dynamic>> enhanceImageStudio(
       List<int> imageBytes) async {
     final req = http.MultipartRequest(
