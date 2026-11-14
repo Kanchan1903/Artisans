@@ -1050,6 +1050,71 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> updateInquiryStatus({
+    required String token,
+    required int inquiryId,
+    required String status,
+    DateTime? scheduledContactAt,
+    String? contactNotes,
+    String? artisanResponse,
+  }) async {
+    try {
+      final payload = <String, dynamic>{
+        'status': status,
+      };
+      if (scheduledContactAt != null) {
+        payload['scheduled_contact_at'] = scheduledContactAt.toUtc().toIso8601String();
+      }
+      if (contactNotes != null) {
+        payload['contact_notes'] = contactNotes;
+      }
+      if (artisanResponse != null) {
+        payload['artisan_response'] = artisanResponse;
+      }
+      final res = await http.patch(
+        Uri.parse('$apiBaseUrl/inquiries/$inquiryId/status'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(timeoutDuration);
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> confirmInquiryOrder({
+    required String token,
+    required int inquiryId,
+    required double agreedPrice,
+    required int agreedQuantity,
+    required String deliveryDetails,
+    String? contactNotes,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$apiBaseUrl/inquiries/$inquiryId/confirm-order'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'agreed_price': agreedPrice,
+          'agreed_quantity': agreedQuantity,
+          'delivery_details': deliveryDetails,
+          'contact_notes': contactNotes,
+        }),
+      ).timeout(timeoutDuration);
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static Future<bool> updateProductAvailability({
     required String token,
     required int productId,
