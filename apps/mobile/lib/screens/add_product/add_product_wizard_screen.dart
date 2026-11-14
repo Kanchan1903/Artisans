@@ -3469,59 +3469,162 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           const SizedBox(height: 18),
         ],
 
-        OutlinedButton.icon(
-          icon: const Icon(Icons.rate_review_outlined),
-          label: const Text('Challenge recommendation and recheck listings'),
-          onPressed: wizard.pricingRevisionId == null || wizard.isPricingLoading
-              ? null
-              : () => _showPricingChallengeDialog(context, wizard, auth),
+        // ── Research Sources & References Card ─────────────────────────────
+        if (wizard.pricingSources.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderWarm),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.travel_explore_rounded, color: AppTheme.indigo, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _localizedCopy(
+                        auth,
+                        english: 'Market Research Sources & References',
+                        hindi: 'बाजार अनुसंधान स्रोत और संदर्भ',
+                        marathi: 'बाजार संशोधन स्रोत आणि संदर्भ',
+                      ),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppTheme.indigo,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...wizard.pricingSources.map((source) {
+                  final sName = source['source']?.toString() ?? 'Market Source';
+                  final sUrl = source['url']?.toString() ?? '';
+                  final sTitle = source['comparable_title']?.toString() ?? '';
+                  final sPrice = source['listed_price'] != null ? '₹ ${(source['listed_price'] as num).toStringAsFixed(0)}' : null;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                sTitle.isNotEmpty ? sTitle : sName,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (sPrice != null)
+                              Text(sPrice, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.terracotta)),
+                          ],
+                        ),
+                        if (sUrl.isNotEmpty)
+                          Text(
+                            sUrl,
+                            style: TextStyle(fontSize: 11, color: Colors.blue.shade700, decoration: TextDecoration.underline),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        const Divider(height: 8),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+
+        // ── Manual Pricing Option Button ─────────────────────────────────────
+        Center(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.edit_note_rounded, color: AppTheme.indigo),
+            label: Text(
+              _localizedCopy(
+                auth,
+                english: 'Add Price Manually',
+                hindi: 'मूल्य मैन्युअल रूप से जोड़ें',
+                marathi: 'किंमत स्वतः प्रविष्ट करा',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.indigo),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppTheme.indigo),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => _showManualPriceDialog(context, wizard, auth),
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
+
+        // ── Prominent Approve or Reject / Try Again Buttons ───────────────────
         Row(
           children: [
-            if (wizard.hasSuggestedPrice)
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.check_rounded),
-                  label: Text(wizard.previousPricingRecommendation == null
-                      ? 'Accept Suggested Price'
-                      : 'Accept Revised Price'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.terracotta),
-                  onPressed: wizard.isPricingLoading
-                      ? null
-                      : () async {
-                          final saved = await wizard.savePriceSelection(
-                            token: auth.authToken ?? '',
-                            price: wizard.suggestedPrice,
-                            source: wizard.previousPricingRecommendation == null
-                                ? 'suggested'
-                                : 'revised_suggestion',
-                          );
-                          if (saved) wizard.nextStep();
-                        },
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.check_circle_rounded, size: 20),
+                label: Text(
+                  _localizedCopy(
+                    auth,
+                    english: 'Approve Price',
+                    hindi: 'मूल्य स्वीकृत करें',
+                    marathi: 'किंमत मंजूर करा',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
-              ),
-            if (wizard.customPriceOverride != null) ...[
-              if (wizard.hasSuggestedPrice) const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.edit_rounded),
-                  label: Text(
-                      'Set My Own Price (${wizard.currency} ${wizard.customPriceOverride!.toStringAsFixed(2)})'),
-                  onPressed: wizard.isPricingLoading
-                      ? null
-                      : () async {
-                          final saved = await wizard.savePriceSelection(
-                            token: auth.authToken ?? '',
-                            price: wizard.customPriceOverride!,
-                            source: 'custom',
-                          );
-                          if (saved) wizard.nextStep();
-                        },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.terracotta,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
+                onPressed: wizard.isPricingLoading
+                    ? null
+                    : () async {
+                        final priceToSave = wizard.customPriceOverride ?? wizard.suggestedPrice;
+                        if (priceToSave > 0) {
+                          await wizard.savePriceSelection(
+                            token: auth.authToken ?? '',
+                            price: priceToSave,
+                            source: wizard.customPriceOverride != null ? 'custom' : 'suggested',
+                          );
+                        }
+                        wizard.nextStep();
+                      },
               ),
-            ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.replay_rounded, size: 20, color: Colors.deepOrange),
+                label: Text(
+                  _localizedCopy(
+                    auth,
+                    english: 'Reject / Try Again',
+                    hindi: 'अस्वीकार / पुनः प्रयास',
+                    marathi: 'नाकारा / पुन्हा प्रयत्न',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.deepOrange),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.deepOrange),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: wizard.isPricingLoading
+                    ? null
+                    : () => _showPricePreferenceModal(context, wizard, auth),
+              ),
+            ),
           ],
         ),
       ],
@@ -4695,8 +4798,235 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
       await wizard.publishProduct(auth.authToken ?? '');
     }
   }
-}
 
+void _showManualPriceDialog(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+    final priceCtrl = TextEditingController(
+        text: wizard.customPriceOverride != null
+            ? wizard.customPriceOverride!.toStringAsFixed(0)
+            : (wizard.suggestedPrice > 0 ? wizard.suggestedPrice.toStringAsFixed(0) : ''));
+    final matCtrl = TextEditingController(
+        text: wizard.materialCost > 0 ? wizard.materialCost.toStringAsFixed(0) : '');
+    final laborCtrl = TextEditingController(
+        text: wizard.laborHours > 0 ? (wizard.laborHours * wizard.hourlyRate).toStringAsFixed(0) : '');
+    final packCtrl = TextEditingController(
+        text: wizard.packagingCost > 0 ? wizard.packagingCost.toStringAsFixed(0) : '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          _localizedCopy(auth,
+              english: 'Add Price Manually',
+              hindi: 'मूल्य मैन्युअल रूप से जोड़ें',
+              marathi: 'किंमत स्वतः प्रविष्ट करा'),
+          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Your Selling Price (₹) *',
+                  border: OutlineInputBorder(),
+                  prefixText: '₹ ',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: matCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Material Cost (₹)',
+                  border: OutlineInputBorder(),
+                  prefixText: '₹ ',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: laborCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Labor / Effort Cost (₹)',
+                  border: OutlineInputBorder(),
+                  prefixText: '₹ ',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: packCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Packaging & Delivery (₹)',
+                  border: OutlineInputBorder(),
+                  prefixText: '₹ ',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(_localizedCopy(auth, english: 'Cancel', hindi: 'रद्द करें', marathi: 'रद्द करा')),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+            onPressed: () {
+              final price = double.tryParse(priceCtrl.text.trim());
+              if (price == null || price <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid price.')),
+                );
+                return;
+              }
+              wizard.setCustomPriceDirect(price);
+              Navigator.pop(ctx);
+            },
+            child: Text(_localizedCopy(auth, english: 'Save Price', hindi: 'मूल्य सहेजें', marathi: 'किंमत जतन करा')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPricePreferenceModal(
+      BuildContext context, ProductWizardProvider wizard, AuthProvider auth) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final voiceCtrl = TextEditingController();
+          return Container(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              top: 24,
+              left: 20,
+              right: 20,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _localizedCopy(
+                        auth,
+                        english: 'Tell Us Your Price Preference',
+                        hindi: 'अपनी मूल्य प्राथमिकता बताएं',
+                        marathi: 'तुमची किंमतीची पसंती सांगा',
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.terracotta),
+                    ),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _localizedCopy(
+                    auth,
+                    english: 'Speak in Marathi, Hindi, or any language. E.g., "I want more than ₹500 because it takes lot of work."',
+                    hindi: 'अपनी भाषा में बोलें. उदा., "मुझे ₹500 से अधिक चाहिए क्योंकि इसमें बहुत मेहनत लगती है."',
+                    marathi: 'मराठी किंवा तुमच्या भाषेत बोला. उदा., "मला याची किंमत ५०० रुपयांपेक्षा जास्त हवी आहे, यात खूप मेहनत लागते."',
+                  ),
+                  style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                ),
+                const SizedBox(height: 16),
+
+                // Microphone recording button
+                Center(
+                  child: GestureDetector(
+                    onTap: () async {
+                      if (wizard.isRecording) {
+                        await wizard.stopSpeechRecognition();
+                      } else {
+                        await wizard.startSpeechRecognition();
+                      }
+                      setSheetState(() {});
+                    },
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: wizard.isRecording ? Colors.red : AppTheme.terracotta,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (wizard.isRecording ? Colors.red : AppTheme.terracotta).withOpacity(0.35),
+                            blurRadius: 16,
+                            spreadRadius: 4,
+                          )
+                        ],
+                      ),
+                      child: Icon(
+                        wizard.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                        size: 40,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  wizard.isRecording
+                      ? _localizedCopy(auth, english: 'Listening… speak now', hindi: 'सुन रहे हैं… बोलें', marathi: 'ऐकत आहोत… बोला')
+                      : (wizard.voiceTranscript.isNotEmpty ? '"${wizard.voiceTranscript}"' : _localizedCopy(auth, english: 'Tap mic to speak', hindi: 'बोलने के लिए माइक दबाएं', marathi: 'बोलण्यासाठी माइक दाबा')),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    color: wizard.isRecording ? Colors.red : AppTheme.textCharcoal,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.auto_awesome_rounded),
+                  label: Text(
+                    _localizedCopy(
+                      auth,
+                      english: 'Recalculate with Market Research',
+                      hindi: 'बाजार अनुसंधान से पुनः गणना करें',
+                      marathi: 'बाजार संशोधनासह पुन्हा किंमत ठरवा',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.indigo,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    final feedback = wizard.voiceTranscript.trim().isNotEmpty
+                        ? wizard.voiceTranscript.trim()
+                        : 'मला बाजारपेठेपेक्षा जास्त किंमत हवी आहे';
+                    Navigator.pop(ctx);
+                    await wizard.submitVoicePricingFeedback(
+                      voiceFeedback: feedback,
+                      token: auth.authToken ?? '',
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
 class _CheckeredPainter extends CustomPainter {
   @override

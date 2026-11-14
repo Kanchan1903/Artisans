@@ -727,6 +727,57 @@ class ApiService {
     throw Exception('Voice-to-Description service is temporarily unreachable.');
   }
 
+  static Future<Map<String, dynamic>> runDynamicPricingWorkflow({
+    required String title,
+    String categorySlug = 'pottery',
+    String? material,
+    double? materialCost,
+    double? laborHours,
+    double? hourlyRate,
+    double? packagingCost,
+    double? shippingCost,
+    double? desiredProfit,
+    String? voiceFeedback,
+  }) async {
+    final candidateBases = [
+      apiBaseUrl,
+      'http://127.0.0.1:8000/api/v1',
+      'http://localhost:8000/api/v1',
+      'http://10.0.2.2:8000/api/v1',
+    ];
+    final uniqueBases = candidateBases.toSet().toList();
+
+    for (final base in uniqueBases) {
+      try {
+        final res = await http.post(
+          Uri.parse('$base/ai/dynamic-pricing-agent'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'title': title,
+            'category_slug': categorySlug,
+            'material': material,
+            'material_cost': materialCost,
+            'labor_hours': laborHours,
+            'hourly_rate': hourlyRate,
+            'packaging_cost': packagingCost,
+            'shipping_cost': shippingCost,
+            'desired_profit': desiredProfit,
+            'voice_feedback': voiceFeedback,
+          }),
+        ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          _activeApiBaseUrl = base;
+          return data;
+        }
+      } catch (e) {
+        debugPrint('Dynamic-pricing candidate $base failed: $e');
+      }
+    }
+    throw Exception('Dynamic Pricing service is temporarily unreachable.');
+  }
+
   static Future<Map<String, dynamic>> enhanceImageStudio(
       List<int> imageBytes) async {
     final req = http.MultipartRequest(

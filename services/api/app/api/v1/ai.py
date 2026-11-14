@@ -416,3 +416,44 @@ async def process_voice_description_workflow(payload: VoiceDescriptionWorkflowPa
         clarification=payload.clarification,
     )
     return result
+
+
+class DynamicPricingWorkflowPayload(BaseModel):
+    title: str = Field(..., min_length=1)
+    category_slug: str = Field(default="pottery")
+    material: str | None = Field(default=None)
+    material_cost: float | None = Field(default=None)
+    labor_hours: float | None = Field(default=None)
+    hourly_rate: float | None = Field(default=None)
+    packaging_cost: float | None = Field(default=None)
+    shipping_cost: float | None = Field(default=None)
+    desired_profit: float | None = Field(default=None)
+    voice_feedback: str | None = Field(default=None)
+
+
+@router.post("/dynamic-pricing-agent")
+async def process_dynamic_pricing_workflow(payload: DynamicPricingWorkflowPayload):
+    """
+    Dynamic Pricing AI Agent Workflow:
+    Coordinates Market Research Agent, Cost Analysis Agent, Pricing Recommendation Agent,
+    Voice Feedback Agent, Pricing Validation Agent, and Coordinator Agent.
+    Fetches real internet marketplace benchmarks & recalculates based on voice feedback.
+    """
+    from app.utils.dynamic_pricing_agents import DynamicPricingCoordinator
+    coordinator = DynamicPricingCoordinator()
+    costs = {
+        "material_cost": payload.material_cost,
+        "labor_hours": payload.labor_hours,
+        "hourly_rate": payload.hourly_rate,
+        "packaging_cost": payload.packaging_cost,
+        "shipping_cost": payload.shipping_cost,
+        "desired_profit": payload.desired_profit,
+    }
+    result = await coordinator.generate_price_recommendation(
+        title=payload.title,
+        category_slug=payload.category_slug,
+        material=payload.material,
+        costs=costs,
+        voice_feedback=payload.voice_feedback,
+    )
+    return result

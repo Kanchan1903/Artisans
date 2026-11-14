@@ -139,6 +139,11 @@ class ProductWizardProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _comparableProducts = [];
   List<String> _influencingFactors = [];
   String _priceExplanation = "";
+  List<Map<String, dynamic>> _pricingSources = [];
+  bool _isDynamicPricingLoading = false;
+  bool _isRevisedByVoiceFeedback = false;
+  String? _voiceFeedbackTranscript;
+  bool _isPricePreferenceScreenActive = false;
 
   // Step 5: Publish
   bool _isPublishing = false;
@@ -256,6 +261,11 @@ class ProductWizardProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get comparableProducts => _comparableProducts;
   List<String> get influencingFactors => _influencingFactors;
   String get priceExplanation => _priceExplanation;
+  List<Map<String, dynamic>> get pricingSources => List.unmodifiable(_pricingSources);
+  bool get isDynamicPricingLoading => _isDynamicPricingLoading;
+  bool get isRevisedByVoiceFeedback => _isRevisedByVoiceFeedback;
+  String? get voiceFeedbackTranscript => _voiceFeedbackTranscript;
+  bool get isPricePreferenceScreenActive => _isPricePreferenceScreenActive;
   bool get isPricingLoading => _isPricingLoading;
   bool get priceSelectionSaved => _priceSelectionSaved;
   String get currency => _currency;
@@ -1392,7 +1402,101 @@ class ProductWizardProvider extends ChangeNotifier {
   String _newPricingRequestKey() =>
       '${DateTime.now().microsecondsSinceEpoch}_${math.Random().nextInt(1 << 32)}';
 
+  void setPricePreferenceScreenActive(bool active) {
+    _isPricePreferenceScreenActive = active;
+    notifyListeners();
+  }
+
+  Future<void> submitVoicePricingFeedback({
+    required String voiceFeedback,
+    required String token,
+  }) async {
+    _voiceFeedbackTranscript = voiceFeedback;
+    _isDynamicPricingLoading = true;
+    _pricingError = null;
+    notifyListeners();
+
+    try {
+      final res = await ApiService.runDynamicPricingWorkflow(
+        title: _titleEn.isNotEmpty ? _titleEn : 'Handcrafted Craft',
+        categorySlug: _categorySlug,
+        material: _material,
+        materialCost: _materialCost > 0 ? _materialCost : null,
+        laborHours: _laborHours > 0 ? _laborHours : null,
+        hourlyRate: _hourlyRate > 0 ? _hourlyRate : 85.0,
+        packagingCost: _packagingCost > 0 ? _packagingCost : null,
+        shippingCost: _shippingCost > 0 ? _shippingCost : null,
+        voiceFeedback: voiceFeedback,
+      );
+
+      if (res['success'] == true) {
+        _suggestedPrice = (res['recommended_price'] as num?)?.toDouble() ?? _suggestedPrice;
+        _acceptedPrice = _suggestedPrice;
+        _priceRangeMin = (res['price_range_min'] as num?)?.toDouble() ?? _priceRangeMin;
+        _priceRangeMax = (res['price_range_max'] as num?)?.toDouble() ?? _priceRangeMax;
+        _priceExplanation = res['explanation'] as String? ?? _priceExplanation;
+        _isRevisedByVoiceFeedback = true;
+        _isPricePreferenceScreenActive = false; // return to review screen
+        
+        if (res['sources'] is List) {
+          _pricingSources = (res['sources'] as List)
+              .map((s) => Map<String, dynamic>.from(s as Map))
+              .toList();
+        }
+        if (res['cost_breakdown'] is Map) {
+          _costBreakdown = Map<String, dynamic>.from(res['cost_breakdown'] as Map);
+        }
+        notifyListeners();
+        return;
+      }
+    } catch (e) {
+      debugPrint('Voice pricing feedback agent error: $e');
+    } finally {
+      _isDynamicPricingLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> loadPricingRecommendation({required String token}) async {
+    _isDynamicPricingLoading = true;
+    notifyListeners();
+
+    // Trigger Dynamic Pricing AI Agent in parallel for live market research & sources
+    try {
+      final agentRes = await ApiService.runDynamicPricingWorkflow(
+        title: _titleEn.isNotEmpty ? _titleEn : 'Handcrafted Craft',
+        categorySlug: _categorySlug,
+        material: _material,
+        materialCost: _materialCost > 0 ? _materialCost : null,
+        laborHours: _laborHours > 0 ? _laborHours : null,
+        hourlyRate: _hourlyRate > 0 ? _hourlyRate : 85.0,
+        packagingCost: _packagingCost > 0 ? _packagingCost : null,
+        shippingCost: _shippingCost > 0 ? _shippingCost : null,
+      );
+
+      if (agentRes['success'] == true) {
+        _suggestedPrice = (agentRes['recommended_price'] as num?)?.toDouble() ?? _suggestedPrice;
+        _acceptedPrice = _suggestedPrice;
+        _priceRangeMin = (agentRes['price_range_min'] as num?)?.toDouble() ?? _priceRangeMin;
+        _priceRangeMax = (agentRes['price_range_max'] as num?)?.toDouble() ?? _priceRangeMax;
+        _priceExplanation = agentRes['explanation'] as String? ?? _priceExplanation;
+        
+        if (agentRes['sources'] is List) {
+          _pricingSources = (agentRes['sources'] as List)
+              .map((s) => Map<String, dynamic>.from(s as Map))
+              .toList();
+        }
+        if (agentRes['cost_breakdown'] is Map) {
+          _costBreakdown = Map<String, dynamic>.from(agentRes['cost_breakdown'] as Map);
+        }
+      }
+    } catch (e) {
+      debugPrint('Dynamic pricing agent initial run error: $e');
+    } finally {
+      _isDynamicPricingLoading = false;
+      notifyListeners();
+    }
+
     final productId = _draftProductId;
     if (productId == null) {
       _pricingError =
@@ -1525,6 +1629,15 @@ class ProductWizardProvider extends ChangeNotifier {
       return false;
     } finally {
       _isPricingLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void setCustomPriceDirect(double customPrice) {
+    if (customPrice > 0) {
+      _customPriceOverride = customPrice;
+      _acceptedPrice = customPrice;
+      _priceOverrideWarning = null;
       notifyListeners();
     }
   }
