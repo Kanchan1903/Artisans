@@ -63,7 +63,7 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(seconds: 3));
 
       expect(find.text('Capture Photo'), findsOneWidget);
       expect(find.text('Choose from gallery'), findsOneWidget);

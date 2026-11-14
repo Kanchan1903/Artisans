@@ -128,6 +128,37 @@ def correct_lighting_and_white_balance(image: Image.Image) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB))
 
 
+def generate_procedural_background(style_name: str, size: tuple[int, int] = (1024, 1024)) -> Image.Image:
+    """Generate high-quality backdrop surfaces like wooden workshop texture, studio vignette, or festive aura."""
+    w, h = size
+    if style_name == "wooden_texture":
+        # Warm, organic wooden table surface with soft horizontal grain
+        base = np.full((h, w, 3), [218, 185, 148], dtype=np.float32)
+        grain = np.sin(np.linspace(0, 36 * np.pi, h))[:, None] * 14.0
+        micro_grain = np.sin(np.linspace(0, 140 * np.pi, h))[:, None] * 4.0
+        np.random.seed(42)
+        noise = np.random.normal(0, 2.5, (h, w, 1))
+        arr = np.clip(base + grain[:, :, None] + micro_grain[:, :, None] + noise, 0, 255).astype(np.uint8)
+        return Image.fromarray(arr).convert("RGBA")
+    elif style_name == "studio_background":
+        # Soft studio spotlight with delicate radial falloff
+        x = np.linspace(-1, 1, w)[None, :]
+        y = np.linspace(-1, 1, h)[:, None]
+        dist = np.sqrt(x * x + y * y)
+        vignette = np.clip(1.0 - 0.22 * dist, 0.72, 1.0)[:, :, None]
+        base = np.full((h, w, 3), [248, 250, 253], dtype=np.float32) * vignette
+        return Image.fromarray(base.astype(np.uint8)).convert("RGBA")
+    elif style_name == "festive_background":
+        # Warm golden festive gradient with radiant aura
+        top = np.array([255, 246, 230], dtype=np.float32)
+        bottom = np.array([255, 218, 165], dtype=np.float32)
+        alpha = np.linspace(0, 1, h, dtype=np.float32)[:, None, None]
+        grad = (top * (1.0 - alpha) + bottom * alpha).astype(np.uint8)
+        arr = np.tile(grad, (1, w, 1))
+        return Image.fromarray(arr).convert("RGBA")
+    return Image.new("RGBA", size, (255, 255, 255, 255))
+
+
 def create_variation_composition(
     foreground_rgba: Image.Image,
     target_size: tuple[int, int] = (1024, 1024),
@@ -138,6 +169,7 @@ def create_variation_composition(
     shadow_opacity: int = 70,
     offset_x_shift: int = 0,
     offset_y_shift: int = 0,
+    bg_canvas: Image.Image | None = None,
 ) -> Image.Image:
     """Composites foreground onto styled background with vectorized gradient & contact shadow."""
     target_w, target_h = target_size
@@ -148,8 +180,9 @@ def create_variation_composition(
     fg = foreground_rgba.copy()
     fg.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
 
-    # Fast Vectorized Background
-    if bg_color_bottom and bg_color_bottom != bg_color_top:
+    if bg_canvas is not None:
+        canvas = bg_canvas.copy().resize(target_size, Image.Resampling.BILINEAR).convert("RGBA")
+    elif bg_color_bottom and bg_color_bottom != bg_color_top:
         top_c = np.array(bg_color_top, dtype=np.float32)
         bot_c = np.array(bg_color_bottom, dtype=np.float32)
         alpha = np.linspace(0, 1, target_h, dtype=np.float32)[:, None, None]

@@ -7,6 +7,7 @@ import 'package:kalasathi_mobile/providers/auth_provider.dart';
 import 'package:kalasathi_mobile/providers/product_wizard_provider.dart';
 import 'package:kalasathi_mobile/screens/add_product/add_product_wizard_screen.dart';
 import 'package:kalasathi_mobile/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Minimal 1x1 transparent PNG bytes for mock Image.memory decoding
 final kTransparentImage = base64Decode(
@@ -14,9 +15,11 @@ final kTransparentImage = base64Decode(
 );
 
 void main() {
-  testWidgets('AddProductWizardScreen Step 2 renders 10 variations and header card', (tester) async {
+  testWidgets('AddProductWizardScreen Step 1 renders AI Photo Studio with controls & background cards', (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final wizard = ProductWizardProvider();
     final auth = AuthProvider();
+    await auth.setLanguage('en');
 
     await tester.pumpWidget(
       MultiProvider(
@@ -25,7 +28,7 @@ void main() {
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
         ],
         child: const MaterialApp(
-          locale: Locale('mr'),
+          locale: Locale('en'),
           supportedLocales: AppLocalizations.supportedLocales,
           localizationsDelegates: [
             AppLocalizationsDelegate(),
@@ -33,56 +36,24 @@ void main() {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: AddProductWizardScreen(),
+          home: AddProductWizardScreen(initialStep: 1),
         ),
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
-    // Add valid image bytes (valid 1x1 PNG)
-    wizard.addPhoto(kTransparentImage);
-    wizard.nextStep(); // Advance to Step 2 (AI Studio)
+    // Verify Preservation card is visible
+    expect(find.text('Original Craft Preserved 100%'), findsOneWidget);
 
-    // Run AI studio variations
-    await wizard.processPhotoInAIStudio(token: 'test_token');
+    // Verify Studio Controls: View Original, Undo, Redo, Reset
+    expect(find.text('View Original'), findsOneWidget);
+    expect(find.text('Undo'), findsOneWidget);
+    expect(find.text('Redo'), findsOneWidget);
+    expect(find.text('Reset'), findsOneWidget);
 
-    expect(wizard.imageVariations.length, 10);
-    expect(wizard.selectedVariationIds.length, 3);
-
-    // Settle UI after variations are set
-    await tester.pumpAndSettle();
-
-    // Verify Header Card texts
-    expect(find.text('Choose Your Best 3 Photos'), findsOneWidget);
-    expect(find.text('तुमचे ३ सर्वोत्तम फोटो निवडा'), findsOneWidget);
-
-    // Verify live counter pill
-    expect(find.textContaining('3 of 3 selected'), findsOneWidget);
-
-    // Verify regenerate button
-    expect(find.text('पुन्हा तयार करा'), findsOneWidget);
-
-    // Verify Continue button
-    expect(find.textContaining('पुढे जा: आवाज वर्णन'), findsOneWidget);
-
-    // Test selection rules: attempting to select a 4th image is blocked
-    final unselectedVar = wizard.imageVariations.firstWhere(
-      (v) => !wizard.selectedVariationIds.contains(v['id']),
-    );
-    final allowed = wizard.toggleVariationSelection(unselectedVar['id'] as String);
-    expect(allowed, isFalse, reason: 'Must not allow selecting a 4th variation');
-    expect(wizard.selectedVariationIds.length, 3);
-
-    // Deselect one
-    final firstSelected = wizard.selectedVariationIds.first;
-    wizard.toggleVariationSelection(firstSelected);
-    expect(wizard.selectedVariationIds.length, 2);
-    await tester.pumpAndSettle();
-
-    // Now re-selecting the unselected one succeeds
-    final selectSuccess = wizard.toggleVariationSelection(unselectedVar['id'] as String);
-    expect(selectSuccess, isTrue);
-    expect(wizard.selectedVariationIds.length, 3);
+    // Verify Remove Background button before background is removed
+    expect(find.text('Remove Background Automatically'), findsOneWidget);
   });
 }

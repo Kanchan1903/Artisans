@@ -617,6 +617,79 @@ class ApiService {
 
   // ─── AI Integration (Routed through Backend API) ───────────────────────────
 
+  static Future<Map<String, dynamic>> removeBackground(List<int> imageBytes) async {
+    final candidateBases = [
+      apiBaseUrl,
+      'http://127.0.0.1:8000/api/v1',
+      'http://localhost:8000/api/v1',
+      'http://10.0.2.2:8000/api/v1',
+    ];
+    final uniqueBases = candidateBases.toSet().toList();
+
+    for (final base in uniqueBases) {
+      try {
+        final req = http.MultipartRequest('POST', Uri.parse('$base/ai/remove-background'));
+        req.files.add(
+          http.MultipartFile.fromBytes('file', imageBytes, filename: 'craft.jpg'),
+        );
+        final streamedRes = await req.send().timeout(const Duration(seconds: 4));
+        final res = await http.Response.fromStream(streamedRes);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          if (data['cutout_base64'] != null) {
+            _activeApiBaseUrl = base;
+            return data;
+          }
+        }
+      } catch (e) {
+        debugPrint('Remove-bg candidate $base failed: $e');
+      }
+    }
+    throw Exception('Background removal service is temporarily unreachable. Please check connection and retry.');
+  }
+
+  static Future<String> composeBackground({
+    required String cutoutBase64,
+    required String backgroundType,
+    required String bgColorHex,
+    bool hasShadow = true,
+  }) async {
+    final candidateBases = [
+      apiBaseUrl,
+      'http://127.0.0.1:8000/api/v1',
+      'http://localhost:8000/api/v1',
+      'http://10.0.2.2:8000/api/v1',
+    ];
+    final uniqueBases = candidateBases.toSet().toList();
+
+    for (final base in uniqueBases) {
+      try {
+        final res = await http.post(
+          Uri.parse('$base/ai/compose-background'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'cutout_base64': cutoutBase64,
+            'background_type': backgroundType,
+            'bg_color_hex': bgColorHex,
+            'has_shadow': hasShadow,
+          }),
+        ).timeout(const Duration(seconds: 4));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          final composed = data['composed_image_base64'] as String?;
+          if (composed != null) {
+            _activeApiBaseUrl = base;
+            return composed;
+          }
+        }
+      } catch (e) {
+        debugPrint('Compose-bg candidate $base failed: $e');
+      }
+    }
+    throw Exception('Background composition service is temporarily unreachable.');
+  }
+
   static Future<Map<String, dynamic>> enhanceImageStudio(
       List<int> imageBytes) async {
     final req = http.MultipartRequest(

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,16 +8,19 @@ import 'package:kalasathi_mobile/providers/product_wizard_provider.dart';
 import 'package:kalasathi_mobile/screens/onboarding_screen.dart';
 import 'package:kalasathi_mobile/services/voice_guidance_service.dart';
 import 'package:kalasathi_mobile/theme/app_theme.dart';
+import 'package:kalasathi_mobile/widgets/image_comparison_slider.dart';
 import 'package:kalasathi_mobile/widgets/voice_help_fab.dart';
 
 class AddProductWizardScreen extends StatefulWidget {
-  const AddProductWizardScreen({super.key});
+  final int? initialStep;
+  const AddProductWizardScreen({super.key, this.initialStep});
 
   @override
   State<AddProductWizardScreen> createState() => _AddProductWizardScreenState();
 }
 
 class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
+  late int _localStep;
   late final TextEditingController _customPriceCtrl;
   late final TextEditingController _englishDescriptionCtrl;
   late final TextEditingController _finalPriceCtrl;
@@ -51,6 +55,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
   @override
   void initState() {
     super.initState();
+    _localStep = widget.initialStep ?? 0;
     _customPriceCtrl = TextEditingController();
     _englishDescriptionCtrl = TextEditingController();
     _finalPriceCtrl = TextEditingController();
@@ -58,7 +63,11 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
       final wizard = Provider.of<ProductWizardProvider>(context, listen: false);
       final language =
           Provider.of<AuthProvider>(context, listen: false).selectedLanguage;
-      wizard.resetWizard();
+      if (widget.initialStep != null && widget.initialStep! > 0) {
+        wizard.goToStep(widget.initialStep!);
+      } else {
+        wizard.resetWizard();
+      }
       wizard.loadCategories();
       wizard.loadSpeechLocales(preferredLanguage: language);
     });
@@ -89,18 +98,19 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
       _finalPriceCtrl.text = finalPriceText;
     }
 
+    final currentStep = wizard.currentStep != 0 ? wizard.currentStep : _localStep;
     final stepTitles = [
       l10n.translate('stepCamera'),
-      l10n.translate('stepVoice'),
       l10n.translate('stepStudio'),
+      l10n.translate('stepVoice'),
       l10n.translate('stepPricing'),
       l10n.translate('stepPublish'),
     ];
 
     final stepHelp = [
       l10n.translate('helpCamera'),
-      l10n.translate('helpVoice'),
       l10n.translate('helpStudio'),
+      l10n.translate('helpVoice'),
       l10n.translate('helpPricing'),
       l10n.translate('helpPublish'),
     ];
@@ -108,14 +118,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundSand,
       appBar: AppBar(
-        title: Text(stepTitles[wizard.currentStep]),
+        title: Text(stepTitles[currentStep]),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: wizard.isPublishing
               ? null
               : () {
-                  if (wizard.currentStep > 0 && !wizard.isPublished) {
+                  if (currentStep > 0 && !wizard.isPublished) {
                     wizard.previousStep();
+                    setState(() => _localStep = wizard.currentStep);
                   } else {
                     Navigator.pop(context);
                   }
@@ -123,7 +134,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         ),
       ),
       floatingActionButton: VoiceHelpFab(
-        customMessage: stepHelp[wizard.currentStep],
+        customMessage: stepHelp[currentStep],
       ),
       body: SafeArea(
         child: Column(
@@ -133,7 +144,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: List.generate(5, (index) {
-                  final isPassed = index <= wizard.currentStep;
+                  final isPassed = index <= currentStep;
                   return Expanded(
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -168,13 +179,14 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
 
   Widget _buildStepContent(
       ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
-    switch (wizard.currentStep) {
+    final step = wizard.currentStep != 0 ? wizard.currentStep : _localStep;
+    switch (step) {
       case 0:
         return _buildCameraStep(wizard, l10n, auth);
       case 1:
-        return _buildVoiceStep(wizard, l10n, auth);
-      case 2:
         return _buildStudioStep(wizard, l10n, auth);
+      case 2:
+        return _buildVoiceStep(wizard, l10n, auth);
       case 3:
         return _buildPricingStep(wizard, l10n, auth);
       case 4:
@@ -719,79 +731,85 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
     );
   }
 
-  // ─── Step 2: AI Image Studio & 10 Variations Selection ────────────────────
+  // ─── Step 2: Dedicated AI Photo Studio & WhatsApp-like Customization ──────
   Widget _buildStudioStep(
       ProductWizardProvider wizard, AppLocalizations l10n, AuthProvider auth) {
-    if (wizard.isProcessingAI) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 70, horizontal: 20),
-          child: Column(
+    final hasPhoto = wizard.photos.isNotEmpty;
+    final originalBytes = hasPhoto ? wizard.photos.first : null;
+    final currentStudioB64 = wizard.currentStudioImageBase64;
+    final cutoutB64 = wizard.cutoutBase64;
+
+    Uint8List? displayBytes;
+    if (wizard.showOriginal && originalBytes != null) {
+      displayBytes = originalBytes;
+    } else if (currentStudioB64 != null) {
+      try {
+        final clean = currentStudioB64.contains(',')
+            ? currentStudioB64.split(',').last
+            : currentStudioB64;
+        displayBytes = base64Decode(clean);
+      } catch (_) {
+        displayBytes = originalBytes;
+      }
+    } else {
+      displayBytes = originalBytes;
+    }
+
+    final backgroundOptions = [
+      {'id': 'transparent', 'name': 'Transparent', 'color': Colors.transparent, 'isTexture': false, 'isCustom': false, 'icon': Icons.grid_4x4_rounded},
+      {'id': 'white', 'name': 'White', 'color': const Color(0xFFFFFFFF), 'isTexture': false, 'isCustom': false},
+      {'id': 'cream', 'name': 'Cream', 'color': const Color(0xFFFFFDD0), 'isTexture': false, 'isCustom': false},
+      {'id': 'beige', 'name': 'Beige', 'color': const Color(0xFFF5F5DC), 'isTexture': false, 'isCustom': false},
+      {'id': 'light_grey', 'name': 'Light Grey', 'color': const Color(0xFFE0E0E0), 'isTexture': false, 'isCustom': false},
+      {'id': 'pastel_pink', 'name': 'Pastel Pink', 'color': const Color(0xFFFFD1DC), 'isTexture': false, 'isCustom': false},
+      {'id': 'pastel_blue', 'name': 'Pastel Blue', 'color': const Color(0xFFAEC6CF), 'isTexture': false, 'isCustom': false},
+      {'id': 'light_green', 'name': 'Light Green', 'color': const Color(0xFFC1E1C1), 'isTexture': false, 'isCustom': false},
+      {'id': 'wooden_texture', 'name': 'Wooden Texture', 'color': const Color(0xFFDAB994), 'isTexture': true, 'isCustom': false, 'icon': Icons.texture_rounded},
+      {'id': 'studio_background', 'name': 'Studio Background', 'color': const Color(0xFFF8FAFD), 'isTexture': true, 'isCustom': false, 'icon': Icons.light_mode_rounded},
+      {'id': 'festive_background', 'name': 'Festive Background', 'color': const Color(0xFFFFDAA5), 'isTexture': true, 'isCustom': false, 'icon': Icons.celebration_rounded},
+      {'id': 'custom', 'name': 'Custom Color', 'color': wizard.customColor, 'isTexture': false, 'isCustom': true, 'icon': Icons.colorize_rounded},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Top Preservation Assurance Card ───────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.turmeric.withOpacity(0.5), width: 1.2),
+          ),
+          child: Row(
             children: [
-              const SizedBox(
-                width: 56,
-                height: 56,
-                child: CircularProgressIndicator(
-                    color: AppTheme.terracotta, strokeWidth: 4.5),
-              ),
-              const SizedBox(height: 28),
-              Text(
-                wizard.imageJobStatus == 'uploading'
-                    ? _localizedCopy(auth,
-                        english: 'Securely uploading your product photo...',
-                        hindi:
-                            'उत्पाद की तस्वीर सुरक्षित रूप से अपलोड हो रही है...',
-                        marathi: 'उत्पादनाचा फोटो सुरक्षितपणे अपलोड करत आहे...')
-                    : _localizedCopy(auth,
-                        english:
-                            'AI Studio is processing your product photo...',
-                        hindi:
-                            'एआई स्टूडियो उत्पाद की तस्वीर प्रोसेस कर रहा है...',
-                        marathi:
-                            'एआय स्टुडिओ उत्पादनाचा फोटो प्रक्रिया करत आहे...'),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textCharcoal),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                wizard.imageJobStatus == 'uploading'
-                    ? "Uploading your original product photo securely..."
-                    : "CrewAI is processing the original photo and preparing catalog backgrounds...",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
-              ),
-              const SizedBox(height: 20),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppTheme.turmericLight,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.turmeric.withOpacity(0.4)),
+                  color: AppTheme.turmeric.withOpacity(0.2),
+                  shape: BoxShape.circle,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: const Icon(Icons.shield_rounded, color: AppTheme.turmericDark, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.lock_rounded,
-                        color: AppTheme.turmericDark, size: 18),
-                    SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        _localizedCopy(auth,
-                            english:
-                                'Preserving the craft’s original shape, colors, and details',
-                            hindi:
-                                'शिल्प के मूल आकार, रंग और विवरण सुरक्षित रखे जा रहे हैं',
-                            marathi:
-                                'हस्तकलेचा मूळ आकार, रंग व नक्षी जतन केली जात आहे'),
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textCharcoal),
-                      ),
+                    Text(
+                      _localizedCopy(auth,
+                          english: 'Original Craft Preserved 100%',
+                          hindi: 'मूल शिल्प 100% सुरक्षित है',
+                          marathi: 'मूळ हस्तकला १००% जतन केली आहे'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textCharcoal),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _localizedCopy(auth,
+                          english: 'Only the background is changed. Product shape, color, and texture remain strictly untouched.',
+                          hindi: 'केवल पृष्ठभूमि बदली जाती है। शिल्प का आकार, रंग और कारीगरी यथावत रहती है।',
+                          marathi: 'फक्त पार्श्वभूमी बदलली जाते. उत्पादनाचा आकार, रंग व नक्षी तशीच राहते.'),
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted, height: 1.3),
                     ),
                   ],
                 ),
@@ -799,419 +817,600 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             ],
           ),
         ),
-      );
-    }
+        const SizedBox(height: 12),
 
-    final variations = wizard.imageVariations;
-    final selectedIds = wizard.selectedVariationIds;
-    final isExact3 =
-        selectedIds.length == 3 && wizard.imageJobStatus == 'completed';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (wizard.imageJobError != null) ...[
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(wizard.imageJobError!,
-                    style: TextStyle(color: Colors.orange.shade900)),
-                if (wizard.imageJobStatus != 'retake_required' &&
-                    wizard.imageJobStatus != 'awaiting_review')
-                  TextButton.icon(
-                    onPressed: () => wizard.retryImageJob(auth.authToken ?? ''),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry image processing'),
-                  ),
-              ],
-            ),
-          ),
-        ],
-        if (wizard.imageJobStatus == 'awaiting_review' &&
-            variations.length >= 3) ...[
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.verified_user_outlined),
-              label: const Text(
-                  'I reviewed these images; the original product is preserved'),
-              onPressed: () => wizard.approveImageReview(auth.authToken ?? ''),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-        // Top Header Card
+        // ── Studio Image Preview Canvas ────────────────────────────────────
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          height: 320,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.borderWarm),
+            color: wizard.selectedBackgroundId == 'transparent' && wizard.hasRemovedBackground
+                ? const Color(0xFFE5E7EB)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppTheme.borderWarm, width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              )
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          child: Stack(
+            fit: StackFit.expand,
+            alignment: Alignment.center,
             children: [
-              SizedBox(height: 3),
-              Text(
-                _localizedCopy(auth,
-                    english: 'Choose your 3 best photos',
-                    hindi: 'अपनी 3 बेहतरीन तस्वीरें चुनें',
-                    marathi: 'तुमचे ३ सर्वोत्तम फोटो निवडा'),
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.terracottaDark),
+              // Checkered background for transparency
+              if (wizard.hasRemovedBackground && wizard.selectedBackgroundId == 'transparent' && !wizard.showOriginal)
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: CustomPaint(painter: _CheckeredPainter()),
+                  ),
+                ),
+
+              // Product Preview Image
+              if (displayBytes != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Image.memory(
+                    displayBytes,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                )
+              else
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.image_outlined, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 10),
+                      const Text('No photo uploaded', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
+
+              // Loading overlay during background removal or composition
+              if (wizard.isRemovingBackground || wizard.isComposingBackground)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.45),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 38,
+                            height: 38,
+                            child: CircularProgressIndicator(color: AppTheme.terracotta, strokeWidth: 3.5),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            wizard.isRemovingBackground
+                                ? _localizedCopy(auth,
+                                    english: 'Removing background...',
+                                    hindi: 'पृष्ठभूमि हटाई जा रही है...',
+                                    marathi: 'पार्श्वभूमी काढत आहे...')
+                                : _localizedCopy(auth,
+                                    english: 'Applying new background...',
+                                    hindi: 'नई पृष्ठभूमि लागू हो रही है...',
+                                    marathi: 'नवी पार्श्वभूमी लावत आहे...'),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textCharcoal),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _localizedCopy(auth,
+                                english: 'Preserving handmade details',
+                                hindi: 'कारीगरी के विवरण सुरक्षित हैं',
+                                marathi: 'हस्तकलेचे तपशील जतन केले जात आहेत'),
+                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Top Status Badge: Original vs Studio Custom
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: wizard.showOriginal ? AppTheme.turmeric : AppTheme.successGreen,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        wizard.showOriginal ? Icons.history_rounded : Icons.auto_awesome_rounded,
+                        color: wizard.showOriginal ? AppTheme.turmeric : AppTheme.successGreen,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        wizard.showOriginal
+                            ? _localizedCopy(auth, english: 'Original', hindi: 'मूल तस्वीर', marathi: 'मूळ फोटो')
+                            : wizard.hasRemovedBackground
+                                ? _localizedCopy(auth, english: 'Studio AI', hindi: 'स्टूडियो एआई', marathi: 'स्टुडिओ एआय')
+                                : _localizedCopy(auth, english: 'Raw Upload', hindi: 'अपलोड किया', marathi: 'अपलोड केलेला'),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              SizedBox(height: 5),
-              Text(
-                "Review the processed product images, then select exactly three for your website catalog.",
-                style: TextStyle(
-                    fontSize: 12, color: AppTheme.textMuted, height: 1.3),
-              ),
+
+              // Bottom Right: Before / After Slider Tool button
+              if (wizard.hasRemovedBackground && originalBytes != null && displayBytes != null)
+                Positioned(
+                  bottom: 12,
+                  right: 12,
+                  child: InkWell(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => Dialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      _localizedCopy(auth,
+                                          english: 'Before / After Comparison',
+                                          hindi: 'पहले / बाद की तुलना',
+                                          marathi: 'आधी / नंतर तुलना'),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close_rounded),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  height: 320,
+                                  child: ImageComparisonSlider(
+                                    beforeImage: MemoryImage(originalBytes),
+                                    afterImage: MemoryImage(displayBytes!),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _localizedCopy(auth,
+                                      english: 'Drag the slider knob to compare original and edited craft.',
+                                      hindi: 'मूल और संपादित शिल्प की तुलना के लिए स्लाइडर खींचें।',
+                                      marathi: 'तुलना करण्यासाठी स्लाइडर डावी-उजवीकडे हलवा.'),
+                                  style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.75),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.compare_rounded, color: Colors.white, size: 15),
+                          SizedBox(width: 4),
+                          Text('Before / After', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
         const SizedBox(height: 12),
 
-        // Live Selection Counter & Actions Bar
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Live Counter Pill: "X of 3 selected"
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isExact3
-                    ? AppTheme.successGreenLight
-                    : AppTheme.terracottaLight,
+        // ── Studio Controls Toolbar: Undo / Redo / Reset / Original Toggle ─
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppTheme.borderWarm),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // Original / Edited Toggle
+              InkWell(
+                onTap: wizard.hasRemovedBackground ? wizard.toggleShowOriginal : null,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isExact3 ? AppTheme.successGreen : AppTheme.terracotta,
-                  width: 1.5,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        wizard.showOriginal ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                        color: wizard.hasRemovedBackground ? AppTheme.terracotta : Colors.grey,
+                        size: 22,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        wizard.showOriginal ? 'Show Edited' : 'View Original',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: wizard.hasRemovedBackground ? AppTheme.textCharcoal : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isExact3
-                        ? Icons.check_circle_rounded
-                        : Icons.photo_library_rounded,
-                    color:
-                        isExact3 ? AppTheme.successGreen : AppTheme.terracotta,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _localizedCopy(auth,
-                        english: '${selectedIds.length} of 3 selected',
-                        hindi: '${selectedIds.length} में से 3 चुनी गईं',
-                        marathi: '${selectedIds.length} पैकी ३ निवडले'),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isExact3
-                          ? AppTheme.successGreen
-                          : AppTheme.terracottaDark,
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
-            // Regenerate Images Button with confirmation
-            OutlinedButton.icon(
-              icon: const Icon(Icons.refresh_rounded,
-                  size: 16, color: AppTheme.indigo),
-              label: Text(
-                _localizedCopy(auth,
-                    english: 'Regenerate',
-                    hindi: 'फिर से बनाएं',
-                    marathi: 'पुन्हा तयार करा'),
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.indigo),
+              // Undo
+              InkWell(
+                onTap: wizard.canUndo ? wizard.undo : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.undo_rounded, color: wizard.canUndo ? AppTheme.indigo : Colors.grey, size: 22),
+                      const SizedBox(height: 3),
+                      Text('Undo', style: TextStyle(fontSize: 11, color: wizard.canUndo ? AppTheme.textCharcoal : Colors.grey)),
+                    ],
+                  ),
+                ),
               ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppTheme.indigo, width: 1.2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+
+              // Redo
+              InkWell(
+                onTap: wizard.canRedo ? wizard.redo : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.redo_rounded, color: wizard.canRedo ? AppTheme.indigo : Colors.grey, size: 22),
+                      const SizedBox(height: 3),
+                      Text('Redo', style: TextStyle(fontSize: 11, color: wizard.canRedo ? AppTheme.textCharcoal : Colors.grey)),
+                    ],
+                  ),
+                ),
               ),
-              onPressed: () =>
-                  _showRegenerateConfirmDialog(context, wizard, auth),
-            ),
-          ],
+
+              // Reset
+              InkWell(
+                onTap: wizard.hasRemovedBackground ? wizard.resetStudio : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded, color: wizard.hasRemovedBackground ? Colors.orange.shade800 : Colors.grey, size: 22),
+                      const SizedBox(height: 3),
+                      Text('Reset', style: TextStyle(fontSize: 11, color: wizard.hasRemovedBackground ? AppTheme.textCharcoal : Colors.grey)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
 
-        // Responsive Grid of 10 Variations
-        if (variations.isNotEmpty)
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: variations.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.82,
+        // ── Remove Background Action (If not removed yet) ─────────────────
+        if (!wizard.hasRemovedBackground)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.auto_fix_high_rounded, size: 22),
+            label: Text(
+              _localizedCopy(auth,
+                  english: 'Remove Background Automatically',
+                  hindi: 'स्वचालित पृष्ठभूमि हटाएं',
+                  marathi: 'आपोआप पार्श्वभूमी काढा'),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
-            itemBuilder: (context, index) {
-              final variation = variations[index];
-              final varId = variation['id'] as String;
-              final isSelected = selectedIds.contains(varId);
-              final isPrimary =
-                  selectedIds.isNotEmpty && selectedIds.first == varId;
-              final titleMr = variation['title_mr'] ??
-                  variation['title'] ??
-                  'पर्याय ${index + 1}';
-              final titleEn = variation['title'] ?? 'Variation ${index + 1}';
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.terracotta,
+              minimumSize: const Size.fromHeight(54),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 2,
+            ),
+            onPressed: wizard.isRemovingBackground
+                ? null
+                : () async {
+                    await wizard.removeBackground();
+                  },
+          )
+        else ...[
+          // ── WhatsApp-like Horizontal Background Selector ──────────────────
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _localizedCopy(auth,
+                        english: 'Choose Background Style',
+                        hindi: 'पृष्ठभूमि का रंग / शैली चुनें',
+                        marathi: 'पार्श्वभूमी रंग / शैली निवडा'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textCharcoal),
+                  ),
+                  Text(
+                    'WhatsApp-like Customizer',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.terracottaDark),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () {
-                  final allowed = wizard.toggleVariationSelection(varId);
-                  if (!allowed) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(_localizedCopy(auth,
-                            english:
-                                'You can select up to 3 photos. Deselect one first.',
-                            hindi:
-                                'आप अधिकतम 3 तस्वीरें चुन सकते हैं। पहले एक तस्वीर हटाएं।',
-                            marathi:
-                                'तुम्ही जास्तीत जास्त ३ फोटो निवडू शकता. कृपया आधी एक फोटो काढा.')),
-                        backgroundColor: AppTheme.terracotta,
-                        duration: const Duration(seconds: 2),
-                        action: SnackBarAction(
-                          label: _localizedCopy(auth,
-                              english: 'Got it',
-                              hindi: 'समझ गया',
-                              marathi: 'समजले'),
-                          textColor: Colors.white,
-                          onPressed: () {},
-                        ),
+              // Horizontal Scrollable Cards
+              SizedBox(
+                height: 102,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: backgroundOptions.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, idx) {
+                    final opt = backgroundOptions[idx];
+                    final optId = opt['id'] as String;
+                    final isSelected = wizard.selectedBackgroundId == optId;
+                    final isCustom = opt['isCustom'] == true;
+                    final color = opt['color'] as Color;
+                    final name = opt['name'] as String;
+                    final icon = opt['icon'] as IconData?;
+
+                    return GestureDetector(
+                      onTap: () async {
+                        if (isCustom) {
+                          _showColorPickerDialog(context, wizard);
+                        } else {
+                          await wizard.selectBackground(optId);
+                        }
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
+                              color: isCustom ? wizard.customColor : color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? AppTheme.terracotta : AppTheme.borderWarm,
+                                width: isSelected ? 3.5 : 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isSelected ? AppTheme.terracotta.withOpacity(0.3) : Colors.black.withOpacity(0.04),
+                                  blurRadius: isSelected ? 8 : 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ],
+                            ),
+                            child: optId == 'transparent'
+                                ? ClipOval(
+                                    child: CustomPaint(
+                                      painter: _CheckeredPainter(),
+                                      child: const Center(
+                                        child: Icon(Icons.grid_4x4_rounded, color: AppTheme.textMuted, size: 24),
+                                      ),
+                                    ),
+                                  )
+                                : icon != null
+                                    ? Center(
+                                        child: Icon(
+                                          icon,
+                                          color: isCustom
+                                              ? (wizard.customColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white)
+                                              : (color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white),
+                                          size: 24,
+                                        ),
+                                      )
+                                    : (isSelected
+                                        ? Center(
+                                            child: Icon(
+                                              Icons.check_rounded,
+                                              color: color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+                                              size: 24,
+                                            ),
+                                          )
+                                        : null),
+                          ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: 72,
+                            child: Text(
+                              name,
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                color: isSelected ? AppTheme.terracottaDark : AppTheme.textMuted,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppTheme.terracotta
-                          : AppTheme.borderWarm,
-                      width: isSelected ? 3.0 : 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isSelected
-                            ? AppTheme.terracotta.withOpacity(0.2)
-                            : Colors.black.withOpacity(0.04),
-                        blurRadius: isSelected ? 8 : 4,
-                        offset: const Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(16)),
-                              child: _buildVariationThumbnail(variation),
-                            ),
-                            // Top Right Selection Badge / Checkbox
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? AppTheme.terracotta
-                                      : Colors.white.withOpacity(0.9),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? AppTheme.terracotta
-                                        : AppTheme.textMuted,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: isSelected
-                                    ? const Icon(Icons.check_rounded,
-                                        size: 18, color: Colors.white)
-                                    : null,
-                              ),
-                            ),
-                            // Top Left Primary / Hero Tag
-                            if (isPrimary)
-                              Positioned(
-                                top: 8,
-                                left: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.successGreen,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    _localizedCopy(auth,
-                                        english: 'Cover photo',
-                                        hindi: 'मुख्य तस्वीर',
-                                        marathi: 'मुख्य चित्र'),
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            // Zoom / Fullscreen Preview Icon
-                            Positioned(
-                              bottom: 8,
-                              right: 8,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    _showImagePreviewDialog(context, variation),
-                                child: Container(
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.65),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.zoom_in_rounded,
-                                      size: 16, color: Colors.white),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Title caption
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 7),
-                        child: Column(
-                          children: [
-                            Text(
-                              auth.selectedLanguage == 'en' ? titleEn : titleMr,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                color: isSelected
-                                    ? AppTheme.terracottaDark
-                                    : AppTheme.textCharcoal,
-                              ),
-                            ),
-                            Text(
-                              titleEn,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  fontSize: 10, color: AppTheme.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  },
                 ),
-              );
-            },
-          )
-        else
-          // Fallback if variations failed
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Center(
-              child: Text(_localizedCopy(auth,
-                  english: 'Loading variations...',
-                  hindi: 'विकल्प लोड हो रहे हैं...',
-                  marathi: 'पर्याय लोड होत आहेत...')),
-            ),
+              ),
+            ],
           ),
+        ],
 
-        const SizedBox(height: 24),
+        if (wizard.studioError != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Text(wizard.studioError!, style: TextStyle(color: Colors.red.shade800, fontSize: 12)),
+          ),
+        ],
 
-        // Continue Button: Strictly disabled until exactly 3 photos are selected
+        const SizedBox(height: 20),
+
+        // ── Primary Action: Save & Select Image for Product Listing ────────
         ElevatedButton.icon(
-          icon: const Icon(Icons.arrow_forward_rounded, size: 24),
+          icon: const Icon(Icons.check_circle_rounded, size: 22),
           label: Text(
-            isExact3
+            wizard.hasRemovedBackground
                 ? _localizedCopy(auth,
-                    english: 'Continue to pricing (3 selected)',
-                    hindi: 'कीमत तय करने के लिए आगे बढ़ें (3 चुनी गईं)',
-                    marathi: 'किंमत ठरवण्यासाठी पुढे जा (३ निवडले)')
+                    english: 'Select Image & Continue to Voice',
+                    hindi: 'तस्वीर चुनें और आवाज विवरण पर आगे बढ़ें',
+                    marathi: 'फोटो निवडा आणि आवाज वर्णनाकडे जा')
                 : _localizedCopy(auth,
-                    english:
-                        'Select exactly 3 photos to continue (${selectedIds.length}/3 selected)',
-                    hindi:
-                        'आगे बढ़ने के लिए ठीक 3 तस्वीरें चुनें (${selectedIds.length}/3 चुनी गईं)',
-                    marathi:
-                        'पुढे जाण्यासाठी नेमके ३ फोटो निवडा (${selectedIds.length}/3 निवडले)'),
+                    english: 'Continue with Current Image',
+                    hindi: 'मौजूदा तस्वीर के साथ आगे बढ़ें',
+                    marathi: 'सध्याच्या फोटोसह पुढे जा'),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: isExact3 ? AppTheme.indigo : Colors.grey.shade400,
+            backgroundColor: AppTheme.terracotta,
             minimumSize: const Size.fromHeight(56),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 3,
           ),
-          onPressed: isExact3
-              ? () async {
-                  final saved =
-                      await wizard.saveImageSelection(auth.authToken ?? '');
-                  if (saved) {
-                    await wizard.loadPricingRecommendation(
-                        token: auth.authToken ?? '');
-                    wizard.nextStep();
+          onPressed: (wizard.isRemovingBackground || wizard.isComposingBackground)
+              ? null
+              : () async {
+                  if (wizard.hasRemovedBackground && wizard.currentStudioImageBase64 != null) {
+                    await wizard.selectImageForListing(auth.authToken ?? '');
                   }
-                }
-              : null,
+                  wizard.nextStep();
+                },
         ),
         const SizedBox(height: 100),
       ],
     );
   }
+
+  void _showColorPickerDialog(BuildContext context, ProductWizardProvider wizard) {
+    Color selectedTemp = wizard.customColor;
+    final palette = [
+      const Color(0xFFFFFFFF),
+      const Color(0xFFFFFDD0),
+      const Color(0xFFF5F5DC),
+      const Color(0xFFE2E8F0),
+      const Color(0xFFFFD1DC),
+      const Color(0xFFAEC6CF),
+      const Color(0xFFC1E1C1),
+      const Color(0xFFFFF4E6),
+      const Color(0xFFE0C9A6),
+      const Color(0xFFD4A373),
+      const Color(0xFFCCD5AE),
+      const Color(0xFFE9EDC9),
+      const Color(0xFFFAEDCD),
+      const Color(0xFFDDA15E),
+      const Color(0xFFBC6C25),
+      const Color(0xFF264653),
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Custom Background Color', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: selectedTemp,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black26),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: palette.map((col) {
+                  final isCurrent = selectedTemp.value == col.value;
+                  return GestureDetector(
+                    onTap: () {
+                      setDialogState(() => selectedTemp = col);
+                    },
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: col,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isCurrent ? AppTheme.terracotta : Colors.grey.shade400,
+                          width: isCurrent ? 3 : 1.2,
+                        ),
+                      ),
+                      child: isCurrent ? Icon(Icons.check, size: 20, color: col.computeLuminance() > 0.5 ? Colors.black : Colors.white) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.terracotta),
+              onPressed: () {
+                Navigator.pop(ctx);
+                wizard.selectBackground('custom', customColor: selectedTemp);
+              },
+              child: const Text('Apply Color', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   void _showCameraPermissionDialog(BuildContext context, String error) {
     showDialog(
@@ -4445,4 +4644,27 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
       await wizard.publishProduct(auth.authToken ?? '');
     }
   }
+}
+
+
+class _CheckeredPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint1 = Paint()..color = const Color(0xFFF3F4F6);
+    final paint2 = Paint()..color = const Color(0xFFE5E7EB);
+    const squareSize = 16.0;
+
+    for (double y = 0; y < size.height; y += squareSize) {
+      for (double x = 0; x < size.width; x += squareSize) {
+        final isEven = ((x / squareSize).floor() + (y / squareSize).floor()) % 2 == 0;
+        canvas.drawRect(
+          Rect.fromLTWH(x, y, squareSize, squareSize),
+          isEven ? paint1 : paint2,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

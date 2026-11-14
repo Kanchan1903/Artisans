@@ -256,6 +256,112 @@ async def enhance_image(
         raise HTTPException(status_code=503, detail="Image processing is unavailable. The original upload is preserved; retry shortly.") from exc
 
 
+class ComposeBackgroundPayload(BaseModel):
+    cutout_base64: str = Field(..., min_length=10)
+    background_type: str = Field("color")  # 'color', 'wood', 'studio', 'festive'
+    bg_color_hex: str = Field("#FFFFFF")
+    has_shadow: bool = Field(True)
+
+
+@router.post("/remove-background")
+async def remove_background_endpoint(
+    file: UploadFile = File(...),
+):
+    """
+    Step 1 of WhatsApp-like Studio: Extract the clean transparent foreground craft cutout (PNG).
+    Strictly preserves the original product pixels, geometry, texture, and colors.
+    """
+    file_bytes = await file.read(10 * 1024 * 1024 + 1)
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(file_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 10 MB or smaller")
+
+    try:
+        from app.utils.image_studio import decode_product_image, remove_background
+        import io
+        raw_pil, _, _ = decode_product_image(file_bytes)
+        cutout = remove_background(raw_pil)
+        buf = io.BytesIO()
+        cutout.save(buf, format="PNG")
+        cutout_bytes = buf.getvalue()
+        b64 = base64.b64encode(cutout_bytes).decode("ascii")
+        return {
+            "status": "success",
+            "width": cutout.width,
+            "height": cutout.height,
+            "cutout_base64": f"data:image/png;base64,{b64}",
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Background removal error: {str(exc)}",
+        ) from exc
+
+
+@router.post("/compose-background")
+async def compose_background_endpoint(
+    payload: ComposeBackgroundPayload,
+):
+    """
+    Step 2 of WhatsApp-like Studio: Real-time background composition behind the segmented craft cutout.
+    Composites the clean product cutout onto solid colors, textures, or custom hex color.
+    """
+    try:
+        import io
+        from PIL import Image
+        from app.utils.image_studio import create_variation_composition, generate_procedural_background
+
+        # Decode base64 cutout
+        data_str = payload.cutout_base64
+        if "," in data_str:
+            data_str = data_str.split(",", 1)[1]
+        cutout_bytes = base64.b64decode(data_str)
+        cutout_img = Image.open(io.BytesIO(cutout_bytes)).convert("RGBA")
+
+        # Parse hex color
+        hex_clean = payload.bg_color_hex.lstrip("#")
+        if len(hex_clean) == 6:
+            r = int(hex_clean[0:2], 16)
+            g = int(hex_clean[2:4], 16)
+            b = int(hex_clean[4:6], 16)
+        else:
+            r, g, b = (255, 255, 255)
+
+        bg_canvas = None
+        if payload.background_type == "wood":
+            bg_canvas = generate_procedural_background("wooden_texture")
+        elif payload.background_type == "studio":
+            bg_canvas = generate_procedural_background("studio_background")
+        elif payload.background_type == "festive":
+            bg_canvas = generate_procedural_background("festive_background")
+
+        comp = create_variation_composition(
+            cutout_img,
+            target_size=(1024, 1024),
+            bg_color_top=(r, g, b),
+            has_shadow=payload.has_shadow,
+            bg_canvas=bg_canvas,
+        )
+
+        out_buf = io.BytesIO()
+        comp.save(out_buf, format="JPEG", quality=90, optimize=True)
+        comp_bytes = out_buf.getvalue()
+        b64 = base64.b64encode(comp_bytes).decode("ascii")
+
+        return {
+            "status": "success",
+            "composed_image_base64": f"data:image/jpeg;base64,{b64}",
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Background composition error: {str(exc)}",
+        ) from exc
+
+
 @router.post("/generate-variations")
 async def generate_variations(
     file: UploadFile = File(...),
