@@ -1019,6 +1019,57 @@ class ApiService {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  // ─── Artisan Inquiries ───────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getArtisanInquiries(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBaseUrl/inquiries/artisan/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(timeoutDuration);
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        return list.map((e) => e as Map<String, dynamic>).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<bool> markInquiryRead({
+    required String token,
+    required int inquiryId,
+  }) async {
+    try {
+      final res = await http.patch(
+        Uri.parse('$apiBaseUrl/inquiries/$inquiryId/read'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(timeoutDuration);
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> updateProductAvailability({
+    required String token,
+    required int productId,
+    required String status,
+  }) async {
+    try {
+      final res = await http.put(
+        Uri.parse('$apiBaseUrl/products/$productId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'status': status}),
+      ).timeout(timeoutDuration);
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static String _pricingErrorMessage(http.Response response) {
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;

@@ -1,4 +1,4 @@
-"""Tests for B2B wholesale inquiries and notifications."""
+"""Tests for B2B wholesale inquiries, availability checks, and contact artisan workflow."""
 import pytest
 from httpx import AsyncClient
 
@@ -30,7 +30,7 @@ async def test_b2b_inquiry_flow(client: AsyncClient, db_session):
     )
     product_id = prod["id"]
 
-    # 2. Buyer submits B2B inquiry
+    # 2. Buyer submits B2B inquiry with phone and email
     buyer_token = await get_user_token(client, "+919555555555", "buyer", "FabIndia Procurement")
     buyer_headers = {"Authorization": f"Bearer {buyer_token}"}
 
@@ -38,6 +38,9 @@ async def test_b2b_inquiry_flow(client: AsyncClient, db_session):
         "/api/v1/inquiries",
         json={
             "product_id": product_id,
+            "buyer_name": "FabIndia Procurement",
+            "buyer_phone": "+91 98765 43210",
+            "buyer_email": "procure@fabindia.com",
             "message": "We would like to order 50 pieces for our Diwali corporate gift boxes.",
             "quantity_needed": 50,
             "is_b2b": True,
@@ -46,17 +49,42 @@ async def test_b2b_inquiry_flow(client: AsyncClient, db_session):
     )
     assert inq_res.status_code == 201
     inquiry_data = inq_res.json()
+    assert inquiry_data["buyer_phone"] == "+91 98765 43210"
+    assert inquiry_data["buyer_email"] == "procure@fabindia.com"
     assert inquiry_data["quantity_needed"] == 50
     assert inquiry_data["is_read"] is False
     inquiry_id = inquiry_data["id"]
 
-    # 3. Artisan sees inquiry in their inbox
+    # 3. Artisan sees inquiry in their inbox with phone and email
     inbox_res = await client.get("/api/v1/inquiries/artisan/me", headers=artisan_headers)
     assert inbox_res.status_code == 200
     inbox = inbox_res.json()
-    assert any(i["id"] == inquiry_id for i in inbox)
+    matched = next((i for i in inbox if i["id"] == inquiry_id), None)
+    assert matched is not None
+    assert matched["buyer_phone"] == "+91 98765 43210"
 
     # 4. Artisan marks inquiry as read
     read_res = await client.patch(f"/api/v1/inquiries/{inquiry_id}/read", headers=artisan_headers)
     assert read_res.status_code == 200
     assert read_res.json()["is_read"] is True
+
+    # 5. Out of stock / unavailable product inquiry rejection
+    prod_out_of_stock = await seed_published_product(
+        client, db_session, artisan_headers, {
+            "title_en": "Sold Out Warli Art",
+            "price": 1200.0,
+            "stock": 0,
+            "status": "published",
+        },
+    )
+    rejected_res = await client.post(
+        "/api/v1/inquiries",
+        json={
+            "product_id": prod_out_of_stock["id"],
+            "buyer_name": "Interested Buyer",
+            "message": "Can I buy this sold out piece?",
+        },
+        headers=buyer_headers,
+    )
+    assert rejected_res.status_code == 400
+    assert "out of stock / unavailable" in rejected_res.json()["detail"]

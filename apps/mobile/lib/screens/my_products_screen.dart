@@ -150,12 +150,21 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.remove_circle_outline_rounded, color: AppTheme.indigo),
-                                        onPressed: () {
+                                        onPressed: () async {
                                           if (stock > 0) {
+                                            final newStock = stock - 1;
                                             setState(() {
-                                              prod['stock'] = stock - 1;
+                                              prod['stock'] = newStock;
                                             });
-                                            VoiceGuidanceService.speakPrompt(context, "साठा बदलून ${stock - 1} झाला आहे.");
+                                            VoiceGuidanceService.speakPrompt(context, "साठा बदलून $newStock झाला आहे.");
+                                            final auth = Provider.of<AuthProvider>(context, listen: false);
+                                            if (auth.authToken != null && prod['id'] != null) {
+                                              await ApiService.updateStock(
+                                                token: auth.authToken!,
+                                                productId: prod['id'],
+                                                newStock: newStock,
+                                              );
+                                            }
                                           }
                                         },
                                       ),
@@ -165,12 +174,87 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.add_circle_outline_rounded, color: AppTheme.terracotta),
-                                        onPressed: () {
+                                        onPressed: () async {
+                                          final newStock = stock + 1;
                                           setState(() {
-                                            prod['stock'] = stock + 1;
+                                            prod['stock'] = newStock;
                                           });
-                                          VoiceGuidanceService.speakPrompt(context, "साठा वाढवून ${stock + 1} झाला आहे.");
+                                          VoiceGuidanceService.speakPrompt(context, "साठा वाढवून $newStock झाला आहे.");
+                                          final auth = Provider.of<AuthProvider>(context, listen: false);
+                                          if (auth.authToken != null && prod['id'] != null) {
+                                            await ApiService.updateStock(
+                                              token: auth.authToken!,
+                                              productId: prod['id'],
+                                              newStock: newStock,
+                                            );
+                                          }
                                         },
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Product Availability / Status Toggle
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: prod['status'] == 'published' && stock > 0
+                                              ? const Color(0xFFDCFCE7)
+                                              : const Color(0xFFFEE2E2),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          prod['status'] == 'published' && stock > 0
+                                              ? 'विक्रीसाठी उपलब्ध (Live)'
+                                              : 'अनुपलब्ध / संपले (Unavailable)',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: prod['status'] == 'published' && stock > 0
+                                                ? const Color(0xFF16A34A)
+                                                : const Color(0xFFDC2626),
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        onPressed: () async {
+                                          final currentStatus = prod['status'] as String? ?? 'published';
+                                          final newStatus = currentStatus == 'published' ? 'hidden' : 'published';
+                                          setState(() {
+                                            prod['status'] = newStatus;
+                                          });
+                                          final auth = Provider.of<AuthProvider>(context, listen: false);
+                                          if (auth.authToken != null && prod['id'] != null) {
+                                            await ApiService.updateProductAvailability(
+                                              token: auth.authToken!,
+                                              productId: prod['id'],
+                                              status: newStatus,
+                                            );
+                                          }
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  newStatus == 'published'
+                                                      ? 'उत्पादन वेबसाईटवर उपलब्ध केले (Product Live)'
+                                                      : 'उत्पादन वेबसाईटवरून लपवले (Product Hidden)',
+                                                ),
+                                                duration: const Duration(seconds: 2),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        child: Text(
+                                          prod['status'] == 'published' ? 'लपवा (Hide)' : 'लाईव्ह करा (Make Live)',
+                                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.terracotta),
+                                        ),
                                       ),
                                     ],
                                   ),

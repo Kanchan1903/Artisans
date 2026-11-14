@@ -35,6 +35,14 @@ async def create_inquiry(
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
+    # Check product availability
+    prod_status_val = str(product.status.value if hasattr(product.status, 'value') else product.status)
+    if prod_status_val != 'published':
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Product is not currently available for inquiry")
+
+    if getattr(product, 'stock', 0) <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Product is currently out of stock / unavailable")
+
     artisan_user = product.artisan.user if product.artisan else None
     target_lang = artisan_user.language.value if artisan_user else "hi"
 
@@ -50,6 +58,7 @@ async def create_inquiry(
         buyer_id=current_user.id if current_user else None,
         buyer_name=payload.buyer_name or (current_user.name if current_user else "Interested Buyer"),
         buyer_email=payload.buyer_email or (current_user.email if current_user else None),
+        buyer_phone=payload.buyer_phone or (getattr(current_user, 'phone', None) if current_user else None),
         message_en=payload.message,
         message_translated=translated_text,
         is_b2b=payload.is_b2b,
@@ -65,7 +74,7 @@ async def create_inquiry(
             user_id=artisan_user.id,
             type="b2b_inquiry",
             title=f"New Bulk Inquiry for '{product.title_en}'",
-            body=f"{inquiry.buyer_name} requested {inquiry.quantity_needed or 1} units: '{inquiry.message_en[:60]}...'",
+            body=f"{inquiry.buyer_name} ({inquiry.buyer_phone or inquiry.buyer_email or 'Buyer'}) requested {inquiry.quantity_needed or 1} units: '{inquiry.message_en[:60]}...'",
             data={"inquiry_id": inquiry.id, "product_id": product.id},
         )
         db.add(notif)
@@ -91,6 +100,7 @@ async def create_inquiry(
         buyer_id=inquiry.buyer_id,
         buyer_name=inquiry.buyer_name,
         buyer_email=inquiry.buyer_email,
+        buyer_phone=inquiry.buyer_phone,
         message_en=inquiry.message_en,
         message_translated=inquiry.message_translated,
         is_b2b=inquiry.is_b2b,
@@ -127,6 +137,7 @@ async def list_artisan_inquiries(
                 buyer_id=inq.buyer_id,
                 buyer_name=inq.buyer_name,
                 buyer_email=inq.buyer_email,
+                buyer_phone=inq.buyer_phone,
                 message_en=inq.message_en,
                 message_translated=inq.message_translated,
                 is_b2b=inq.is_b2b,
@@ -169,6 +180,7 @@ async def mark_inquiry_read(
         buyer_id=inquiry.buyer_id,
         buyer_name=inquiry.buyer_name,
         buyer_email=inquiry.buyer_email,
+        buyer_phone=inquiry.buyer_phone,
         message_en=inquiry.message_en,
         message_translated=inquiry.message_translated,
         is_b2b=inquiry.is_b2b,

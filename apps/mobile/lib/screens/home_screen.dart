@@ -7,6 +7,7 @@ import 'package:kalasathi_mobile/providers/order_provider.dart';
 import 'package:kalasathi_mobile/screens/add_product/add_product_wizard_screen.dart';
 import 'package:kalasathi_mobile/screens/my_products_screen.dart';
 import 'package:kalasathi_mobile/screens/orders_screen.dart';
+import 'package:kalasathi_mobile/screens/inquiries_screen.dart';
 import 'package:kalasathi_mobile/screens/earnings_learn_screen.dart';
 import 'package:kalasathi_mobile/screens/language_picker_screen.dart';
 import 'package:kalasathi_mobile/screens/settings_screen.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingProducts = true;
   List<Map<String, dynamic>> _recentProducts = [];
   Map<String, dynamic>? _earningsData;
+  int _unreadInquiriesCount = 0;
 
   @override
   void initState() {
@@ -43,6 +45,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (auth.authToken != null && auth.authToken!.isNotEmpty) {
       orderProvider.fetchOrders(auth.authToken!);
+      try {
+        final inquiries = await ApiService.getArtisanInquiries(auth.authToken!);
+        final unread = inquiries.where((inq) => inq['is_read'] != true).length;
+        if (mounted) {
+          setState(() {
+            _unreadInquiriesCount = unread;
+          });
+        }
+      } catch (_) {}
+
       try {
         final earnings = await ApiService.getArtisanDashboard(auth.authToken!);
         if (mounted) {
@@ -573,6 +585,85 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                // Card 5: Buyer Inquiries Banner Card (Rose / Sky)
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const InquiriesScreen()),
+                    ).then((_) => _loadDashboardData());
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF16A34A).withOpacity(0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF16A34A), size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    "ग्राहक चौकशी (Buyer Inquiries)",
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                  if (_unreadInquiriesCount > 0) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        "$_unreadInquiriesCount नवीन",
+                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                "वेबसाईटवरील ग्राहकांचे संदेश पहा आणि संपर्क साधा",
+                                style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF16A34A)),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
 

@@ -7,6 +7,7 @@ class InquiryCreate(BaseModel):
     product_id: int
     buyer_name: str | None = None
     buyer_email: str | None = None
+    buyer_phone: str | None = None
     message: str = Field(..., min_length=5, description="Buyer inquiry message in English or any language")
     quantity_needed: int | None = Field(None, ge=1)
     is_b2b: bool = True
@@ -21,6 +22,7 @@ class InquiryOut(BaseModel):
     buyer_id: int | None = None
     buyer_name: str | None = None
     buyer_email: str | None = None
+    buyer_phone: str | None = None
     message_en: str
     message_translated: str | None = None
     is_b2b: bool

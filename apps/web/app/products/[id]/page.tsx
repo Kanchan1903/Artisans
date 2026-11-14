@@ -53,6 +53,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   // B2B Inquiry form state
   const [inquiryName, setInquiryName] = useState("");
   const [inquiryEmail, setInquiryEmail] = useState("");
+  const [inquiryPhone, setInquiryPhone] = useState("");
   const [inquiryQty, setInquiryQty] = useState(1);
   const [inquiryMsg, setInquiryMsg] = useState("");
   const [inquirySuccess, setInquirySuccess] = useState(false);
@@ -172,11 +173,17 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const handleB2BSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setInquiryLoading(true);
+    if (!inquiryEmail.trim() && !inquiryPhone.trim()) {
+      alert("Please provide either an email address or a phone number so the artisan can reach you.");
+      setInquiryLoading(false);
+      return;
+    }
     try {
       await submitB2BInquiry({
         product_id: product.id,
         buyer_name: inquiryName,
-        buyer_email: inquiryEmail,
+        buyer_email: inquiryEmail.trim() || undefined,
+        buyer_phone: inquiryPhone.trim() || undefined,
         quantity_needed: inquiryQty,
         message: inquiryMsg,
       });
@@ -184,6 +191,10 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       setTimeout(() => {
         setInquirySuccess(false);
         setShowInquiryModal(false);
+        setInquiryName("");
+        setInquiryEmail("");
+        setInquiryPhone("");
+        setInquiryMsg("");
       }, 2500);
     } catch (err) {
       alert("Failed to submit inquiry. Please try again.");
@@ -426,16 +437,25 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
             {/* Contact the artisan directly about this product. */}
             <div className="pt-4 border-t border-stone-200 space-y-4">
-              <button
-                onClick={() => setShowInquiryModal(true)}
-                className="w-full py-3.5 px-6 rounded-xl bg-[#C85A32] text-white font-semibold text-sm hover:bg-[#B34D28] transition-colors flex items-center justify-center space-x-2 shadow-sm"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>Contact Artisan</span>
-              </button>
-              <p className="text-center text-xs text-stone-500">
-                Ask about availability, customizations, or delivery directly from the artisan.
-              </p>
+              {product.stock > 0 && product.status === "published" ? (
+                <>
+                  <button
+                    onClick={() => setShowInquiryModal(true)}
+                    className="w-full py-3.5 px-6 rounded-xl bg-[#C85A32] text-white font-semibold text-sm hover:bg-[#B34D28] transition-colors flex items-center justify-center space-x-2 shadow-sm"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Contact Artisan / Enquire About Product</span>
+                  </button>
+                  <p className="text-center text-xs text-stone-500">
+                    Ask about availability, customizations, or delivery directly from the artisan.
+                  </p>
+                </>
+              ) : (
+                <div className="p-4 bg-stone-100 rounded-2xl text-center border border-stone-200">
+                  <p className="text-sm font-semibold text-stone-700 mb-1">Product Currently Unavailable / Sold Out</p>
+                  <p className="text-xs text-stone-500">This handcrafted item is out of stock. Inquiries are closed until restocked.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -593,18 +613,36 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   />
                 </div>
 
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 mb-2">
+                  <span className="font-bold block text-stone-900">Product: {product.title_en}</span>
+                  <span className="text-stone-600">Product ID: #{product.id} • Price: ₹{product.price}</span>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Email Address *
+                    Phone Number (Mobile / WhatsApp)
+                  </label>
+                  <input
+                    type="tel"
+                    value={inquiryPhone}
+                    onChange={(e) => setInquiryPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2 text-sm border border-stone-300 rounded-xl focus:ring-2 focus:ring-[#C85A32] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Email Address
                   </label>
                   <input
                     type="email"
-                    required
                     value={inquiryEmail}
                     onChange={(e) => setInquiryEmail(e.target.value)}
                     placeholder="name@company.com"
                     className="w-full px-3 py-2 text-sm border border-stone-300 rounded-xl focus:ring-2 focus:ring-[#C85A32] focus:outline-none"
                   />
+                  <p className="text-[11px] text-stone-500 mt-1">Provide at least phone or email so the artisan can reply.</p>
                 </div>
 
                 <div>

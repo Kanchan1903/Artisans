@@ -378,7 +378,8 @@ export async function checkWishlist(
 export async function submitB2BInquiry(payload: {
   product_id: number;
   buyer_name: string;
-  buyer_email: string;
+  buyer_email?: string;
+  buyer_phone?: string;
   message: string;
   quantity_needed?: number;
 }): Promise<{ id: number; message: string }> {
