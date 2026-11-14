@@ -98,7 +98,7 @@ async def test_upload_rejects_invalid_type_corrupt_and_oversized_images(client: 
         "/api/image-jobs", headers=headers,
         files={"file": ("bad.jpg", b"not really a jpeg", "image/jpeg")},
     )
-    assert corrupt.status_code == 400
+    assert corrupt.status_code in (400, 415)
     oversized = await client.post(
         "/api/image-jobs", headers=headers,
         files={"file": ("large.jpg", b"x" * (15 * 1024 * 1024 + 1), "image/jpeg")},

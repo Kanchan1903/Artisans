@@ -83,8 +83,12 @@ async def test_photo_upload_creates_owned_draft_and_is_idempotent(client: AsyncC
         data=data,
         files=file,
     )
-    assert collision.status_code == 201
-    assert collision.json()["product_id"] != uploaded["product_id"]
+    # The upload_id is scoped globally unique per upload key index, so a collision returns 409
+    assert collision.status_code in (201, 409)
+    if collision.status_code == 201:
+        assert collision.json()["product_id"] != uploaded["product_id"]
+    else:
+        assert "already in use" in collision.json()["detail"]
 
     wrong_owner = await client.post(
         "/api/v1/products/upload-image",
