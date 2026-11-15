@@ -113,7 +113,15 @@ class StorageService:
             file_path = UPLOAD_DIR / unique_name
             with open(file_path, "wb") as f:
                 f.write(file_bytes)
-            api_base = settings.PUBLIC_API_URL.rstrip("/")
+            api_base = (
+                settings.PUBLIC_API_URL.rstrip("/")
+                if settings.PUBLIC_API_URL and settings.PUBLIC_API_URL != "http://localhost:8000"
+                else (
+                    "https://kalasathi-api.onrender.com"
+                    if settings.ENVIRONMENT.lower() == "production"
+                    else "http://localhost:8000"
+                )
+            )
             return f"{api_base}/uploads/{unique_name}"
         except Exception:
             if settings.ENVIRONMENT.lower() == "production":
