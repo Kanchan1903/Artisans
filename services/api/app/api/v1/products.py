@@ -345,6 +345,24 @@ async def translate_product_description(
             raise HTTPException(status_code=404, detail="Product not found for this artisan")
 
     try:
+        from app.utils.voice_description_agents import VoiceDescriptionCoordinator
+        coordinator = VoiceDescriptionCoordinator()
+        agent_out = await coordinator.execute_workflow(
+            transcript=transcript,
+            preferred_language=source,
+        )
+        if agent_out.get("success") and agent_out.get("detailed_description"):
+            return ProductDescriptionTranslationOut(
+                success=True,
+                source_language=source,
+                original_transcript=transcript,
+                english_description=agent_out["detailed_description"].strip(),
+                requires_review=True,
+            )
+    except Exception:
+        pass
+
+    try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             response = await client.post(
                 f"{settings.AI_SERVICE_URL.rstrip('/')}/ai/product-description",
