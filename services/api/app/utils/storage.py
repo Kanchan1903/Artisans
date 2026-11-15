@@ -109,13 +109,16 @@ class StorageService:
                 self._available = False
 
         # 3. Local storage fallback - fast and reliable
-        if settings.ENVIRONMENT.lower() == "production":
-            raise RuntimeError("Configured image storage is unavailable in production")
-        file_path = UPLOAD_DIR / unique_name
-        with open(file_path, "wb") as f:
-            f.write(file_bytes)
-        api_base = settings.PUBLIC_API_URL.rstrip("/")
-        return f"{api_base}/uploads/{unique_name}"
+        try:
+            file_path = UPLOAD_DIR / unique_name
+            with open(file_path, "wb") as f:
+                f.write(file_bytes)
+            api_base = settings.PUBLIC_API_URL.rstrip("/")
+            return f"{api_base}/uploads/{unique_name}"
+        except Exception:
+            if settings.ENVIRONMENT.lower() == "production":
+                raise RuntimeError("Configured image storage is unavailable in production")
+            raise
 
     async def delete_file(self, url: str) -> None:
         """Best-effort deletion for an image removed from a draft."""
