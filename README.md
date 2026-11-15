@@ -145,8 +145,8 @@ Interactive API documentation is accessible at `http://localhost:8000/docs` (or 
 
 | Method & Route | Description |
 |---|---|
-| `POST /api/v1/auth/otp/send` | Send OTP to mobile phone |
-| `POST /api/v1/auth/otp/verify` | Verify OTP and issue JWT access token |
+| `POST /api/v1/auth/register` | Register new artisan or buyer with name, phone & password |
+| `POST /api/v1/auth/login` | Sign in with phone/email and password (JWT access token) |
 | `GET /api/v1/products` | Browse public catalog (category, search filters) |
 | `POST /api/v1/products` | Create draft handcrafted creation |
 | `POST /api/v1/products/{id}/publish` | Publish approved product to web storefront |
