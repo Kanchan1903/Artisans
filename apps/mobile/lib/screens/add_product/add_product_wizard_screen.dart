@@ -1969,6 +1969,86 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     hintText: 'Review and edit the English description',
                   ),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+                        label: Text(
+                          _localizedCopy(auth,
+                              english: 'Approve',
+                              hindi: 'स्वीकार करें',
+                              marathi: 'मंजूर करा'),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: wizard.englishDescriptionConfirmed
+                              ? Colors.green.shade700
+                              : Colors.green.shade600,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () {
+                          wizard.setDescriptionApproved(true);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(_localizedCopy(auth,
+                                  english: 'Description approved!',
+                                  hindi: 'विवरण स्वीकृत!',
+                                  marathi: 'वर्णन मंजूर केले!')),
+                              backgroundColor: Colors.green.shade700,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.replay_rounded, size: 20),
+                        label: Text(
+                          _localizedCopy(auth,
+                              english: 'Reject & Rewrite',
+                              hindi: 'अस्वीकार व पुनः लिखें',
+                              marathi: 'नाकारा व पुन्हा लिहा'),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                          side: BorderSide(color: Colors.red.shade400, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () async {
+                          wizard.setDescriptionApproved(false);
+                          await wizard.processVoiceNote(
+                            auth.selectedLanguage,
+                            token: auth.authToken ?? '',
+                          );
+                          _englishDescriptionCtrl.text = wizard.descriptionEn;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(_localizedCopy(auth,
+                                  english: 'Description regenerated from voice.',
+                                  hindi: 'आवाज से विवरण पुनः तैयार किया गया।',
+                                  marathi: 'आवाजावरून वर्णन पुन्हा तयार केले.')),
+                              backgroundColor: Colors.orange.shade800,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   value: wizard.englishDescriptionConfirmed,

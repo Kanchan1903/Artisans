@@ -334,8 +334,39 @@ class ResearchAgent:
 
 # ─── 4. Description Agent ────────────────────────────────────────────────────
 
+def _translate_speech_to_english(text: str) -> str:
+    """Translates regional spoken transcript directly to clear English using Speech-to-Text translation."""
+    try:
+        clean_text = text.strip()
+        # Common phonetic Speech-to-Text corrections for Indian craft speech
+        subs = {
+            "पोत": "pot",
+            "पोट": "pot",
+            "घड़ा": "earthen pot",
+            "मटका": "earthen pot",
+            "हाताने": "by hand",
+            "हाथ से": "by hand",
+        }
+        for k, v in subs.items():
+            clean_text = clean_text.replace(k, v)
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(clean_text)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            translated = "".join(part[0] for part in data[0] if part[0]).strip()
+            if translated:
+                if translated[0].islower():
+                    translated = translated[0].upper() + translated[1:]
+                if not translated.endswith((".", "!", "?")):
+                    translated += "."
+                return translated
+    except Exception:
+        pass
+    return text.strip()
+
+
 class DescriptionAgent:
-    """Agent 4: Generates natural, professional English title, short description, and detailed description grounded in facts."""
+    """Agent 4: Generates natural, professional English title, short description, and detailed description strictly grounded in spoken facts."""
 
     @staticmethod
     def generate_description(
@@ -350,36 +381,35 @@ class DescriptionAgent:
         cat_name = facts["category_name"]
         stated_handmade = facts["stated_handmade"]
 
+        # Derive direct speech translation in English
+        direct_english = _translate_speech_to_english(transcript)
+
         # Derive title
         prefix = "Handcrafted " if stated_handmade else ""
         if "Warli" in " ".join(techniques) or "warli" in transcript.lower():
             title = f"{prefix}Warli Folk Art Canvas Painting"
-            short_desc = "Traditional Warli artwork painted with natural rice flour paste on canvas."
+            short_desc = direct_english
         elif cat_slug == "pottery":
-            title = f"{prefix}Terracotta Earthenware Craft"
-            short_desc = "Authentic clay creation shaped by traditional artisans for home and daily living."
+            title = f"{prefix}Clay Pot Craft" if stated_handmade else "Clay Pot"
+            short_desc = direct_english
         elif cat_slug == "woodcraft":
-            title = f"{prefix}Carved Wooden Craft Piece"
-            short_desc = "Hand-carved wooden craft preserving traditional woodworking craftsmanship."
+            title = f"{prefix}Wooden Craft Piece"
+            short_desc = direct_english
         elif cat_slug == "metalcraft":
-            title = f"{prefix}Artisanal Metal Bell Craft"
-            short_desc = "Traditional metalcraft piece created using time-honored casting techniques."
+            title = f"{prefix}Metal Craft Piece"
+            short_desc = direct_english
         elif cat_slug == "handloom":
             title = f"{prefix}Handloom Textile Craft"
-            short_desc = "Handwoven textile creation crafted with heritage weaving techniques."
+            short_desc = direct_english
         else:
             title = f"{prefix}Artisan Craft ({cat_name})"
-            short_desc = f"Handcrafted creation made with care by regional Indian artisans."
+            short_desc = direct_english
 
-        # Build detailed description
+        # Build detailed description directly matching the speech
         paragraphs = []
-        # Paragraph 1: What the artisan created (grounded in stated words)
-        paragraphs.append(
-            f"This piece is directly created by the artisan: \"{transcript}\". "
-            f"It represents authentic regional craftsmanship without industrial mass production."
-        )
+        paragraphs.append(direct_english)
 
-        # Paragraph 2: Materials & Technique (ONLY if mentioned)
+        # Materials & Technique ONLY if explicitly mentioned
         spec_parts = []
         if materials:
             spec_parts.append(f"Materials: {', '.join(materials)}")
@@ -388,14 +418,10 @@ class DescriptionAgent:
         if facts.get("dimensions"):
             spec_parts.append(f"Dimensions: {facts['dimensions']}")
         if facts.get("labor_hours"):
-            spec_parts.append(f"Artisan Labor: Approximately {facts['labor_hours']:.1f} hours of focused handwork")
+            spec_parts.append(f"Artisan Labor: Approximately {facts['labor_hours']:.1f} hours of handwork")
 
         if spec_parts:
             paragraphs.append("Product Details:\n- " + "\n- ".join(spec_parts))
-
-        # Paragraph 3: Care note
-        care_note = "Care Instructions: Gently wipe with a soft, clean dry cloth. Keep away from harsh chemicals and excessive moisture."
-        paragraphs.append(care_note)
 
         detailed_desc = "\n\n".join(paragraphs)
 
