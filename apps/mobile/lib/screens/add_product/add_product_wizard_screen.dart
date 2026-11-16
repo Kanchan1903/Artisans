@@ -631,96 +631,25 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
         ],
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
 
-        // Quick Preset Sample Craft selector
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.borderWarm),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.palette_outlined,
-                      size: 18, color: AppTheme.terracotta),
-                  SizedBox(width: 6),
-                  Text(
-                    l10n.translate('cameraTrySample'),
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: AppTheme.textCharcoal),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  ActionChip(
-                    avatar: const Text("🏺"),
-                    label: Text(l10n.translate('craftPottery'),
-                        style: const TextStyle(fontSize: 12)),
-                    onPressed: () => wizard
-                        .loadSamplePhoto('assets/images/prod_pottery.jpg'),
-                  ),
-                  ActionChip(
-                    avatar: const Text("🧵"),
-                    label: Text(l10n.translate('craftHandloom'),
-                        style: const TextStyle(fontSize: 12)),
-                    onPressed: () => wizard
-                        .loadSamplePhoto('assets/images/prod_handloom.jpg'),
-                  ),
-                  ActionChip(
-                    avatar: const Text("💍"),
-                    label: Text(l10n.translate('craftJewelry'),
-                        style: const TextStyle(fontSize: 12)),
-                    onPressed: () => wizard
-                        .loadSamplePhoto('assets/images/prod_jewelry.jpg'),
-                  ),
-                  ActionChip(
-                    avatar: const Text("🪵"),
-                    label: Text(l10n.translate('craftWoodcraft'),
-                        style: const TextStyle(fontSize: 12)),
-                    onPressed: () => wizard
-                        .loadSamplePhoto('assets/images/prod_woodcraft.jpg'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Continue to AI Studio Button (Enabled only if valid photo selected)
+        // Continue to AI Studio Button (Enabled when photo is selected)
         ElevatedButton.icon(
           icon: const Icon(Icons.auto_awesome_rounded, size: 24),
           label: Text(
             !hasPhoto
                 ? l10n.translate('cameraTakeOrChooseFirst')
-                : !wizard.isCurrentPhotoUploaded
-                    ? 'Upload the original photo before continuing'
-                    : l10n.translate('cameraContinueDetails'),
+                : l10n.translate('cameraContinueDetails'),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: hasPhoto &&
-                    wizard.isCurrentPhotoUploaded &&
-                    !wizard.isUploadingPhoto
+            backgroundColor: hasPhoto
                 ? AppTheme.indigo
                 : Colors.grey.shade400,
             minimumSize: const Size.fromHeight(56),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
-          onPressed: hasPhoto &&
-                  wizard.isCurrentPhotoUploaded &&
-                  !wizard.isUploadingPhoto
+          onPressed: hasPhoto
               ? () {
                   wizard.nextStep();
                 }
@@ -826,7 +755,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           decoration: BoxDecoration(
             color: wizard.selectedBackgroundId == 'transparent' && wizard.hasRemovedBackground
                 ? const Color(0xFFE5E7EB)
-                : Colors.white,
+                : (wizard.hasRemovedBackground && wizard.currentBackgroundColor != Colors.transparent
+                    ? wizard.currentBackgroundColor
+                    : Colors.white),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: AppTheme.borderWarm, width: 1.5),
             boxShadow: [
@@ -873,8 +804,8 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   ),
                 ),
 
-              // Loading overlay during background removal or composition
-              if (wizard.isRemovingBackground || wizard.isComposingBackground)
+              // Loading overlay during initial background removal
+              if (wizard.isRemovingBackground)
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.45),
@@ -898,15 +829,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                           ),
                           const SizedBox(height: 14),
                           Text(
-                            wizard.isRemovingBackground
-                                ? _localizedCopy(auth,
-                                    english: 'Removing background...',
-                                    hindi: 'पृष्ठभूमि हटाई जा रही है...',
-                                    marathi: 'पार्श्वभूमी काढत आहे...')
-                                : _localizedCopy(auth,
-                                    english: 'Applying new background...',
-                                    hindi: 'नई पृष्ठभूमि लागू हो रही है...',
-                                    marathi: 'नवी पार्श्वभूमी लावत आहे...'),
+                            _localizedCopy(auth,
+                                english: 'Removing background...',
+                                hindi: 'पृष्ठभूमि हटाई जा रही है...',
+                                marathi: 'पार्श्वभूमी काढत आहे...'),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textCharcoal),
                           ),
                           const SizedBox(height: 4),
@@ -919,6 +845,35 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                ),
+
+              // Non-blocking corner progress indicator during background composition
+              if (wizard.isComposingBackground)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Applying...',
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1746,165 +1701,66 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
         ),
         const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.borderWarm),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Product information',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: wizard.titleEn,
-                decoration: const InputDecoration(
-                    labelText: 'Product name *', border: OutlineInputBorder()),
-                onChanged: wizard.setTitleEn,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: wizard.descriptionEn,
-                minLines: 3,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                    labelText: 'Product description *',
-                    border: OutlineInputBorder()),
-                onChanged: wizard.updateEnglishDescription,
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: wizard.englishDescriptionConfirmed,
-                onChanged: (value) =>
-                    wizard.confirmEnglishDescription(value ?? false),
-                title: const Text('I confirm this description is accurate.'),
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-              if (wizard.categories.isEmpty) ...[
-                if (wizard.categoriesError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      wizard.categoriesError!,
-                      style: TextStyle(color: Colors.red.shade700),
-                    ),
-                  ),
-                OutlinedButton.icon(
-                  onPressed:
-                      wizard.isLoadingCategories ? null : wizard.loadCategories,
-                  icon: wizard.isLoadingCategories
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                  label: Text(wizard.isLoadingCategories
-                      ? _localizedCopy(auth,
-                          english: 'Loading categories...',
-                          hindi: 'श्रेणियां लोड हो रही हैं...',
-                          marathi: 'वर्ग लोड होत आहेत...')
-                      : _localizedCopy(auth,
-                          english: 'Retry loading categories *',
-                          hindi: 'श्रेणियां फिर से लोड करें *',
-                          marathi: 'वर्ग पुन्हा लोड करा *')),
-                ),
-              ] else
-                DropdownButtonFormField<String>(
-                  value: wizard.categories
-                          .any((item) => item['slug'] == wizard.categorySlug)
-                      ? wizard.categorySlug
-                      : null,
-                  decoration: const InputDecoration(
-                      labelText: 'Product category *',
-                      border: OutlineInputBorder()),
-                  items: wizard.categories
-                      .map((item) => DropdownMenuItem<String>(
-                            value: item['slug'].toString(),
-                            child: Text(item['name'].toString()),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) wizard.setCategorySlug(value);
-                  },
-                ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: wizard.material,
-                decoration: const InputDecoration(
-                    labelText: 'Material', border: OutlineInputBorder()),
-                onChanged: (value) => wizard.updateField(material: value),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: wizard.dimensions,
-                decoration: const InputDecoration(
-                    labelText: 'Dimensions',
-                    hintText: 'e.g. 20 × 12 cm',
-                    border: OutlineInputBorder()),
-                onChanged: (value) => wizard.updateField(dimensions: value),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: wizard.weightGrams?.toString() ?? '',
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                    labelText: 'Weight in grams', border: OutlineInputBorder()),
-                onChanged: (value) =>
-                    wizard.setWeightGrams(double.tryParse(value)),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: wizard.additionalDetails,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                    labelText: 'Other details', border: OutlineInputBorder()),
-                onChanged: (value) =>
-                    wizard.updateField(additionalDetails: value),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-
         // Big Accessible Mic Button (min 56dp, 110dp circle)
-        if (wizard.speechLocales.isNotEmpty)
-          DropdownButton<String>(
-            value: wizard.speechLocales.any((locale) =>
-                    locale.localeId.toLowerCase().split(RegExp('[-_]')).first ==
-                    wizard.voiceLanguage)
-                ? wizard.voiceLanguage
-                : wizard.speechLocales.first.localeId
-                    .toLowerCase()
-                    .split(RegExp('[-_]'))
-                    .first,
-            items: wizard.speechLocales
-                .map((locale) => DropdownMenuItem<String>(
-                      value: locale.localeId
-                          .toLowerCase()
-                          .split(RegExp('[-_]'))
-                          .first,
-                      child: Text('${locale.name} (${locale.localeId})'),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value != null) wizard.setVoiceLanguage(value);
-            },
+        if (wizard.speechLocales.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.borderWarm),
+            ),
+            child: DropdownButton<String>(
+              underline: const SizedBox.shrink(),
+              isExpanded: false,
+              value: wizard.speechLocales.any((locale) =>
+                      locale.localeId.toLowerCase().split(RegExp('[-_]')).first ==
+                      wizard.voiceLanguage)
+                  ? wizard.voiceLanguage
+                  : wizard.speechLocales.first.localeId
+                      .toLowerCase()
+                      .split(RegExp('[-_]'))
+                      .first,
+              items: wizard.speechLocales
+                  .map((locale) => DropdownMenuItem<String>(
+                        value: locale.localeId
+                            .toLowerCase()
+                            .split(RegExp('[-_]'))
+                            .first,
+                        child: Text(
+                          '${locale.name} (${locale.localeId})',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textCharcoal,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) wizard.setVoiceLanguage(value);
+              },
+            ),
           ),
+          const SizedBox(height: 14),
+        ],
         GestureDetector(
           onTap: () async {
             if (wizard.isRecording) {
               await wizard.stopSpeechRecognition();
-              await wizard.processVoiceNote(auth.selectedLanguage,
-                  token: auth.authToken ?? '');
+              if (wizard.voiceTranscript.trim().isNotEmpty) {
+                await wizard.processVoiceNote(auth.selectedLanguage,
+                    token: auth.authToken ?? '');
+              }
             } else {
-              await wizard.startSpeechRecognition();
+              await wizard.startSpeechRecognition(
+                onFinalSpeech: (transcript) async {
+                  if (transcript.trim().isNotEmpty && !wizard.isProcessingAI) {
+                    await wizard.processVoiceNote(auth.selectedLanguage,
+                        token: auth.authToken ?? '');
+                  }
+                },
+              );
             }
           },
           child: Container(
@@ -2444,47 +2300,94 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Approve & Continue to Fair Pricing
-          ElevatedButton.icon(
-            icon: const Icon(Icons.check_circle_rounded, size: 24),
-            label: Text(
-              _localizedCopy(
-                auth,
-                english: 'Approve Description & Continue to Pricing',
-                hindi: 'विवरण स्वीकृत करें और मूल्य निर्धारण पर जाएं',
-                marathi: 'वर्णन मंजूर करा आणि किंमत ठरवण्याकडे जा',
+        // ─── Prominent Approve or Reject / Rewrite Description Buttons ────
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.check_circle_rounded, size: 22),
+                label: Text(
+                  _localizedCopy(
+                    auth,
+                    english: 'Approve Description',
+                    hindi: 'विवरण स्वीकृत करें',
+                    marathi: 'वर्णन मंजूर करा',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.terracotta,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 2,
+                ),
+                onPressed: () async {
+                  if (wizard.titleEn.trim().length < 2 ||
+                      wizard.descriptionEn.trim().length < 5 ||
+                      wizard.categorySlug.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please verify product name, description, and category before continuing.'),
+                      backgroundColor: Colors.red,
+                    ));
+                    return;
+                  }
+                  wizard.setDescriptionApproved(true);
+                  wizard.confirmEnglishDescription(true);
+                  final saved = await wizard.saveAsDraft(auth.authToken ?? '');
+                  if (!mounted) return;
+                  if (!saved) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(wizard.publishError ?? 'Product details could not be saved.'),
+                      backgroundColor: Colors.red,
+                    ));
+                    return;
+                  }
+                  wizard.nextStep();
+                },
               ),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.terracotta,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.refresh_rounded, size: 20, color: Colors.deepOrange),
+                label: Text(
+                  _localizedCopy(
+                    auth,
+                    english: 'Reject / Rewrite',
+                    hindi: 'अस्वीकार / पुनः लिखें',
+                    marathi: 'नाकारा / पुन्हा लिहा',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.deepOrange),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.deepOrange, width: 1.6),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: wizard.isProcessingAI
+                    ? null
+                    : () async {
+                        // Reject and trigger the multi-agent AI workflow to rewrite description
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(_localizedCopy(
+                            auth,
+                            english: 'Rewriting description from your voice recording...',
+                            hindi: 'आवाज से विवरण फिर से लिखा जा रहा है...',
+                            marathi: 'आवाज रेकॉर्डिंगवरून पुन्हा वर्णन लिहीत आहे...',
+                          )),
+                          duration: const Duration(seconds: 2),
+                        ));
+                        await wizard.processVoiceNote(
+                          auth.selectedLanguage,
+                          token: auth.authToken ?? '',
+                          clarification: 'Rewrite the description more accurately and engagingly, adhering strictly to the facts mentioned in the spoken recording.',
+                        );
+                      },
+              ),
             ),
-            onPressed: () async {
-              if (wizard.titleEn.trim().length < 2 ||
-                  wizard.descriptionEn.trim().length < 5 ||
-                  wizard.categorySlug.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Please verify product name, description, and category before continuing.'),
-                  backgroundColor: Colors.red,
-                ));
-                return;
-              }
-              wizard.setDescriptionApproved(true);
-              wizard.confirmEnglishDescription(true);
-              final saved = await wizard.saveAsDraft(auth.authToken ?? '');
-              if (!mounted) return;
-              if (!saved) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(wizard.publishError ?? 'Product details could not be saved.'),
-                  backgroundColor: Colors.red,
-                ));
-                return;
-              }
-              wizard.nextStep();
-            },
-          ),
+          ],
+        ),
+        const SizedBox(height: 80),
         ] else ...[
           // Manual entry is available when device speech recognition is absent.
           OutlinedButton.icon(

@@ -632,7 +632,7 @@ class ApiService {
         req.files.add(
           http.MultipartFile.fromBytes('file', imageBytes, filename: 'craft.jpg'),
         );
-        final streamedRes = await req.send().timeout(const Duration(seconds: 4));
+        final streamedRes = await req.send().timeout(const Duration(seconds: 30));
         final res = await http.Response.fromStream(streamedRes);
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -673,7 +673,7 @@ class ApiService {
             'bg_color_hex': bgColorHex,
             'has_shadow': hasShadow,
           }),
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(seconds: 30));
 
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -713,7 +713,7 @@ class ApiService {
             'preferred_language': preferredLanguage,
             'clarification': clarification,
           }),
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 35));
 
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as Map<String, dynamic>;

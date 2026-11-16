@@ -187,6 +187,34 @@ class ProductWizardProvider extends ChangeNotifier {
   String? get currentStudioImageBase64 => _currentStudioImageBase64;
   String get selectedBackgroundId => _selectedBackgroundId;
   Color get customColor => _customColor;
+  Color get currentBackgroundColor {
+    switch (_selectedBackgroundId) {
+      case 'white':
+        return const Color(0xFFFFFFFF);
+      case 'cream':
+        return const Color(0xFFFFFDD0);
+      case 'beige':
+        return const Color(0xFFF5F5DC);
+      case 'light_grey':
+        return const Color(0xFFE0E0E0);
+      case 'pastel_pink':
+        return const Color(0xFFFFD1DC);
+      case 'pastel_blue':
+        return const Color(0xFFAEC6CF);
+      case 'light_green':
+        return const Color(0xFFC1E1C1);
+      case 'wooden_texture':
+        return const Color(0xFFDAB994);
+      case 'studio_background':
+        return const Color(0xFFF8FAFD);
+      case 'festive_background':
+        return const Color(0xFFFFDAA5);
+      case 'custom':
+        return _customColor;
+      default:
+        return Colors.transparent;
+    }
+  }
   bool get canUndo => _undoHistory.isNotEmpty;
   bool get canRedo => _redoHistory.isNotEmpty;
   bool get showOriginal => _showOriginal;
@@ -681,12 +709,13 @@ class ProductWizardProvider extends ChangeNotifier {
       _undoHistory.clear();
       _redoHistory.clear();
     } catch (e) {
-      debugPrint('Background removal failed: ');
-      // Graceful offline mock fallback for tests / offline editing
+      debugPrint('Background removal failed: $e');
+      _studioError = e.toString().replaceFirst('Exception: ', '');
+      // If server failed, keep the original photo so screen never turns blank
       final b64 = base64Encode(_photos.first);
-      _cutoutBase64 = 'data:image/png;base64,';
+      _cutoutBase64 = 'data:image/jpeg;base64,$b64';
       _currentStudioImageBase64 = _cutoutBase64;
-      _hasRemovedBackground = true;
+      _hasRemovedBackground = false;
       _selectedBackgroundId = 'transparent';
       _undoHistory.clear();
       _redoHistory.clear();
@@ -715,6 +744,12 @@ class ProductWizardProvider extends ChangeNotifier {
       _currentStudioImageBase64 = _cutoutBase64;
       notifyListeners();
       return;
+    }
+
+    // Instantly show the selected background style in the studio canvas
+    if (_hasRemovedBackground) {
+      _currentStudioImageBase64 = _cutoutBase64;
+      notifyListeners();
     }
 
     _isComposingBackground = true;
@@ -760,7 +795,7 @@ class ProductWizardProvider extends ChangeNotifier {
           final r = ((argb >> 16) & 0xFF).toRadixString(16).padLeft(2, '0');
           final g = ((argb >> 8) & 0xFF).toRadixString(16).padLeft(2, '0');
           final b = (argb & 0xFF).toRadixString(16).padLeft(2, '0');
-          hexColor = '#';
+          hexColor = '#$r$g$b';
           break;
       }
 
@@ -1043,7 +1078,7 @@ class ProductWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> startSpeechRecognition() async {
+  Future<void> startSpeechRecognition({Function(String)? onFinalSpeech}) async {
     if (_isStartingSpeech || _isRecording || _isProcessingAI) return;
     if (!_speechInitialized) await loadSpeechLocales();
     if (!_speechAvailable) return;
@@ -1064,10 +1099,15 @@ class ProductWizardProvider extends ChangeNotifier {
         listenOptions: stt.SpeechListenOptions(
           localeId: locale.first.localeId,
           partialResults: true,
+          listenMode: stt.ListenMode.dictation,
+          cancelOnError: false,
         ),
         onResult: (SpeechRecognitionResult result) {
           _voiceTranscript = result.recognizedWords;
           notifyListeners();
+          if (result.finalResult && onFinalSpeech != null) {
+            onFinalSpeech(_voiceTranscript);
+          }
         },
       );
       _isRecording = _speech.isListening;

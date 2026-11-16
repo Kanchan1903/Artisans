@@ -80,9 +80,10 @@ def remove_background(image: Image.Image) -> Image.Image:
     bgd_model = np.zeros((1, 65), np.float64)
     fgd_model = np.zeros((1, 65), np.float64)
 
-    margin_x = max(int(small_w * 0.04), 2)
-    margin_y = max(int(small_h * 0.04), 2)
-    rect = (margin_x, margin_y, small_w - 2 * margin_x, small_h - 2 * margin_y)
+    # Use 1px border so objects touching photo margins (edge-to-edge shots) are not cut off
+    margin_x = 1
+    margin_y = 1
+    rect = (margin_x, margin_y, max(small_w - 2 * margin_x, 1), max(small_h - 2 * margin_y, 1))
 
     try:
         cv2.grabCut(cv_img, mask, rect, bgd_model, fgd_model, 2, cv2.GC_INIT_WITH_RECT)
