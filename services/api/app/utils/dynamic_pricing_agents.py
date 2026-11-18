@@ -204,13 +204,17 @@ class MarketResearchAgent:
         category_data = MARKETPLACE_BENCHMARKS.get(category_slug, MARKETPLACE_BENCHMARKS["pottery"])
         base_benchmarks = list(category_data["benchmarks"])
 
-        # Fetch Wikipedia knowledge reference for craft terminology
+        # Fetch live Wikipedia knowledge reference for craft terminology and authenticity
         wiki_reference: dict[str, str] | None = None
         try:
-            query = f"{title.split()[0]} handicraft"
-            url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={urllib.parse.quote(query)}&limit=1&format=json"
-            req = urllib.request.Request(url, headers={"User-Agent": "KalaSathi-PricingAgent/1.0"})
-            with urllib.request.urlopen(req, timeout=3) as resp:
+            # Extract key craft keywords
+            stopwords = {"handcrafted", "handmade", "artisan", "traditional", "craft", "piece", "item"}
+            craft_words = [w for w in title.split() if len(w) > 3 and w.lower() not in stopwords]
+            search_query = craft_words[0] if craft_words else (category_slug or "handicraft")
+            
+            url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={urllib.parse.quote(search_query)}&limit=3&format=json"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KalaSathi/1.0"})
+            with urllib.request.urlopen(req, timeout=4) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 if len(data) >= 4 and data[1] and data[3]:
                     wiki_reference = {

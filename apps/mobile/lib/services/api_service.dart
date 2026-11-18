@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:kalasathi_mobile/services/offline_storage_service.dart';
 
 class ApiService {
-  static const Duration timeoutDuration = Duration(seconds: 10);
+  static const Duration timeoutDuration = Duration(seconds: 45);
 
   static const String _customApiUrl = String.fromEnvironment('API_URL');
   static const String _customAiUrl = String.fromEnvironment('AI_URL');
@@ -764,7 +764,7 @@ class ApiService {
             'desired_profit': desiredProfit,
             'voice_feedback': voiceFeedback,
           }),
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 35));
 
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -1130,6 +1130,23 @@ class ApiService {
         body: jsonEncode({'status': status}),
       ).timeout(timeoutDuration);
       return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> deleteProduct({
+    required String token,
+    required int productId,
+  }) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$apiBaseUrl/products/$productId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(timeoutDuration);
+      return res.statusCode == 200 || res.statusCode == 204;
     } catch (_) {
       return false;
     }

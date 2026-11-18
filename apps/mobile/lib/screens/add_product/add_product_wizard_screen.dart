@@ -4394,6 +4394,32 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   ),
                 ],
               ),
+              if (wizard.descriptionEn.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _localizedCopy(auth,
+                          english: 'Description:',
+                          hindi: 'विवरण:',
+                          marathi: 'वर्णन:'),
+                      style: const TextStyle(
+                          fontSize: 13, color: AppTheme.textMuted),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        wizard.descriptionEn.trim(),
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textCharcoal),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
