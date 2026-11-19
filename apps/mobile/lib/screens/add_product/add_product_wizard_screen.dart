@@ -1954,14 +1954,24 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('English product description',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textCharcoal)),
+                Text(
+                  _localizedCopy(auth,
+                      english: 'English product description',
+                      hindi: 'उत्पाद का अंग्रेज़ी विवरण',
+                      marathi: 'उत्पादनाचे इंग्रजी वर्णन'),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textCharcoal),
+                ),
                 if (wizard.descriptionNeedsReview) ...[
                   const SizedBox(height: 6),
-                  const Text('Please review this translation carefully.',
-                      style: TextStyle(color: Colors.deepOrange)),
+                  Text(
+                    _localizedCopy(auth,
+                        english: 'Please review this translation carefully.',
+                        hindi: 'कृपया इस अनुवाद की सावधानीपूर्वक समीक्षा करें।',
+                        marathi: 'कृपया या भाषांतराची काळजीपूर्वक खात्री करा.'),
+                    style: const TextStyle(color: Colors.deepOrange),
+                  ),
                 ],
                 const SizedBox(height: 8),
                 TextField(
@@ -1970,9 +1980,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   minLines: 3,
                   maxLines: 6,
                   onChanged: wizard.updateEnglishDescription,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Review and edit the English description',
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    hintText: _localizedCopy(auth,
+                        english: 'Review and edit the English description',
+                        hindi: 'अंग्रेज़ी विवरण देखें व संपादित करें',
+                        marathi: 'इंग्रजी वर्णन तपासा व संपादित करा'),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -2060,8 +2073,10 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   value: wizard.englishDescriptionConfirmed,
                   onChanged: (value) =>
                       wizard.confirmEnglishDescription(value ?? false),
-                  title: const Text(
-                      'I confirm this English description is accurate.'),
+                  title: Text(_localizedCopy(auth,
+                      english: 'I confirm this English description is accurate.',
+                      hindi: 'मैं पुष्टि करता/करती हूँ कि यह अंग्रेज़ी विवरण सही है।',
+                      marathi: 'मी खात्री करतो/करते की हे इंग्रजी वर्णन योग्य आहे.')),
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
               ],
@@ -2963,7 +2978,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     const SizedBox(height: 3),
                     Text(
                       wizard.isVerifiedMarketPrice
-                          ? "${wizard.comparableProducts.length} current published KarigarAI listings were compared. This suggestion is advisory; you choose the final price."
+                          ? "${wizard.pricingSources.isNotEmpty ? wizard.pricingSources.length : wizard.comparableProducts.length} verified marketplace comparisons evaluated. This suggestion is advisory; you choose the final price."
                           : "No matching published listings were found. There is no market-based suggestion; you can still enter your own price.",
                       style: TextStyle(
                         fontSize: 12,
@@ -3167,12 +3182,22 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 const Icon(Icons.receipt_long_rounded,
                     color: AppTheme.terracotta),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                     child: Text(
-                        'No costs have been supplied. Pricing uses storefront listings only.')),
+                  _localizedCopy(auth,
+                      english:
+                          'No costs have been supplied. Pricing uses live market benchmarks.',
+                      hindi:
+                          'कोई लागत दर्ज नहीं की गई है। मूल्य निर्धारण बाज़ार संदर्भ पर आधारित है।',
+                      marathi:
+                          'कोणताही खर्च भरलेला नाही. किंमत बाजार संदर्भानुसार काढली आहे.'),
+                )),
                 OutlinedButton(
                   onPressed: () => _showEditCostsDialog(context, wizard, auth),
-                  child: const Text('Add costs'),
+                  child: Text(_localizedCopy(auth,
+                      english: 'Add costs',
+                      hindi: 'लागत जोड़ें',
+                      marathi: 'खर्च जोडा')),
                 ),
               ],
             ),

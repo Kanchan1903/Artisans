@@ -282,7 +282,7 @@ class ProductWizardProvider extends ChangeNotifier {
   double get acceptedPrice => _acceptedPrice;
   double? get customPriceOverride => _customPriceOverride;
   String? get priceOverrideWarning => _priceOverrideWarning;
-  bool get isVerifiedMarketPrice => _comparableProducts.isNotEmpty;
+  bool get isVerifiedMarketPrice => _comparableProducts.isNotEmpty || _pricingSources.isNotEmpty;
   String get pricingBasis => _pricingBasis;
   String get statusLabel => _statusLabel;
   Map<String, dynamic> get costBreakdown => _costBreakdown;
@@ -307,8 +307,7 @@ class ProductWizardProvider extends ChangeNotifier {
   Map<String, dynamic>? get previousPricingRecommendation =>
       _previousPricingRecommendation;
   bool get hasArtisanCostInputs => _hasArtisanCostInputs;
-  bool get hasSuggestedPrice =>
-      _pricingRevisionId != null && _suggestedPrice > 0;
+  bool get hasSuggestedPrice => _suggestedPrice > 0;
 
   Map<String, dynamic> _parseAdditionalDetails(String value) =>
       value.trim().isEmpty ? <String, dynamic>{} : {'notes': value.trim()};
