@@ -3559,7 +3559,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         ),
         const SizedBox(height: 14),
 
-        // ── Prominent Approve or Reject / Try Again Buttons ───────────────────
+        // ── Prominent Approve or Argue / Disagree with Voice Buttons ─────────
         Row(
           children: [
             Expanded(
@@ -3597,18 +3597,18 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton.icon(
-                icon: const Icon(Icons.replay_rounded, size: 20, color: Colors.deepOrange),
+                icon: const Icon(Icons.record_voice_over_rounded, size: 20, color: Colors.deepOrange),
                 label: Text(
                   _localizedCopy(
                     auth,
-                    english: 'Reject / Try Again',
-                    hindi: 'अस्वीकार / पुनः प्रयास',
-                    marathi: 'नाकारा / पुन्हा प्रयत्न',
+                    english: 'Argue Price (Voice)',
+                    hindi: 'कीमत पर आपत्ति (बोलकर)',
+                    marathi: 'किंमतीवर वाद / चर्चा (बोलून)',
                   ),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.deepOrange),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepOrange),
                 ),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.deepOrange),
+                  side: const BorderSide(color: Colors.deepOrange, width: 1.5),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
@@ -4101,96 +4101,6 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           const SizedBox(height: 14),
         ],
 
-        if (wizard.draftProductId != null) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.turmericLight,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.turmeric.withOpacity(0.45)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _localizedCopy(auth,
-                      english: 'AI catalog content',
-                      hindi: 'एआई कैटलॉग सामग्री',
-                      marathi: 'एआय कॅटलॉग मजकूर'),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  wizard.catalogBuilderState == 'ready'
-                      ? _localizedCopy(auth,
-                          english:
-                              'Generated title and description are ready. Review and edit them below before publishing.',
-                          hindi:
-                              'तैयार शीर्षक और विवरण नीचे देखें और प्रकाशित करने से पहले संपादित करें।',
-                          marathi:
-                              'तयार शीर्षक आणि वर्णन खाली तपासा व प्रकाशित करण्यापूर्वी संपादित करा.')
-                      : _localizedCopy(auth,
-                          english:
-                              'Generate a polished title, description, keywords, and product highlights from your saved details.',
-                          hindi:
-                              'सेव किए गए विवरण से बेहतर शीर्षक, वर्णन, कीवर्ड और उत्पाद की खास बातें बनाएं।',
-                          marathi:
-                              'जतन केलेल्या माहितीवरून सुधारित शीर्षक, वर्णन, शोधशब्द आणि वैशिष्ट्ये तयार करा.'),
-                  style: const TextStyle(fontSize: 12, height: 1.35),
-                ),
-                if (wizard.isCatalogBuilderProcessing) ...[
-                  const SizedBox(height: 10),
-                  const LinearProgressIndicator(color: AppTheme.terracotta),
-                  const SizedBox(height: 5),
-                  Text(_localizedCopy(auth,
-                      english: 'Catalog builder is processing your product…',
-                      hindi: 'कैटलॉग बिल्डर आपके उत्पाद को प्रोसेस कर रहा है…',
-                      marathi:
-                          'कॅटलॉग बिल्डर तुमच्या उत्पादनावर प्रक्रिया करत आहे…')),
-                ],
-                if (wizard.catalogBuilderError != null) ...[
-                  const SizedBox(height: 8),
-                  Text(wizard.catalogBuilderError!,
-                      style: TextStyle(color: Colors.red.shade800)),
-                ],
-                if (wizard.catalogBuilderState != 'ready') ...[
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: wizard.isCatalogBuilderProcessing
-                        ? null
-                        : () => wizard.generateCatalogContent(
-                              auth.authToken ?? '',
-                              retry: wizard.catalogBuilderState == 'failed',
-                            ),
-                    icon: const Icon(Icons.auto_awesome_rounded),
-                    label: Text(wizard.isCatalogBuilderProcessing
-                        ? _localizedCopy(auth,
-                            english: 'Processing…',
-                            hindi: 'प्रोसेस हो रहा है…',
-                            marathi: 'प्रक्रिया सुरू आहे…')
-                        : wizard.catalogBuilderState == 'processing'
-                            ? _localizedCopy(auth,
-                                english: 'Check status',
-                                hindi: 'स्थिति देखें',
-                                marathi: 'स्थिती तपासा')
-                            : wizard.catalogBuilderState == 'failed'
-                                ? _localizedCopy(auth,
-                                    english: 'Retry catalog generation',
-                                    hindi: 'कैटलॉग फिर से बनाएं',
-                                    marathi: 'कॅटलॉग पुन्हा तयार करा')
-                                : _localizedCopy(auth,
-                                    english: 'Generate AI catalog content',
-                                    hindi: 'एआई कैटलॉग सामग्री बनाएं',
-                                    marathi: 'एआय कॅटलॉग मजकूर तयार करा')),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-        ],
-
         // Product Summary Card with Actual Selected Image
         Container(
           padding: const EdgeInsets.all(16),
@@ -4566,88 +4476,6 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 controlAffinity: ListTileControlAffinity.leading,
               ),
               const Divider(height: 18),
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 76,
-                      height: 76,
-                      color: AppTheme.backgroundSand,
-                      child: wizard.originalImageUrl == null
-                          ? const Icon(Icons.image_not_supported_outlined)
-                          : Image.network(
-                              wizard.originalImageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.broken_image_outlined,
-                                  color: AppTheme.textMuted),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(wizard.originalImageUrl == null
-                        ? 'Original uploaded photo is unavailable.'
-                        : 'Original uploaded photo kept for reference.'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text('Selected product images',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 92,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: wizard.selectedVariations.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final variant = wizard.selectedVariations[index];
-                    final imageUrl =
-                        (variant['image_url'] ?? variant['url'] ?? '')
-                            .toString();
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: 92,
-                        color: AppTheme.backgroundSand,
-                        child: imageUrl.startsWith('http')
-                            ? Image.network(
-                                imageUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.broken_image_outlined,
-                                  color: AppTheme.textMuted,
-                                ),
-                                loadingBuilder: (context, child, progress) =>
-                                    progress == null
-                                        ? child
-                                        : const Center(
-                                            child: SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            ),
-                                          ),
-                              )
-                            : const Icon(Icons.image_not_supported_outlined),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed:
-                    wizard.isPublishing ? null : () => wizard.goToStep(2),
-                icon: const Icon(Icons.photo_library_outlined),
-                label: const Text('Change the three selected images'),
-              ),
-              const Divider(height: 18),
               TextField(
                 controller: _finalPriceCtrl,
                 focusNode: _finalPriceFocus,
@@ -4677,14 +4505,6 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 title: const Text('I confirm this final selling price.'),
                 controlAffinity: ListTileControlAffinity.leading,
               ),
-              if (wizard.selectedVariations.length != 3 ||
-                  wizard.imageJobStatus != 'completed' ||
-                  wizard.imageProcessingMode == 'mock')
-                Text(
-                  wizard.imageJobError ??
-                      'Three successfully processed, approved images are required.',
-                  style: TextStyle(color: Colors.red.shade700),
-                ),
             ],
           ),
         ),
@@ -4919,7 +4739,6 @@ void _showManualPriceDialog(
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
-          final voiceCtrl = TextEditingController();
           return Container(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
@@ -4941,11 +4760,11 @@ void _showManualPriceDialog(
                     Text(
                       _localizedCopy(
                         auth,
-                        english: 'Tell Us Your Price Preference',
-                        hindi: 'अपनी मूल्य प्राथमिकता बताएं',
-                        marathi: 'तुमची किंमतीची पसंती सांगा',
+                        english: 'Argue & Negotiate Price (Voice)',
+                        hindi: 'मूल्य पर आपत्ति व चर्चा दर्ज करें',
+                        marathi: 'किंमतीवर आक्षेप / चर्चा नोंदवा',
                       ),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.terracotta),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: AppTheme.terracotta),
                     ),
                     IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
                   ],
@@ -4954,13 +4773,13 @@ void _showManualPriceDialog(
                 Text(
                   _localizedCopy(
                     auth,
-                    english: 'Speak in Marathi, Hindi, or any language. E.g., "I want more than ₹500 because it takes lot of work."',
-                    hindi: 'अपनी भाषा में बोलें. उदा., "मुझे ₹500 से अधिक चाहिए क्योंकि इसमें बहुत मेहनत लगती है."',
-                    marathi: 'मराठी किंवा तुमच्या भाषेत बोला. उदा., "मला याची किंमत ५०० रुपयांपेक्षा जास्त हवी आहे, यात खूप मेहनत लागते."',
+                    english: 'Speak naturally in Marathi, Hindi, or English. E.g., "The clay is hand-refined and took 8 hours, I need at least ₹750."',
+                    hindi: 'अपनी भाषा में बोलें. उदा., "मिट्टी हाथ से तैयार की गई है और 8 घंटे लगे, मुझे कम से कम ₹750 चाहिए।"',
+                    marathi: 'तुमच्या भाषेत सांगा. उदा., "माती हाताने शुद्ध केली आहे आणि ८ तास लागले, मला कमीत कमी ₹७५० हवे आहेत."',
                   ),
                   style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
                 // Microphone recording button
                 Center(
@@ -4974,22 +4793,22 @@ void _showManualPriceDialog(
                       setSheetState(() {});
                     },
                     child: Container(
-                      width: 80,
-                      height: 80,
+                      width: 84,
+                      height: 84,
                       decoration: BoxDecoration(
                         color: wizard.isRecording ? Colors.red : AppTheme.terracotta,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
                             color: (wizard.isRecording ? Colors.red : AppTheme.terracotta).withOpacity(0.35),
-                            blurRadius: 16,
+                            blurRadius: 18,
                             spreadRadius: 4,
                           )
                         ],
                       ),
                       child: Icon(
                         wizard.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                        size: 40,
+                        size: 44,
                         color: Colors.white,
                       ),
                     ),
@@ -4999,7 +4818,7 @@ void _showManualPriceDialog(
                 Text(
                   wizard.isRecording
                       ? _localizedCopy(auth, english: 'Listening… speak now', hindi: 'सुन रहे हैं… बोलें', marathi: 'ऐकत आहोत… बोला')
-                      : (wizard.voiceTranscript.isNotEmpty ? '"${wizard.voiceTranscript}"' : _localizedCopy(auth, english: 'Tap mic to speak', hindi: 'बोलने के लिए माइक दबाएं', marathi: 'बोलण्यासाठी माइक दाबा')),
+                      : (wizard.voiceTranscript.isNotEmpty ? '"${wizard.voiceTranscript}"' : _localizedCopy(auth, english: 'Tap red mic to record your voice argument', hindi: 'आपत्ति रिकॉर्ड करने के लिए माइक दबाएं', marathi: 'तुमचा आक्षेप सांगण्यासाठी माइक दाबा')),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
@@ -5007,23 +4826,23 @@ void _showManualPriceDialog(
                     color: wizard.isRecording ? Colors.red : AppTheme.textCharcoal,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
 
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.auto_awesome_rounded),
+                  icon: const Icon(Icons.travel_explore_rounded),
                   label: Text(
                     _localizedCopy(
                       auth,
-                      english: 'Recalculate with Market Research',
-                      hindi: 'बाजार अनुसंधान से पुनः गणना करें',
-                      marathi: 'बाजार संशोधनासह पुन्हा किंमत ठरवा',
+                      english: 'Search Web Again & Re-evaluate Price',
+                      hindi: 'बाज़ार में पुनः खोज कर नया मूल्य निकालें',
+                      marathi: 'इंटरनेटवर पुन्हा शोधून योग्य किंमत ठरवा',
                     ),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.indigo,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: () async {
                     final feedback = wizard.voiceTranscript.trim().isNotEmpty
