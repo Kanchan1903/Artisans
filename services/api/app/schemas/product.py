@@ -113,6 +113,7 @@ class ProductUpdate(BaseModel):
     price: float | None = None
     stock: int | None = None
     status: ProductStatus | None = None
+    images: list[ProductImageCreate] | None = None
     translations: list[ProductTranslationCreate] | None = None
 
 

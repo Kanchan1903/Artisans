@@ -1961,14 +1961,14 @@ class ProductWizardProvider extends ChangeNotifier {
 
     int? apiPublishedProductId;
     try {
-      if (!_priceSelectionSaved) {
-        final priceSaved = await savePriceSelection(
-          token: token,
-          price: _acceptedPrice,
-          source: 'custom',
-        );
-        if (!priceSaved)
-          throw Exception(_pricingError ?? 'Final price could not be saved.');
+      if (!_priceSelectionSaved && _pricingRevisionId != null) {
+        try {
+          await savePriceSelection(
+            token: token,
+            price: _acceptedPrice,
+            source: 'custom',
+          );
+        } catch (_) {}
       }
       final metadata = {
         'title_en': _titleEn.trim(),
@@ -1986,6 +1986,7 @@ class ProductWizardProvider extends ChangeNotifier {
         'voice_transcript': _voiceTranscript,
         'voice_language': _voiceLanguage,
         'seo_keywords': _seoKeywords,
+        'price': _acceptedPrice,
         'translations': _translations.isNotEmpty
             ? _translations
             : [
@@ -2001,11 +2002,6 @@ class ProductWizardProvider extends ChangeNotifier {
                 },
               ],
       };
-      await ApiService.updateProduct(
-        token: token,
-        productId: _draftProductId!,
-        payload: metadata,
-      );
 
       // Prepare image URLs for the product
       final productImages = <Map<String, dynamic>>[];

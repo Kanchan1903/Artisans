@@ -1375,13 +1375,13 @@ async def update_product(
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found or unauthorized")
 
-    if payload.status == ProductStatus.published and product.status != ProductStatus.published:
-        raise HTTPException(status_code=409, detail="Use the final review publish endpoint to publish this product")
+    is_publishing = (payload.status == ProductStatus.published and product.status != ProductStatus.published)
 
     update_data = payload.model_dump(exclude_unset=True)
     category_slug = update_data.pop("category_slug", None)
     category_id = update_data.pop("category_id", None) if "category_id" in update_data else None
     translations = update_data.pop("translations", None)
+    images = update_data.pop("images", None)
     if category_slug:
         category_result = await db.execute(select(Category).where(Category.slug == category_slug))
         category = category_result.scalar_one_or_none()
@@ -1398,6 +1398,16 @@ async def update_product(
         product.category_id = category_id
     for field, val in update_data.items():
         setattr(product, field, val)
+
+    if images is not None and len(images) > 0:
+        product.images.clear()
+        for idx, img in enumerate(images):
+            product.images.append(ProductImage(
+                url=img["url"],
+                is_primary=img.get("is_primary", idx == 0),
+                order_index=img.get("order_index", idx),
+            ))
+
     if translations is not None:
         product.translations.clear()
         for tr in translations:
@@ -1407,7 +1417,21 @@ async def update_product(
                 description=tr.get("description"),
             ))
 
+    if is_publishing or product.status == ProductStatus.published:
+        product.status = ProductStatus.published
+        product.processing_status = "ready"
+        if not product.published_at:
+            product.published_at = datetime.now(timezone.utc)
+
     await db.commit()
+
+    if product.status == ProductStatus.published:
+        try:
+            await _sync_product_to_mongo(product)
+            from app.mongodb import publish_product_mongo
+            await publish_product_mongo(product.id, profile.id)
+        except Exception:
+            pass
 
     # Reload with relationships
     stmt = (
