@@ -1875,23 +1875,29 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.record_voice_over_rounded,
-                            color: AppTheme.terracotta, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          _localizedCopy(auth,
-                              english: 'Your original voice note',
-                              hindi: 'आपका बोला गया विवरण',
-                              marathi: 'तुमचा मूळ आवाज'),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.terracotta),
-                        ),
-                      ],
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.record_voice_over_rounded,
+                              color: AppTheme.terracotta, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _localizedCopy(auth,
+                                  english: 'Your original voice note',
+                                  hindi: 'आपका बोला गया विवरण',
+                                  marathi: 'तुमचा मूळ आवाज'),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.terracotta),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
                           tooltip: _localizedCopy(auth,
@@ -2423,6 +2429,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                     return;
                   }
                   wizard.nextStep();
+                  if (auth.authToken != null && auth.authToken!.isNotEmpty) {
+                    wizard.loadPricingRecommendation(token: auth.authToken!);
+                  }
                 },
               ),
             ),
