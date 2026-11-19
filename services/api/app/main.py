@@ -72,6 +72,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 # Include v1 API endpoints
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 app.include_router(api_router, prefix="/api")
+app.include_router(api_router)
 
 
 @app.get("/", tags=["Health"])
