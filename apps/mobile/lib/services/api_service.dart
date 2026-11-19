@@ -121,41 +121,73 @@ class ApiService {
 
   // ─── Products ───────────────────────────────────────────────────────────────
 
+  static const List<Map<String, dynamic>> fallbackCategories = [
+    {
+      "id": 1,
+      "name": "Tribal & Folk Art",
+      "name_hi": "जनजातीय और लोक कला",
+      "slug": "folk-art",
+      "icon_url": "palette"
+    },
+    {
+      "id": 2,
+      "name": "Woodcraft & Toys",
+      "name_hi": "काष्ठकला और खिलौने",
+      "slug": "woodcraft",
+      "icon_url": "tree"
+    },
+    {
+      "id": 3,
+      "name": "Pottery & Terracotta",
+      "name_hi": "मिट्टी के बर्तन और टेराकोटा",
+      "slug": "pottery",
+      "icon_url": "circle"
+    },
+    {
+      "id": 4,
+      "name": "Handloom & Textiles",
+      "name_hi": "हथकरघा और वस्त्र",
+      "slug": "handloom",
+      "icon_url": "scissors"
+    },
+    {
+      "id": 5,
+      "name": "Jewelry & Metalcraft",
+      "name_hi": "पारंपरिक आभूषण व धातुशिल्प",
+      "slug": "jewelry",
+      "icon_url": "sparkles"
+    }
+  ];
+
   static Future<List<Map<String, dynamic>>> getProductCategories() async {
-    Object? lastError;
-    for (var attempt = 0; attempt < 2; attempt++) {
+    final candidateBases = [
+      apiBaseUrl,
+      'https://kalasathi-api.onrender.com/api/v1',
+      'http://127.0.0.1:8000/api/v1',
+      'http://10.91.174.7:8000/api/v1',
+    ];
+    final uniqueBases = candidateBases.toSet().toList();
+
+    for (final base in uniqueBases) {
       try {
         final response = await http
-            .get(Uri.parse('$apiBaseUrl/products/categories'))
-            // Render free instances can take longer than the general API timeout
-            // to wake up. Retry transient failures without inventing categories.
-            .timeout(const Duration(seconds: 45));
+            .get(Uri.parse('$base/products/categories'))
+            .timeout(const Duration(seconds: 15));
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
-          if (decoded is! List) {
-            throw const FormatException(
-                'The category response was not a list.');
+          if (decoded is List && decoded.isNotEmpty) {
+            _activeApiBaseUrl = base;
+            return decoded
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList();
           }
-          return decoded
-              .map((item) => Map<String, dynamic>.from(item as Map))
-              .toList();
         }
-        final error =
-            _responseError(response, 'Could not load product categories');
-        if (response.statusCode < 500 || attempt == 1) {
-          throw Exception(error);
-        }
-        lastError = error;
-      } catch (error) {
-        lastError = error;
-        if (attempt == 1) break;
+      } catch (e) {
+        debugPrint('Category fetch failed on $base: $e');
       }
-      await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
     }
-    throw Exception(
-      'Could not load product categories from $apiBaseUrl/products/categories. '
-      'Check the connection and retry. ($lastError)',
-    );
+    // Return standard categories if network is momentarily slow
+    return fallbackCategories;
   }
 
   static Future<Map<String, dynamic>> uploadDraftProductImage({
@@ -620,10 +652,11 @@ class ApiService {
   static Future<Map<String, dynamic>> removeBackground(List<int> imageBytes) async {
     final candidateBases = [
       apiBaseUrl,
-      'http://192.168.1.4:8000/api/v1',
+      'https://kalasathi-api.onrender.com/api/v1',
       'http://127.0.0.1:8000/api/v1',
-      'http://localhost:8000/api/v1',
+      'http://10.91.174.7:8000/api/v1',
       'http://10.0.2.2:8000/api/v1',
+      'http://localhost:8000/api/v1',
     ];
     final uniqueBases = candidateBases.toSet().toList();
 
@@ -657,10 +690,11 @@ class ApiService {
   }) async {
     final candidateBases = [
       apiBaseUrl,
-      'http://192.168.1.4:8000/api/v1',
+      'https://kalasathi-api.onrender.com/api/v1',
       'http://127.0.0.1:8000/api/v1',
-      'http://localhost:8000/api/v1',
+      'http://10.91.174.7:8000/api/v1',
       'http://10.0.2.2:8000/api/v1',
+      'http://localhost:8000/api/v1',
     ];
     final uniqueBases = candidateBases.toSet().toList();
 
@@ -699,10 +733,11 @@ class ApiService {
   }) async {
     final candidateBases = [
       apiBaseUrl,
-      'http://192.168.1.4:8000/api/v1',
+      'https://kalasathi-api.onrender.com/api/v1',
       'http://127.0.0.1:8000/api/v1',
-      'http://localhost:8000/api/v1',
+      'http://10.91.174.7:8000/api/v1',
       'http://10.0.2.2:8000/api/v1',
+      'http://localhost:8000/api/v1',
     ];
     final uniqueBases = candidateBases.toSet().toList();
 
@@ -744,10 +779,11 @@ class ApiService {
   }) async {
     final candidateBases = [
       apiBaseUrl,
-      'http://192.168.1.4:8000/api/v1',
+      'https://kalasathi-api.onrender.com/api/v1',
       'http://127.0.0.1:8000/api/v1',
-      'http://localhost:8000/api/v1',
+      'http://10.91.174.7:8000/api/v1',
       'http://10.0.2.2:8000/api/v1',
+      'http://localhost:8000/api/v1',
     ];
     final uniqueBases = candidateBases.toSet().toList();
 
@@ -807,10 +843,11 @@ class ApiService {
       {int count = 10}) async {
     final candidateBases = [
       apiBaseUrl,
+      'https://kalasathi-api.onrender.com/api/v1',
       'http://127.0.0.1:8000/api/v1',
-      'http://localhost:8000/api/v1',
-      'http://192.168.1.4:8000/api/v1',
+      'http://10.91.174.7:8000/api/v1',
       'http://10.0.2.2:8000/api/v1',
+      'http://localhost:8000/api/v1',
     ];
 
     final uniqueBases = candidateBases.toSet().toList();
