@@ -1,4 +1,3 @@
-import 'package:kalasathi_mobile/providers/product_wizard_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:kalasathi_mobile/l10n/app_localizations.dart';
@@ -201,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         "KalaSathi",
                         style: TextStyle(
                           fontSize: 19,
@@ -384,17 +383,33 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                        ElevatedButton(
-                          onPressed: _isSyncing ? null : _triggerSync,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFC84B31),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            minimumSize: const Size(54, 32),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                          child: _isSyncing
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : Text(l10n.translate('syncNow'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _isSyncing ? null : _triggerSync,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFC84B31),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                minimumSize: const Size(54, 32),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: _isSyncing
+                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : Text(l10n.translate('syncNow'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF64748B)),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: 'Clear',
+                              onPressed: () async {
+                                await OfflineStorageService.clearOfflineDrafts();
+                                await _checkPendingSync();
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -448,36 +463,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                 height: 1.35,
                               ),
                             ),
-                            const SizedBox(height: 14),
-                            // Primary Pill CTA
-                            ElevatedButton(
-                              onPressed: () => _onAddProductTap(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFC84B31), // Terracotta
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-                                elevation: 2,
-                              ),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.camera_alt_rounded, size: 15, color: Colors.white),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      l10n.translate('addNewProduct'),
-                                      style: const TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFC84B31).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    l10n.translate('appTitle'),
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFC84B31),
                                     ),
-                                    const SizedBox(width: 3),
-                                    const Icon(Icons.arrow_forward_rounded, size: 13, color: Colors.white),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                           ],
                         ),
@@ -628,8 +632,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Row(
                                 children: [
-                                  const Text(
-                                    "ग्राहक चौकशी (Buyer Inquiries)",
+                                  Text(
+                                    l10n.translate("inquiriesTitle"),
                                     style: TextStyle(
                                       fontSize: 14.5,
                                       fontWeight: FontWeight.bold,
@@ -645,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Text(
-                                        "$_unreadInquiriesCount नवीन",
+                                        "$_unreadInquiriesCount ${l10n.translate('newBadge')}",
                                         style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white),
                                       ),
                                     ),
@@ -653,8 +657,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
                               const SizedBox(height: 2),
-                              const Text(
-                                "वेबसाईटवरील ग्राहकांचे संदेश पहा आणि संपर्क साधा",
+                              Text(
+                                l10n.translate("inquiriesSub"),
                                 style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
                               ),
                             ],
@@ -753,12 +757,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    _buildMiniBar("मे", 24, false),
-                                    _buildMiniBar("जून", 32, false),
-                                    _buildMiniBar("जुलै", 28, false),
-                                    _buildMiniBar("ऑग", 42, false),
-                                    _buildMiniBar("सप्टें", 50, false),
-                                    _buildMiniBar("ऑक्टो", 65, true),
+                                    _buildMiniBar(l10n.translate('month_5'), 24, false),
+                                    _buildMiniBar(l10n.translate('month_6'), 32, false),
+                                    _buildMiniBar(l10n.translate('month_7'), 28, false),
+                                    _buildMiniBar(l10n.translate('month_8'), 42, false),
+                                    _buildMiniBar(l10n.translate('month_9'), 50, false),
+                                    _buildMiniBar(l10n.translate('month_10'), 65, true),
                                   ],
                                 ),
                               ],
