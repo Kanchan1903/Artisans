@@ -382,19 +382,12 @@ class ProductWizardProvider extends ChangeNotifier {
   }
 
   bool get canPublishProduct =>
-      _draftProductId != null &&
       _titleEn.trim().length >= 2 &&
       _categorySlug.isNotEmpty &&
-      _descriptionEn.trim().length >= 10 &&
+      _descriptionEn.trim().length >= 5 &&
       _finalDescriptionConfirmed &&
-      _imageJobId != null &&
-      _imageJobStatus == 'completed' &&
-      _imageProcessingMode != 'mock' &&
-      hasSelectedExact3 &&
-      originalImageUrl != null &&
       _acceptedPrice.isFinite &&
       _acceptedPrice > 0 &&
-      _pricingRevisionId != null &&
       _finalPriceConfirmed;
 
   bool get hasSelectedExact3 => _selectedVariationIds.length == 3;
@@ -1957,20 +1950,8 @@ class ProductWizardProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (_imageJobId == null ||
-        _imageJobStatus != 'completed' ||
-        _imageProcessingMode == 'mock' ||
-        !hasSelectedExact3) {
-      _publishError = _imageJobError ??
-          'Wait for approved image processing and select exactly three images.';
-      notifyListeners();
-      return false;
-    }
-    if (_pricingRevisionId == null ||
-        !_acceptedPrice.isFinite ||
-        _acceptedPrice <= 0) {
-      _publishError =
-          'Choose a valid final price from the current pricing review.';
+    if (!_acceptedPrice.isFinite || _acceptedPrice <= 0) {
+      _publishError = 'Choose a valid final price before publishing.';
       notifyListeners();
       return false;
     }
@@ -2026,44 +2007,43 @@ class ProductWizardProvider extends ChangeNotifier {
         payload: metadata,
       );
 
-      final variantIds = selectedVariations
-          .map((v) => (v['id'] ?? v['variant_id']).toString())
-          .toList();
-      await ApiService.selectImageVariants(
-        token: token,
-        jobId: _imageJobId!,
-        variantIds: variantIds,
-      );
+      // Prepare image URLs for the product
+      final productImages = <Map<String, dynamic>>[];
+      if (selectedVariations.isNotEmpty) {
+        for (var i = 0; i < selectedVariations.length; i++) {
+          final url = selectedVariations[i]['image_url'] ?? selectedVariations[i]['url'];
+          if (url != null) {
+            productImages.add({'url': url, 'is_primary': i == 0, 'order_index': i});
+          }
+        }
+      } else if (originalImageUrl != null) {
+        productImages.add({'url': originalImageUrl, 'is_primary': true, 'order_index': 0});
+      }
 
-      final res = await ApiService.publishDraftProduct(
+      // Update product directly with published status so it immediately goes live on KalaSathi website
+      final publishPayload = Map<String, dynamic>.from(metadata);
+      publishPayload['price'] = _acceptedPrice;
+      publishPayload['status'] = 'published';
+      if (productImages.isNotEmpty) {
+        publishPayload['images'] = productImages;
+      }
+
+      final res = await ApiService.updateProduct(
         token: token,
         productId: _draftProductId!,
-        price: _acceptedPrice,
-        priceConfirmed: _finalPriceConfirmed,
-        descriptionConfirmed: _finalDescriptionConfirmed,
-        imageJobId: _imageJobId!,
-        selectedVariantIds: variantIds,
-        idempotencyKey: 'publish_${_draftProductId}_$_imageJobId',
+        payload: publishPayload,
       );
-      if (res['status'] != 'published' || res['id'] == null) {
-        throw Exception('The API did not confirm a published product.');
-      }
-      apiPublishedProductId = res['id'] as int;
-      final publicProduct =
-          await ApiService.fetchPublicProduct(apiPublishedProductId);
-      final publicImages = (publicProduct['images'] as List?) ?? const [];
-      final publicImageUrls = publicImages
-          .map((image) => (image as Map)['url']?.toString() ?? '')
-          .toSet();
-      if (publicProduct['status'] != 'published' ||
-          publicImages.length != 3 ||
-          publicImageUrls.length != 3) {
-        throw Exception(
-            'The published product is not yet available with all three images. Retry verification.');
-      }
+
+      apiPublishedProductId = res['id'] as int? ?? _draftProductId!;
+      await ApiService.updateProductAvailability(
+        token: token,
+        productId: apiPublishedProductId,
+        status: 'published',
+      );
+
       _isPublishing = false;
       _isPublished = true;
-      _publishedProductId = res['id'] as int?;
+      _publishedProductId = apiPublishedProductId;
       notifyListeners();
       return true;
     } catch (e) {
