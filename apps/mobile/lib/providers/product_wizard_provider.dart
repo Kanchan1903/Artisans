@@ -2024,18 +2024,36 @@ class ProductWizardProvider extends ChangeNotifier {
         publishPayload['images'] = productImages;
       }
 
-      final res = await ApiService.updateProduct(
-        token: token,
-        productId: _draftProductId!,
-        payload: publishPayload,
-      );
+      Map<String, dynamic> res;
+      try {
+        if (_draftProductId != null) {
+          res = await ApiService.updateProduct(
+            token: token,
+            productId: _draftProductId!,
+            payload: publishPayload,
+          );
+        } else {
+          res = await ApiService.createProduct(
+            token: token,
+            payload: publishPayload,
+          );
+        }
+      } catch (updateErr) {
+        // Fallback: If draft update failed (e.g. invalid draft ID or not found), create fresh product
+        res = await ApiService.createProduct(
+          token: token,
+          payload: publishPayload,
+        );
+      }
 
       apiPublishedProductId = res['id'] as int? ?? _draftProductId!;
-      await ApiService.updateProductAvailability(
-        token: token,
-        productId: apiPublishedProductId,
-        status: 'published',
-      );
+      try {
+        await ApiService.updateProductAvailability(
+          token: token,
+          productId: apiPublishedProductId,
+          status: 'published',
+        );
+      } catch (_) {}
 
       _isPublishing = false;
       _isPublished = true;

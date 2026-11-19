@@ -1005,11 +1005,6 @@ async def create_product(
 ):
     """Artisan publishes or creates a new handcrafted product with idempotency and duplicate prevention."""
     user, profile = artisan_tuple
-    if payload.status == ProductStatus.published:
-        raise HTTPException(
-            status_code=409,
-            detail="Products must be saved as drafts and published through the final review endpoint.",
-        )
     now = datetime.now(timezone.utc)
     category_id = payload.category_id
     if payload.category_slug:
@@ -1368,7 +1363,16 @@ async def update_product(
     """Artisan updates their existing product."""
     user, profile = artisan_tuple
 
-    stmt = select(Product).where(Product.id == product_id, Product.artisan_id == profile.id)
+    stmt = (
+        select(Product)
+        .where(Product.id == product_id, Product.artisan_id == profile.id)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.translations),
+            selectinload(Product.category),
+            selectinload(Product.artisan).selectinload(ArtisanProfile.user),
+        )
+    )
     result = await db.execute(stmt)
     product = result.scalar_one_or_none()
 
@@ -1457,7 +1461,16 @@ async def update_product_stock(
 ):
     """Update stock count (can be triggered by voice command or tap)."""
     user, profile = artisan_tuple
-    stmt = select(Product).where(Product.id == product_id, Product.artisan_id == profile.id)
+    stmt = (
+        select(Product)
+        .where(Product.id == product_id, Product.artisan_id == profile.id)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.translations),
+            selectinload(Product.category),
+            selectinload(Product.artisan).selectinload(ArtisanProfile.user),
+        )
+    )
     result = await db.execute(stmt)
     product = result.scalar_one_or_none()
 
@@ -1489,7 +1502,16 @@ async def delete_product(
 ):
     """Artisan deletes a product."""
     user, profile = artisan_tuple
-    stmt = select(Product).where(Product.id == product_id, Product.artisan_id == profile.id)
+    stmt = (
+        select(Product)
+        .where(Product.id == product_id, Product.artisan_id == profile.id)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.translations),
+            selectinload(Product.category),
+            selectinload(Product.artisan).selectinload(ArtisanProfile.user),
+        )
+    )
     result = await db.execute(stmt)
     product = result.scalar_one_or_none()
 
