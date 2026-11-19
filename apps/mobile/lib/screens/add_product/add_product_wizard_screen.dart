@@ -2011,18 +2011,15 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        onPressed: () {
+                        onPressed: () async {
                           wizard.setDescriptionApproved(true);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(_localizedCopy(auth,
-                                  english: 'Description approved!',
-                                  hindi: 'विवरण स्वीकृत!',
-                                  marathi: 'वर्णन मंजूर केले!')),
-                              backgroundColor: Colors.green.shade700,
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
+                          wizard.confirmEnglishDescription(true);
+                          final saved = await wizard.saveAsDraft(auth.authToken ?? '');
+                          if (!mounted) return;
+                          wizard.nextStep();
+                          if (auth.authToken != null && auth.authToken!.isNotEmpty) {
+                            wizard.loadPricingRecommendation(token: auth.authToken!);
+                          }
                         },
                       ),
                     ),
