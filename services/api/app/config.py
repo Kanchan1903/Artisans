@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # App
     ENVIRONMENT: str = "development"
     PROJECT_NAME: str = "KalaSathi API"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.1"
     API_V1_PREFIX: str = "/api/v1"
     CURRENCY_CODE: str = "INR"
 
