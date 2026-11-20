@@ -82,6 +82,16 @@ async def init_db():
         except Exception:
             pass
 
+        # Ensure demo products and demo user are completely removed from DB
+        try:
+            connection.execute(text("DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE title_en LIKE '%DEMO%' OR idempotency_key LIKE 'demo%')"))
+            connection.execute(text("DELETE FROM product_translations WHERE product_id IN (SELECT id FROM products WHERE title_en LIKE '%DEMO%' OR idempotency_key LIKE 'demo%')"))
+            connection.execute(text("DELETE FROM products WHERE title_en LIKE '%DEMO%' OR idempotency_key LIKE 'demo%'"))
+            connection.execute(text("DELETE FROM artisan_profiles WHERE user_id IN (SELECT id FROM users WHERE email = 'demo-catalog@kalasathi.invalid')"))
+            connection.execute(text("DELETE FROM users WHERE email = 'demo-catalog@kalasathi.invalid'"))
+        except Exception:
+            pass
+
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
