@@ -644,3 +644,41 @@ export async function publishProduct(
   }
   return res.json();
 }
+
+/**
+ * Client-side translation helper for dynamic regional translations (e.g. products, reviews, specs).
+ * Automatically caches results to minimize repeated calls.
+ */
+const translationCache: Record<string, string> = {};
+
+export async function translateText(
+  text: string,
+  targetLang: string
+): Promise<string> {
+  const clean = text?.trim();
+  if (!clean || targetLang === "en") return clean;
+  const cacheKey = `${targetLang}:${clean}`;
+  if (translationCache[cacheKey]) {
+    return translationCache[cacheKey];
+  }
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(
+      targetLang
+    )}&dt=t&q=${encodeURIComponent(clean)}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      const translated = (data[0] as Array<[string]>)
+        .map((p) => p[0])
+        .filter(Boolean)
+        .join("")
+        .trim();
+      if (translated) {
+        translationCache[cacheKey] = translated;
+        return translated;
+      }
+    }
+  } catch (_) {}
+  return clean;
+}
+

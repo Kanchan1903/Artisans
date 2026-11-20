@@ -24,6 +24,7 @@ import {
   Product,
   ProductTranslation,
   submitB2BInquiry,
+  translateText,
 } from "@/lib/api";
 
 const LANGUAGES_12 = [
@@ -54,6 +55,18 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
 
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
+  const [dynamicTranslations, setDynamicTranslations] = useState<
+    Record<
+      string,
+      {
+        title: string;
+        description: string;
+        material?: string;
+        technique?: string;
+        care?: string;
+      }
+    >
+  >({});
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
   const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
   const [showInquiryModal, setShowInquiryModal] = useState<boolean>(false);
@@ -149,6 +162,55 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     );
   }
 
+  // Dynamic multilingual translation for selected language
+  useEffect(() => {
+    if (!product || selectedLanguage === "en") return;
+
+    // Check if the product already has complete database translations for this language
+    const existing = product.translations?.find(
+      (t) => t.language === selectedLanguage && t.title && t.description
+    );
+    if (existing) return;
+
+    if (dynamicTranslations[selectedLanguage]) return;
+
+    let cancelled = false;
+    async function loadDynamicTranslation() {
+      if (!product) return;
+      const baseTitle = product.title_en;
+      const baseDesc = product.description_en || "";
+      const baseMaterial = product.material || "";
+      const baseTech = product.technique || "";
+      const baseCare = product.care_instructions || "";
+
+      const [trTitle, trDesc, trMat, trTech, trCare] = await Promise.all([
+        translateText(baseTitle, selectedLanguage),
+        baseDesc ? translateText(baseDesc, selectedLanguage) : Promise.resolve(""),
+        baseMaterial ? translateText(baseMaterial, selectedLanguage) : Promise.resolve(""),
+        baseTech ? translateText(baseTech, selectedLanguage) : Promise.resolve(""),
+        baseCare ? translateText(baseCare, selectedLanguage) : Promise.resolve(""),
+      ]);
+
+      if (!cancelled) {
+        setDynamicTranslations((prev) => ({
+          ...prev,
+          [selectedLanguage]: {
+            title: trTitle,
+            description: trDesc,
+            material: trMat,
+            technique: trTech,
+            care: trCare,
+          },
+        }));
+      }
+    }
+
+    loadDynamicTranslation();
+    return () => {
+      cancelled = true;
+    };
+  }, [product, selectedLanguage, dynamicTranslations]);
+
   // Find translation for selected language, fallback to English or Hindi
   const activeTranslation: ProductTranslation | undefined =
     product.translations?.find((t) => t.language === selectedLanguage) ||
@@ -159,19 +221,40 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       description: product.description_en || "",
     };
 
+  const dynamic = dynamicTranslations[selectedLanguage];
+
   const currentTitle =
     selectedLanguage === "en"
       ? product.title_en
+      : activeTranslation?.title && activeTranslation.language === selectedLanguage
+      ? activeTranslation.title
       : selectedLanguage === "hi" && product.title_hi
       ? product.title_hi
-      : activeTranslation?.title || product.title_en;
+      : dynamic?.title || product.title_en;
 
   const currentDescription =
     selectedLanguage === "en"
       ? product.description_en
+      : activeTranslation?.description && activeTranslation.language === selectedLanguage
+      ? activeTranslation.description
       : selectedLanguage === "hi" && product.description_hi
       ? product.description_hi
-      : activeTranslation?.description || product.description_en;
+      : dynamic?.description || product.description_en;
+
+  const currentMaterial =
+    selectedLanguage === "en"
+      ? product.material
+      : dynamic?.material || product.material;
+
+  const currentTechnique =
+    selectedLanguage === "en"
+      ? product.technique
+      : dynamic?.technique || product.technique;
+
+  const currentCare =
+    selectedLanguage === "en"
+      ? product.care_instructions
+      : dynamic?.care || product.care_instructions;
 
   const categoryFallback = product.category?.slug ? CATEGORY_IMAGES[product.category.slug] : null;
 
@@ -421,19 +504,19 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                 <div>
                   <span className="font-semibold text-stone-500 block mb-0.5">Primary Materials:</span>
                   <span className="font-medium text-stone-800">
-                    {product.material || "Organic natural materials"}
+                    {currentMaterial || "Organic natural materials"}
                   </span>
                 </div>
                 <div>
                   <span className="font-semibold text-stone-500 block mb-0.5">Heritage Technique:</span>
                   <span className="font-medium text-stone-800">
-                    {product.technique || "Handcrafted by lineage technique"}
+                    {currentTechnique || "Handcrafted by lineage technique"}
                   </span>
                 </div>
                 <div className="sm:col-span-2">
                   <span className="font-semibold text-stone-500 block mb-0.5">Care Instructions:</span>
                   <span className="font-medium text-stone-800">
-                    {product.care_instructions || "Handle gently with clean dry cloth"}
+                    {currentCare || "Handle gently with clean dry cloth"}
                   </span>
                 </div>
                 {product.voice_transcript && (
