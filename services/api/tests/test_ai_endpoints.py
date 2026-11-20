@@ -123,16 +123,64 @@ async def test_save_product_draft_with_translations_and_images(client: AsyncClie
 async def test_voice_description_agent_dynamic_watch_not_clay_pot(client: AsyncClient):
     payload = {
         "transcript": "my watch with black colour",
-        "language_hint": "en",
     }
     res = await client.post("/api/v1/ai/voice-description-agent", json=payload)
     assert res.status_code == 200
     data = res.json()
     assert data["title"] == "Black Watch"
     assert data["category_slug"] == "jewelry"
-    assert data["category"] == "Jewelry & Metalcraft"
+    assert data["category"] == "Watches & Timepieces"
     assert "pottery" not in data["category_slug"]
     assert "clay" not in data["title"].lower()
     for kw in data["seo_keywords"]:
         assert "pottery" not in kw.lower()
+    assert len(data.get("source_references", [])) > 0
+
+
+@pytest.mark.asyncio
+async def test_voice_description_multilingual_and_universal_categories(client: AsyncClient):
+    # 1. Wooden Chair in Marathi
+    res_chair = await client.post(
+        "/api/v1/ai/voice-description-agent",
+        json={"transcript": "हे लाकडाची मजबूत खुर्ची आहे", "preferred_language": "mr"},
+    )
+    assert res_chair.status_code == 200
+    d_chair = res_chair.json()
+    assert d_chair["detected_language"] == "mr"
+    assert "Chair" in d_chair["title"]
+    assert d_chair["category"] == "Furniture & Living"
+    assert d_chair["category_slug"] == "woodcraft"
+
+    # 2. Leather Laptop Cover in Bengali
+    res_laptop = await client.post(
+        "/api/v1/ai/voice-description-agent",
+        json={"transcript": "এটি একটি সুন্দর চামড়ার ল্যাপটপ কভার", "preferred_language": "bn"},
+    )
+    assert res_laptop.status_code == 200
+    d_laptop = res_laptop.json()
+    assert d_laptop["detected_language"] == "bn"
+    assert "Laptop Cover" in d_laptop["title"]
+    assert d_laptop["category"] == "Bags, Sleeves & Covers"
+
+    # 3. Umbrella in Tamil
+    res_umbrella = await client.post(
+        "/api/v1/ai/voice-description-agent",
+        json={"transcript": "இது ஒரு அழகான நீல நிற குடை", "preferred_language": "ta"},
+    )
+    assert res_umbrella.status_code == 200
+    d_umb = res_umbrella.json()
+    assert d_umb["detected_language"] == "ta"
+    assert "Umbrella" in d_umb["title"]
+    assert d_umb["category"] == "Umbrellas & Rain Gear"
+
+    # 4. Assamese language detection and chair classification
+    res_as = await client.post(
+        "/api/v1/ai/voice-description-agent",
+        json={"transcript": "এইটো এটা ধুনীয়া কাঠৰ চকী"},
+    )
+    assert res_as.status_code == 200
+    d_as = res_as.json()
+    assert d_as["detected_language"] == "as"
+    assert "Chair" in d_as["title"]
+
 

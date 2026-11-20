@@ -54,12 +54,70 @@ LANGUAGE_NAMES_MAP = {
     "english": "en",
 }
 
-CRAFT_CATEGORIES = [
-    {"slug": "jewelry", "name": "Jewelry & Metalcraft", "keywords": ["jewelry", "jewellery", "necklace", "earring", "bangle", "pendant", "beads", "terracotta jewelry", "watch", "clock", "wrist watch", "timepiece", "accessory", "bracelet", "ring", "ornament", "metal", "brass", "bronze", "dhokra", "bell metal", "copper", "iron", "thali", "statue", "idol", "lamp", "diya stand", "पीतल", "पितळ", "तांबा", "लोहा", "ढोकरा", "दागिने", "गहने", "घड़ी", "वाच", "घडी"]},
-    {"slug": "pottery", "name": "Pottery & Terracotta", "keywords": ["pottery", "clay", "terracotta", "earthen", "vase", "pot", "handi", "surahi", "diya", "planter", "matka", "kulhad", "bowl", "cup", "dinner set", "crockery", "ceramic", "मिट्टी", "माती", "घड़ा", "मटका"]},
-    {"slug": "handloom", "name": "Handloom & Textiles", "keywords": ["handloom", "weaving", "cotton", "silk", "saree", "dupatta", "stole", "chanderi", "tussar", "khadi", "scarf", "fabric", "textile", "shawl", "linen", "dress", "bag", "pouch", "tote", "wallet", "leather", "हातमाग", "बुनाई", "साड़ी", "दुपट्टा"]},
-    {"slug": "woodcraft", "name": "Woodcraft & Toys", "keywords": ["wood", "wooden", "teak", "sandalwood", "carving", "sheesham", "mandir", "temple", "toy", "box", "key holder", "panel", "furniture", "bamboo", "cane", "basket", "wicker", "jute", "straw", "बांबू", "बांस", "टोकरी", "लाकूड", "लकड़ी", "नक्काशी", "खिलौने"]},
-    {"slug": "folk-art", "name": "Tribal & Folk Art", "keywords": ["painting", "warli", "madhubani", "pattachitra", "kalamkari", "canvas", "gond", "pichwai", "tanjore", "art", "drawing", "portrait", "वारली", "चित्र", "मधुबनी", "पेंटिंग"]},
+# ─── Universal Product Classification & Dynamic Categories ────────────────────
+
+# Universal Categories supported across all industries and e-commerce listings
+UNIVERSAL_CATEGORIES = [
+    {
+        "category": "Watches & Timepieces",
+        "slug": "jewelry",
+        "keywords": ["watch", "wrist watch", "smartwatch", "clock", "timepiece", "chronograph", "घड़ी", "वाच", "घडी", "ঘড়ি", "கைக்கடிகாரம்", "వాచ్", "ಗಡಿಯಾರ", "വാച്ച്", "ઘડિયાળ", "ਘੜੀ", "ଘଣ୍ଟା"],
+        "default_specs": ["Dial & display specifications", "Band/strap details", "Water resistance", "Movement type"],
+    },
+    {
+        "category": "Furniture & Living",
+        "slug": "woodcraft",
+        "keywords": ["chair", "table", "desk", "sofa", "couch", "bench", "stool", "bed", "wardrobe", "shelf", "cupboard", "cabinet", "dining", "furniture", "कुर्सी", "मेज", "टेबल", "खुर्ची", "টেবিল", "চেয়ার", "நாற்காலி", "కుర్చీ", "ಕುರ್ಚಿ", "കസേര", "ખુરશી", "ਕੁਰਸੀ", "ଚୌକି"],
+        "default_specs": ["Ergonomic design", "Frame & structural material", "Weight capacity & dimensions", "Assembly & placement"],
+    },
+    {
+        "category": "Pottery & Ceramics",
+        "slug": "pottery",
+        "keywords": ["pot", "clay pot", "vase", "planter", "matka", "surahi", "handi", "kulhad", "bowl", "mug", "cup", "crockery", "earthen", "terracotta", "ceramic", "clay", "घड़ा", "मटका", "मातीचे भांडे", "মাটির পাত্র", "களிமண் பாண்டம்", "మట్టి కుండ", "ಮಣ್ಣಿನ ಮಡಕೆ", "കളിമൺ പാത്രം", "માટીનું વાસણ", "ਮਿੱਟੀ ਦਾ ਭਾਂਡਾ", "ମାଟି ପାତ୍ର"],
+        "default_specs": ["Earthen/clay composition", "Kiln firing finish", "Liquid storage & porosity", "Care instructions"],
+    },
+    {
+        "category": "Bags, Sleeves & Covers",
+        "slug": "handloom",
+        "keywords": ["laptop cover", "laptop sleeve", "laptop case", "bag", "backpack", "pouch", "tote", "wallet", "purse", "briefcase", "handbag", "cover", "sleeve", "case", "झोला", "बस्ता", "पिशवी", "ব্যাগ", "பை", "సంచి", "ಚೀಲ", "സഞ്ചി", "થેલો", "ਥੈਲਾ", "ବ୍ୟାଗ୍"],
+        "default_specs": ["Protective padding & lining", "Device / compartment fit", "Closure type (zipper/strap)", "Portability & carry style"],
+    },
+    {
+        "category": "Umbrellas & Rain Gear",
+        "slug": "handloom",
+        "keywords": ["umbrella", "parasol", "raincoat", "canopy", "rain gear", "छाता", "छतरी", "छत्री", "ছাতা", "குடை", "గొడుగు", "ಛತ್ರಿ", "കുട", "છત્રી", "ਛਤਰੀ", "ଛତା"],
+        "default_specs": ["Canopy fabric & water repellency", "Frame & rib construction", "Open/close mechanism", "Wind resistance & portability"],
+    },
+    {
+        "category": "Apparel, Clothing & Accessories",
+        "slug": "handloom",
+        "keywords": ["shirt", "t-shirt", "pants", "trousers", "dress", "saree", "dupatta", "stole", "scarf", "shawl", "jacket", "coat", "kurta", "kurti", "fabric", "textile", "clothing", "apparel", "साड़ी", "दुपट्टा", "कपड़े", "শাড়ি", "புடவை", "చీర", "ಸೀರೆ", "സാരി", "સાડી", "ਸਾੜ੍ਹੀ", "ଶାଢ଼ୀ"],
+        "default_specs": ["Fabric weave & breathability", "Fit & styling", "Occasion & versatile wear", "Washing & garment care"],
+    },
+    {
+        "category": "Jewelry, Ornaments & Accessories",
+        "slug": "jewelry",
+        "keywords": ["necklace", "earring", "bangle", "bracelet", "ring", "pendant", "choker", "anklet", "brooch", "jewelry", "jewellery", "ornament", "दागिने", "गहने", "হিরের গয়না", "நகைகள்", "ఆభరణాలు", "ಒಡವೆ", "ആഭരണങ്ങൾ", "દાગીના", "ਗਹਿਣੇ", "ଅଳଙ୍କାର"],
+        "default_specs": ["Design aesthetic & motif", "Metal/material finish", "Clasp & fastening type", "Styling versatility"],
+    },
+    {
+        "category": "Home Decor & Art",
+        "slug": "folk-art",
+        "keywords": ["painting", "canvas", "wall art", "sculpture", "statue", "idol", "lamp", "lantern", "diya", "cushion", "curtain", "rug", "carpet", "tapestry", "warli", "madhubani", "pattachitra", "decor", "home decor", "पेंटिंग", "चित्रकला", "तस्वीर"],
+        "default_specs": ["Artistic style & motif", "Display medium & surface", "Mounting / framing advice", "Care & preservation"],
+    },
+    {
+        "category": "Electronics, Audio & Gadgets",
+        "slug": "jewelry",
+        "keywords": ["electronics", "gadget", "headphone", "earphone", "speaker", "charger", "cable", "power bank", "mouse", "keyboard", "device", "इलेक्ट्रॉनिक्स"],
+        "default_specs": ["Connectivity & interface", "Build & housing quality", "Compatibility", "Usage & functionality"],
+    },
+    {
+        "category": "Woodcraft & Handcrafted Utility",
+        "slug": "woodcraft",
+        "keywords": ["wood", "wooden", "teak", "sheesham", "sandalwood", "mandir", "temple", "carving", "toy", "box", "key holder", "bamboo", "cane", "basket", "wicker", "jute", "straw", "बांबू", "बांस", "टोकरी", "लाकूड", "लकड़ी"],
+        "default_specs": ["Wood/material grain & finish", "Joinery & craftsmanship", "Structural durability", "Natural maintenance"],
+    },
 ]
 
 def clean_speech_to_title(english_phrase: str, stated_handmade: bool = False) -> str:
@@ -86,6 +144,8 @@ def clean_speech_to_title(english_phrase: str, stated_handmade: bool = False) ->
         r"\s+which\s+i\s+(?:have\s+)?made.*$",
         r"\s+made\s+by\s+me.*$",
         r"\s+for\s+sale.*$",
+        r"\s+which\s+is\s+(?:very\s+)?(?:nice|good|durable|beautiful).*$",
+        r"\s+that\s+is\s+(?:very\s+)?(?:nice|good|durable|beautiful).*$",
     ]
     for pattern in trail_ins:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
@@ -99,7 +159,7 @@ def clean_speech_to_title(english_phrase: str, stated_handmade: bool = False) ->
 
     words = cleaned.split()
     if not words:
-        words = ["Handcrafted", "Craft"]
+        words = ["Featured", "Product"]
 
     title_words = []
     lowercase_words = {"a", "an", "the", "and", "or", "in", "on", "at", "to", "for", "with", "by", "of"}
@@ -122,25 +182,19 @@ def clean_speech_to_title(english_phrase: str, stated_handmade: bool = False) ->
 
 def detect_category(text: str, english_text: str = "") -> tuple[str, str]:
     """Dynamically infers category from spoken words or English translation without hardcoding.
-    Maps strictly to the 5 official platform database categories:
-    'jewelry', 'pottery', 'handloom', 'woodcraft', 'folk-art'."""
+    Returns:
+      (category_slug, category_display_name)
+    where category_slug maps safely to the platform database category table
+    and category_display_name is the dynamic, universal category name."""
     t = f"{text} {english_text}".lower()
 
-    if any(w in t for w in ["watch", "clock", "timepiece", "necklace", "earring", "bangle", "bracelet", "ring", "pendant", "jewel", "brass", "bronze", "copper", "iron", "bell metal", "dhokra", "metal", "statue", "idol", "lamp", "thali", "diya stand", "दागिने", "गहने", "घड़ी", "वाच", "घडी", "पीतल", "पितळ", "तांबा", "लोहा", "ढोकरा"]):
-        return "jewelry", "Jewelry & Metalcraft"
-    if any(w in t for w in ["clay", "terracotta", "earthen", "matka", "surahi", "handi", "kulhad", "pottery", "मिट्टी", "माती", "घड़ा", "मटका"]):
-        return "pottery", "Pottery & Terracotta"
-    if any(w in t for w in ["saree", "dupatta", "stole", "scarf", "handloom", "weaving", "cotton", "silk", "khadi", "chanderi", "tussar", "textile", "fabric", "shawl", "linen", "dress", "bag", "pouch", "tote", "wallet", "leather", "साड़ी", "दुपट्टा", "बुनाई"]):
-        return "handloom", "Handloom & Textiles"
-    if any(w in t for w in ["wood", "wooden", "teak", "sheesham", "sandalwood", "mandir", "temple", "carving", "toy", "box", "key holder", "bamboo", "cane", "basket", "wicker", "jute", "straw", "बांबू", "बांस", "टोकरी", "लाकूड", "लकड़ी", "नक्काशी", "खिलौने"]):
-        return "woodcraft", "Woodcraft & Toys"
-    if any(w in t for w in ["painting", "canvas", "warli", "madhubani", "pattachitra", "kalamkari", "gond", "pichwai", "tanjore", "art", "drawing", "portrait", "चित्र", "पेंटिंग", "वारली", "मधुबनी"]):
-        return "folk-art", "Tribal & Folk Art"
-    if any(w in t for w in ["pot", "vase", "bowl", "planter", "cup", "diya"]):
-        return "pottery", "Pottery & Terracotta"
+    for item in UNIVERSAL_CATEGORIES:
+        for kw in item["keywords"]:
+            if re.search(r"\b" + re.escape(kw) + r"\b", t, re.IGNORECASE) or kw in t:
+                return item["slug"], item["category"]
 
-    # Default fallback to Jewelry & Metalcraft (covers watches, accessories, crafts)
-    return "jewelry", "Jewelry & Metalcraft"
+    # Open fallback: If no explicit keyword matches, return General Products mapped safely
+    return "jewelry", "General Products & Merchandise"
 
 def _translate_to_hindi(text: str) -> str:
     """Translates an English phrase or title into natural Hindi."""
@@ -232,6 +286,12 @@ class VoiceAgent:
         }
         max_script_lang, max_script_count = max(counts.items(), key=lambda x: x[1])
         if max_script_count > 3:
+            # Distinguish Assamese vs Bengali (both use the Eastern Nagari script block 0x0980-0x09FF)
+            if max_script_lang == "bn":
+                has_assamese_char = any(ord(c) in (0x09F0, 0x09F1) for c in text)
+                assamese_lexical = ["এইটো", "ধুনীয়া", "চকী", "সামগ্ৰী", "আছে", "হৈছে", "নহয়", "কৰা", "মোৰ"]
+                if has_assamese_char or any(w in text for w in assamese_lexical) or hint_lang == "as":
+                    return "as"
             return max_script_lang
 
         if devanagari_count > 3:
@@ -436,13 +496,20 @@ class ResearchAgent:
         return unique_keywords[:10]
 
     @staticmethod
-    def search_terminology_online(query: str) -> str | None:
-        """Query LangSearch Web Search API for authentic Indian craft heritage, traditions, and naming context."""
+    def search_terminology_online(product_name: str, category_name: str = "") -> dict[str, Any]:
+        """Query LangSearch Web Search API for professional product terminology, relevant features,
+        common uses, comparable descriptions, and source reference URLs."""
         api_key = getattr(settings, "LANGSEARCH_API_KEY", "") or "sk-60d823fe6dbd4ccd8b1223ae83d9e830"
+        result_payload = {
+            "summary": None,
+            "relevant_features": [],
+            "source_references": [],
+        }
         if api_key:
             try:
                 url = "https://api.langsearch.com/v1/web-search"
-                payload = json.dumps({"query": f"{query} authentic handcrafted Indian artisan", "count": 3}).encode("utf-8")
+                query = f"{product_name} specifications features overview".strip()
+                payload = json.dumps({"query": query, "count": 4}).encode("utf-8")
                 req = urllib.request.Request(
                     url,
                     data=payload,
@@ -452,30 +519,65 @@ class ResearchAgent:
                         "User-Agent": "KalaSathi-ResearchAgent/1.0",
                     },
                 )
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with urllib.request.urlopen(req, timeout=6) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 pages = data.get("data", {}).get("webPages", {}).get("value", [])
-                snippets = [p.get("snippet", "") for p in pages if p.get("snippet")]
-                if snippets:
-                    clean_ctx = " ".join(snippets[:2])
-                    clean_ctx = re.sub(r'\s+', ' ', clean_ctx).strip()
-                    if len(clean_ctx) > 30:
-                        return clean_ctx[:300]
+                
+                refs = []
+                extracted_features = []
+                snippets = []
+                noise_words = [
+                    "price", "sale", "cart", "shipping", "cookie", "login", "off", "eur", "usd",
+                    "xcd", "₹", "$", "theme", "wordpress", "drupal", "download", "template",
+                    "license", "weapon", "cosara"
+                ]
+                for p in pages:
+                    p_url = p.get("url", "").strip()
+                    p_name = p.get("name", "").strip()
+                    p_snip = p.get("snippet", "").strip()
+                    if p_url:
+                        refs.append({"title": p_name or product_name, "url": p_url})
+                    if p_snip:
+                        snippets.append(p_snip)
+                        clean = re.sub(r"https?://\S+", "", p_snip)
+                        clean = re.sub(r"\s+", " ", clean).strip()
+                        sentences = [s.strip() for s in re.split(r"[.\n|•]", clean) if len(s.strip()) > 20]
+                        for s in sentences:
+                            if not any(stop in s.lower() for stop in noise_words):
+                                if s not in extracted_features:
+                                    extracted_features.append(s)
+
+                result_payload["source_references"] = refs
+                result_payload["relevant_features"] = extracted_features[:4]
+
+                clean_snippets = [
+                    snip for snip in snippets
+                    if not any(stop in snip.lower() for stop in ["theme", "drupal", "wordpress", "weapon"])
+                ]
+                if clean_snippets:
+                    summary_text = " ".join(clean_snippets[:2])
+                    summary_text = re.sub(r"\s+", " ", summary_text).strip()
+                    if len(summary_text) > 30:
+                        result_payload["summary"] = summary_text[:300]
+                return result_payload
             except Exception as e:
-                logger.warning("LangSearch terminology search error: %s", e)
+                logger.warning("LangSearch web research error: %s", e)
 
         # Fallback to DuckDuckGo instant answer
         try:
-            url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json"
+            url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(product_name)}&format=json"
             req = urllib.request.Request(url, headers={"User-Agent": "KalaSathi-ResearchAgent/1.0"})
             with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                abstract = data.get("Abstract")
-                if abstract and len(abstract) > 20:
-                    return abstract[:250]
+            abstract = data.get("Abstract")
+            abstract_url = data.get("AbstractURL")
+            if abstract and len(abstract) > 20:
+                result_payload["summary"] = abstract[:250]
+                if abstract_url:
+                    result_payload["source_references"].append({"title": product_name, "url": abstract_url})
         except Exception:
             pass
-        return None
+        return result_payload
 
 
 # ─── 4. Description Agent ────────────────────────────────────────────────────
@@ -518,7 +620,7 @@ class DescriptionAgent:
     def generate_description(
         facts: dict[str, Any],
         researched_keywords: list[str],
-        online_context: str | None = None,
+        web_research: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         transcript = facts["raw_transcript"]
         materials = facts["materials"]
@@ -539,13 +641,15 @@ class DescriptionAgent:
         paragraphs = []
         paragraphs.append(direct_english)
 
-        # Authentic craft heritage context derived from LangSearch for traditional arts
-        if online_context and cat_slug in ["folk-art", "pottery", "handloom", "woodcraft"]:
-            clean_ctx = online_context.split(".")[0].strip()
-            if clean_ctx and len(clean_ctx) > 30 and not any(k in clean_ctx.lower() for k in ["cookie", "javascript", "login", "404", "privacy", "http", "sale", "price", "cart", "dollar", "$"]):
-                paragraphs.append(f"Traditional Craft Heritage: {clean_ctx}.")
+        # Web Research summary & professional terminology (if available)
+        if web_research and isinstance(web_research, dict):
+            summary = web_research.get("summary")
+            if summary and len(summary) > 30 and not any(k in summary.lower() for k in ["cookie", "javascript", "login", "404", "privacy", "http", "sale", "price", "cart", "dollar", "$"]):
+                first_sent = summary.split(".")[0].strip()
+                if first_sent and len(first_sent) > 20:
+                    paragraphs.append(f"Product Context & Heritage: {first_sent}.")
 
-        # Materials & Technique ONLY if explicitly mentioned
+        # Materials & Technique ONLY if explicitly mentioned by artisan
         spec_parts = []
         if materials:
             spec_parts.append(f"Materials: {', '.join(materials)}")
@@ -559,9 +663,21 @@ class DescriptionAgent:
         if spec_parts:
             paragraphs.append("Product Details:\n- " + "\n- ".join(spec_parts))
 
-        paragraphs.append("Artisan Guarantee: 100% authentic handcrafted creation direct from master artisans. Every purchase directly sustains traditional Indian craft communities.")
+        # Verified relevant features researched from the web for this category
+        if web_research and isinstance(web_research, dict):
+            features = web_research.get("relevant_features", [])
+            if features:
+                paragraphs.append("Notable Features & Overview:\n- " + "\n- ".join(features[:3]))
+
+        # Artisan / Authenticity guarantee
+        if stated_handmade:
+            paragraphs.append("Artisan Guarantee: 100% authentic handcrafted creation direct from master artisans. Every purchase directly sustains traditional craft communities.")
+        else:
+            paragraphs.append("Quality Guarantee: Genuine product described directly by the seller. Listed with direct transparency and fair direct pricing.")
 
         detailed_desc = "\n\n".join(paragraphs)
+
+        refs = web_research.get("source_references", []) if (web_research and isinstance(web_research, dict)) else []
 
         return {
             "title": title,
@@ -571,7 +687,8 @@ class DescriptionAgent:
             "category": cat_name,
             "category_slug": cat_slug,
             "seo_keywords": researched_keywords,
-            "tags": [cat_slug, "handcrafted", "artisan-direct", *researched_keywords[:4]],
+            "tags": [cat_slug, "authentic", "direct-seller", *researched_keywords[:4]],
+            "source_references": refs,
         }
 
 
@@ -681,15 +798,15 @@ class VoiceDescriptionCoordinator:
             title=initial_title,
             transcript=full_transcript,
         )
-        online_context = self.research_agent.search_terminology_online(
-            f"{initial_title} {facts['category_name']} Indian handicraft"
+        web_research = self.research_agent.search_terminology_online(
+            initial_title, facts["category_name"]
         )
 
         # Step 4: Description Generation
         initial_desc = self.desc_agent.generate_description(
             facts=facts,
             researched_keywords=researched_keywords,
-            online_context=online_context,
+            web_research=web_research,
         )
 
         # Step 5: Fact-Checking & Hallucination Removal
@@ -712,6 +829,7 @@ class VoiceDescriptionCoordinator:
             "materials": facts["materials"],
             "techniques": facts["techniques"],
             "dimensions": facts["dimensions"],
+            "source_references": verified_output.get("source_references", []),
             "needs_clarification": needs_clarification,
             "clarification_prompt": clarification_prompt,
             "fact_checked": True,
