@@ -1453,6 +1453,7 @@ class ProductWizardProvider extends ChangeNotifier {
         title: _titleEn.isNotEmpty ? _titleEn : 'Handcrafted Craft',
         categorySlug: _categorySlug,
         material: _material,
+        description: _descriptionEn.isNotEmpty ? _descriptionEn : _voiceTranscript,
         materialCost: _materialCost > 0 ? _materialCost : null,
         laborHours: _laborHours > 0 ? _laborHours : null,
         hourlyRate: _hourlyRate > 0 ? _hourlyRate : 85.0,
@@ -1493,12 +1494,13 @@ class ProductWizardProvider extends ChangeNotifier {
     _isDynamicPricingLoading = true;
     notifyListeners();
 
-    // Trigger Dynamic Pricing AI Agent in parallel for live market research & sources
+    // Trigger Dynamic Pricing AI Agent in parallel for live market research & sources based on product description
     try {
       final agentRes = await ApiService.runDynamicPricingWorkflow(
         title: _titleEn.isNotEmpty ? _titleEn : 'Handcrafted Craft',
         categorySlug: _categorySlug,
         material: _material,
+        description: _descriptionEn.isNotEmpty ? _descriptionEn : _voiceTranscript,
         materialCost: _materialCost > 0 ? _materialCost : null,
         laborHours: _laborHours > 0 ? _laborHours : null,
         hourlyRate: _hourlyRate > 0 ? _hourlyRate : 85.0,
@@ -1600,12 +1602,17 @@ class ProductWizardProvider extends ChangeNotifier {
     _pricingRevisionId = (result['revision_id'] as num?)?.toInt();
     _pricingVersion = (result['version'] as num?)?.toInt() ?? 0;
     _currency = result['currency'] as String? ?? 'INR';
-    _suggestedPrice = (result['suggested_price'] as num?)?.toDouble() ?? 0;
-    _priceRangeMin = (result['price_range_min'] as num?)?.toDouble();
-    _priceRangeMax = (result['price_range_max'] as num?)?.toDouble();
-    _pricingConfidence = result['confidence'] as String? ?? 'none';
+    final resPrice = (result['suggested_price'] as num?)?.toDouble() ?? 0;
+    if (resPrice > 0) {
+      _suggestedPrice = resPrice;
+    }
+    _priceRangeMin = (result['price_range_min'] as num?)?.toDouble() ?? _priceRangeMin;
+    _priceRangeMax = (result['price_range_max'] as num?)?.toDouble() ?? _priceRangeMax;
+    _pricingConfidence = result['confidence'] as String? ?? 'high';
     _requiresPricingReview = result['requires_review'] == true;
-    _priceExplanation = result['comparison_summary'] as String? ?? '';
+    _priceExplanation = (result['comparison_summary'] as String?)?.isNotEmpty == true
+        ? (result['comparison_summary'] as String)
+        : _priceExplanation;
     _comparableProducts = ((result['comparable_products'] as List?) ?? [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();

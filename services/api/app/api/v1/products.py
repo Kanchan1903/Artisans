@@ -1,5 +1,6 @@
 """Product router: Catalog browsing, filters, search, artisan CRUD, stock updates."""
 import io
+import logging
 import httpx
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
@@ -50,6 +51,7 @@ from app.utils.catalog_builder import (
 from app.utils.catalog_builder_client import catalog_builder_client
 
 router = APIRouter(prefix="/products", tags=["Products"])
+logger = logging.getLogger(__name__)
 
 
 async def _owned_draft(product_id: int, artisan_id: int, db: AsyncSession) -> Product:
@@ -136,12 +138,54 @@ async def _save_pricing_revision(
         "packaging_cost": request.packaging_cost,
         "shipping_cost": request.shipping_cost,
     }
-    snapshot = build_storefront_recommendation(
-        product,
-        candidates,
-        currency=settings.CURRENCY_CODE.upper(),
-        costs=costs,
-    )
+
+    # Dynamic pricing with real-time web search based on product description and title
+    ai_pricing = None
+    try:
+        from app.utils.dynamic_pricing_agents import DynamicPricingCoordinator
+        coordinator = DynamicPricingCoordinator()
+        ai_pricing = await coordinator.generate_price_recommendation(
+            title=product.title_en or "Handcrafted Creation",
+            category_slug=category_slug,
+            material=product.material,
+            description=product.description_en or product.voice_transcript,
+            costs=costs,
+            voice_feedback=challenge_context if challenge_reason else None,
+        )
+    except Exception as exc:
+        logger.warning("Dynamic pricing web search error in _save_pricing_revision: %s", exc)
+
+    if ai_pricing and ai_pricing.get("recommended_price") is not None and ai_pricing["recommended_price"] > 0:
+        suggested_price = ai_pricing["recommended_price"]
+        price_range_min = ai_pricing.get("price_range_min")
+        price_range_max = ai_pricing.get("price_range_max")
+        comparables = ai_pricing.get("comparables", [])
+        summary = ai_pricing.get("explanation") or f"Recommended based on live web search for '{product.title_en}'."
+        factors = [
+            f"Ground truth live web search for '{product.title_en}' across online craft marketplaces.",
+            f"Calibrated using description attributes: {product.description_en[:80] if product.description_en else product.material or 'artisan crafted'}.",
+            *(f"Cost factor: {k} = {v}" for k, v in costs.items() if v is not None),
+        ]
+        confidence = "high" if comparables else "medium"
+        requires_review = False
+        error = None
+    else:
+        snapshot = build_storefront_recommendation(
+            product,
+            candidates,
+            currency=settings.CURRENCY_CODE.upper(),
+            costs=costs,
+        )
+        suggested_price = snapshot["suggested_price"]
+        price_range_min = snapshot["price_range_min"]
+        price_range_max = snapshot["price_range_max"]
+        comparables = snapshot["comparable_products"]
+        summary = snapshot["comparison_summary"]
+        factors = snapshot["pricing_factors"]
+        confidence = snapshot["confidence"]
+        requires_review = snapshot["requires_review"]
+        error = snapshot["error"]
+
     version_result = await db.execute(
         select(func.max(PricingRevision.version)).where(
             PricingRevision.product_id == product.id
@@ -154,15 +198,15 @@ async def _save_pricing_revision(
         version=version,
         pricing_version=PRICING_VERSION,
         currency=settings.CURRENCY_CODE.upper(),
-        suggested_price=snapshot["suggested_price"],
-        price_range_min=snapshot["price_range_min"],
-        price_range_max=snapshot["price_range_max"],
-        comparable_products=snapshot["comparable_products"],
-        comparison_summary=snapshot["comparison_summary"],
-        pricing_factors=snapshot["pricing_factors"],
-        confidence=snapshot["confidence"],
-        requires_review=snapshot["requires_review"],
-        error=snapshot["error"],
+        suggested_price=suggested_price,
+        price_range_min=price_range_min,
+        price_range_max=price_range_max,
+        comparable_products=comparables,
+        comparison_summary=summary,
+        pricing_factors=factors,
+        confidence=confidence,
+        requires_review=requires_review,
+        error=error,
         challenge_reason=challenge_reason,
         challenge_context=challenge_context,
         previous_revision_id=previous_revision_id,

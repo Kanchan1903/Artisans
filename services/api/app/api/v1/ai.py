@@ -422,6 +422,7 @@ class DynamicPricingWorkflowPayload(BaseModel):
     title: str = Field(..., min_length=1)
     category_slug: str = Field(default="pottery")
     material: str | None = Field(default=None)
+    description: str | None = Field(default=None)
     material_cost: float | None = Field(default=None)
     labor_hours: float | None = Field(default=None)
     hourly_rate: float | None = Field(default=None)
@@ -453,6 +454,7 @@ async def process_dynamic_pricing_workflow(payload: DynamicPricingWorkflowPayloa
         title=payload.title,
         category_slug=payload.category_slug,
         material=payload.material,
+        description=payload.description,
         costs=costs,
         voice_feedback=payload.voice_feedback,
     )
