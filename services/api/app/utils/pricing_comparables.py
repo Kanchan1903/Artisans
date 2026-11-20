@@ -146,9 +146,9 @@ def build_storefront_recommendation(
             "error": "insufficient_comparable_data",
         }
 
-    suggested = round(float(median(prices)), 2)
-    low = _quartile(prices, 0.25)
-    high = round(prices[math.ceil((count - 1) * 0.75)], 2)
+    suggested = round(float(median(prices)))
+    low = round(float(_quartile(prices, 0.25)))
+    high = round(float(prices[math.ceil((count - 1) * 0.75)]))
 
     # Safety calibration: If all candidate records in DB share identical seeded prices (e.g. 549.0),
     # calibrate against description-based benchmarks so recommendations are grounded in description.
@@ -157,9 +157,9 @@ def build_storefront_recommendation(
             from app.utils.dynamic_pricing_agents import MarketResearchAgent
             combined_desc = f"{getattr(target, 'title_en', '') or ''} {getattr(target, 'description_en', '') or ''} {getattr(target, 'material', '') or ''}"
             base = MarketResearchAgent.calculate_description_baseline(target_category or "pottery", combined_desc)
-            suggested = base["suggested"]
-            low = base["min"]
-            high = base["max"]
+            suggested = round(float(base["suggested"]))
+            low = round(float(base["min"]))
+            high = round(float(base["max"]))
         except Exception:
             pass
 

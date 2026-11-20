@@ -93,7 +93,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
       _englishDescriptionCtrl.text = wizard.descriptionEn;
     }
     final finalPriceText =
-        wizard.acceptedPrice > 0 ? wizard.acceptedPrice.toStringAsFixed(2) : '';
+        wizard.acceptedPrice > 0 ? wizard.acceptedPrice.toStringAsFixed(0) : '';
     if (!_finalPriceFocus.hasFocus && _finalPriceCtrl.text != finalPriceText) {
       _finalPriceCtrl.text = finalPriceText;
     }
@@ -3058,13 +3058,13 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                          'Before: ${wizard.previousPricingRecommendation!['suggested_price'] == null ? 'No suggestion' : '${wizard.currency} ${(wizard.previousPricingRecommendation!['suggested_price'] as num).toStringAsFixed(2)}'}'),
+                          'Before: ${wizard.previousPricingRecommendation!['suggested_price'] == null ? 'No suggestion' : '${wizard.currency} ${(wizard.previousPricingRecommendation!['suggested_price'] as num).toStringAsFixed(0)}'}'),
                     ),
                     const Icon(Icons.arrow_forward_rounded, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                          'Now: ${wizard.hasSuggestedPrice ? '${wizard.currency} ${wizard.suggestedPrice.toStringAsFixed(2)}' : 'No suggestion'}'),
+                          'Now: ${wizard.hasSuggestedPrice ? '${wizard.currency} ${wizard.suggestedPrice.toStringAsFixed(0)}' : 'No suggestion'}'),
                     ),
                   ],
                 ),
@@ -3220,7 +3220,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
           _buildPriceCard(
             title: l10n.translate('suggestedPrice'),
             subtitle:
-                'Observed range: ${wizard.currency} ${wizard.priceRangeMin?.toStringAsFixed(2) ?? '—'} – ${wizard.priceRangeMax?.toStringAsFixed(2) ?? '—'}',
+                'Observed range: ${wizard.currency} ${wizard.priceRangeMin?.toStringAsFixed(0) ?? '—'} – ${wizard.priceRangeMax?.toStringAsFixed(0) ?? '—'}',
             price: wizard.suggestedPrice,
             isSelected: wizard.acceptedPrice == wizard.suggestedPrice,
             badge: 'Storefront median · ${wizard.pricingConfidence} confidence',
@@ -4522,7 +4522,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                   prefixText: '₹ ',
                   border: const OutlineInputBorder(),
                   helperText: wizard.hasSuggestedPrice
-                      ? 'AI suggestion: ${wizard.currency} ${wizard.suggestedPrice.toStringAsFixed(2)} (advisory)'
+                      ? 'AI suggestion: ${wizard.currency} ${wizard.suggestedPrice.toStringAsFixed(0)} (advisory)'
                       : 'Set the price you want buyers to pay.',
                 ),
               ),
@@ -4647,7 +4647,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
         title: const Text('Publish this product?'),
         content: Text(
           '${wizard.titleEn}\n${wizard.categorySlug}\n'
-          '${wizard.currency} ${wizard.acceptedPrice.toStringAsFixed(2)}\n'
+          '${wizard.currency} ${wizard.acceptedPrice.toStringAsFixed(0)}\n'
           'Three approved product images',
         ),
         actions: [

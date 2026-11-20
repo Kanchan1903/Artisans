@@ -252,8 +252,82 @@ class MarketResearchAgent:
         return craft_terms
 
     @classmethod
+    def extract_prices_from_text(cls, text: str) -> list[int]:
+        """Extract prices in INR, USD, EUR, GBP, converting foreign currencies to whole-number INR."""
+        prices: list[int] = []
+        # 1. Price: ... or MRP: ... or Cost: ...
+        for p in re.findall(
+            r'(?:price|mrp|cost)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d{2,6})\b',
+            text,
+            re.IGNORECASE,
+        ):
+            try:
+                v = float(p.replace(',', ''))
+                if 50 <= v <= 300000:
+                    prices.append(round(v))
+            except Exception:
+                pass
+
+        # 2. Explicit INR (₹, Rs., INR)
+        for p in re.findall(
+            r'(?:₹|rs\.?|inr)\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d{2,6})\b',
+            text,
+            re.IGNORECASE,
+        ):
+            try:
+                v = float(p.replace(',', ''))
+                if 50 <= v <= 300000:
+                    prices.append(round(v))
+            except Exception:
+                pass
+
+        # 3. USD ($ or USD) -> converted to INR @ 86
+        for m in re.finditer(
+            r'[\$]\s*(\d+(?:,\d{3})*(?:\.\d+)?)|(?:usd)\s*(\d+(?:,\d{3})*(?:\.\d+)?)\b',
+            text,
+            re.IGNORECASE,
+        ):
+            try:
+                raw = m.group(1) or m.group(2)
+                v = float(raw.replace(',', '')) * 86.0
+                if 50 <= v <= 300000:
+                    prices.append(round(v))
+            except Exception:
+                pass
+
+        # 4. EUR (€ or EUR) -> converted to INR @ 92
+        for m in re.finditer(
+            r'(?:€|eur)\s*(\d+(?:,\d{3})*(?:\.\d+)?)|(?:euro|euros)\s*(\d+(?:,\d{3})*(?:\.\d+)?)\b',
+            text,
+            re.IGNORECASE,
+        ):
+            try:
+                raw = m.group(1) or m.group(2)
+                v = float(raw.replace(',', '')) * 92.0
+                if 50 <= v <= 300000:
+                    prices.append(round(v))
+            except Exception:
+                pass
+
+        # 5. GBP (£ or GBP) -> converted to INR @ 108
+        for m in re.finditer(
+            r'[£]\s*(\d+(?:,\d{3})*(?:\.\d+)?)|(?:gbp)\s*(\d+(?:,\d{3})*(?:\.\d+)?)\b',
+            text,
+            re.IGNORECASE,
+        ):
+            try:
+                raw = m.group(1) or m.group(2)
+                v = float(raw.replace(',', '')) * 108.0
+                if 50 <= v <= 300000:
+                    prices.append(round(v))
+            except Exception:
+                pass
+
+        return prices
+
+    @classmethod
     def query_langsearch(cls, phrase: str) -> list[dict[str, Any]]:
-        """Query LangSearch Web Search API for real-time live Indian handicraft marketplace pricing."""
+        """Query LangSearch Web Search API for real-time live marketplace pricing across all product categories."""
         api_key = getattr(settings, "LANGSEARCH_API_KEY", "") or "sk-60d823fe6dbd4ccd8b1223ae83d9e830"
         if not api_key:
             return []
@@ -278,46 +352,45 @@ class MarketResearchAgent:
                 raw_title = (item.get("name") or "").strip()
                 raw_url = (item.get("url") or "").strip()
                 raw_snippet = (item.get("snippet") or "").strip()
-                combined_text = f"{raw_title} {raw_snippet}"
+                combined_text = f"{raw_title}\n{raw_snippet}"
 
                 # Brand source detection
                 src_name = "Online Marketplace"
                 lower_url = raw_url.lower()
                 if "amazon" in lower_url:
-                    src_name = "Amazon Karigar India"
+                    src_name = "Amazon India"
                 elif "indiamart" in lower_url:
-                    src_name = "IndiaMART Craft Network"
+                    src_name = "IndiaMART Marketplace"
                 elif "etsy" in lower_url:
-                    src_name = "Etsy India Marketplace"
+                    src_name = "Etsy India"
                 elif "craftsvilla" in lower_url:
-                    src_name = "Craftsvilla Artisans"
+                    src_name = "Craftsvilla"
                 elif "flipkart" in lower_url:
-                    src_name = "Flipkart Samarth"
+                    src_name = "Flipkart"
                 elif "myntra" in lower_url:
-                    src_name = "Myntra Handcrafted"
+                    src_name = "Myntra"
                 elif "ondc" in lower_url or "mystore" in lower_url:
-                    src_name = "ONDC Artisan Network"
+                    src_name = "ONDC Network"
                 elif "tribesindia" in lower_url:
                     src_name = "Tribes India (TRIFED)"
                 elif "meesho" in lower_url:
-                    src_name = "Meesho Craft Collection"
+                    src_name = "Meesho"
                 elif "aajjo" in lower_url:
-                    src_name = "Aajjo Indian Craft Network"
+                    src_name = "Aajjo India"
+                elif "ikea" in lower_url:
+                    src_name = "IKEA India"
+                elif "woodenstreet" in lower_url:
+                    src_name = "Wooden Street"
+                elif "pepperfry" in lower_url:
+                    src_name = "Pepperfry"
+                elif "croma" in lower_url:
+                    src_name = "Croma Electronics"
+                elif "reliancedigital" in lower_url:
+                    src_name = "Reliance Digital"
 
-                # Find price patterns (₹ 80, Rs 500, INR 850, etc.)
-                prices = re.findall(r'(?:₹|rs\.?|inr)\s*(\d{2,5}(?:,\d{3})*)', combined_text, re.IGNORECASE)
-                prices += re.findall(r'(\d{2,5})\s*(?:rs|rupees|inr|per|\/)', combined_text, re.IGNORECASE)
+                clean_prices = cls.extract_prices_from_text(combined_text)
+                price_val: int | None = clean_prices[0] if clean_prices else None
 
-                clean_prices = []
-                for p in prices:
-                    try:
-                        v = float(p.replace(',', ''))
-                        if 80 <= v <= 45000:
-                            clean_prices.append(v)
-                    except Exception:
-                        pass
-
-                price_val = clean_prices[0] if clean_prices else None
                 listings.append({
                     "title": raw_title[:85],
                     "url": raw_url,
@@ -333,7 +406,7 @@ class MarketResearchAgent:
 
     @classmethod
     def query_web_search(cls, query_terms: list[str], category_slug: str) -> list[dict[str, Any]]:
-        phrase = " ".join(query_terms[:4]) if query_terms else category_slug
+        phrase = " ".join(query_terms[:5]) if query_terms else category_slug
 
         # 1. Primary: High-fidelity LangSearch API
         langsearch_results = cls.query_langsearch(phrase)
@@ -372,37 +445,25 @@ class MarketResearchAgent:
                 src_name = "Online Marketplace"
                 lower_url = actual_url.lower()
                 if "amazon.in" in lower_url:
-                    src_name = "Amazon Karigar India"
+                    src_name = "Amazon India"
                 elif "indiamart.com" in lower_url:
-                    src_name = "IndiaMART Craft Network"
+                    src_name = "IndiaMART Marketplace"
                 elif "etsy.com" in lower_url:
-                    src_name = "Etsy India Marketplace"
+                    src_name = "Etsy India"
                 elif "craftsvilla.com" in lower_url:
-                    src_name = "Craftsvilla Artisans"
+                    src_name = "Craftsvilla"
                 elif "flipkart.com" in lower_url:
-                    src_name = "Flipkart Samarth"
+                    src_name = "Flipkart"
                 elif "myntra.com" in lower_url:
-                    src_name = "Myntra Handcrafted"
+                    src_name = "Myntra"
                 elif "ondc.org" in lower_url or "mystore.in" in lower_url:
-                    src_name = "ONDC Artisan Network"
+                    src_name = "ONDC Network"
                 elif "tribesindia.com" in lower_url:
                     src_name = "Tribes India (TRIFED)"
 
-                combined_text = f"{raw_title} {raw_snippet}"
-                # Find price patterns
-                prices = re.findall(r'(?:₹|rs\.?|inr)\s*(\d{2,5}(?:,\d{3})*)', combined_text, re.IGNORECASE)
-                prices += re.findall(r'(\d{2,5})\s*(?:rs|rupees|inr|per|\/)', combined_text, re.IGNORECASE)
-                
-                clean_prices = []
-                for p in prices:
-                    try:
-                        v = float(p.replace(',', ''))
-                        if 80 <= v <= 35000:
-                            clean_prices.append(v)
-                    except Exception:
-                        pass
-                        
-                price_val = clean_prices[0] if clean_prices else None
+                combined_text = f"{raw_title}\n{raw_snippet}"
+                clean_prices = cls.extract_prices_from_text(combined_text)
+                price_val: int | None = clean_prices[0] if clean_prices else None
                 listings.append({
                     "title": raw_title[:85],
                     "url": actual_url,
@@ -505,9 +566,9 @@ class MarketResearchAgent:
         if len(priced_listings) >= 2:
             # Use real web search results as comparables!
             for item in priced_listings[:6]:
-                price_val = item["price"]
+                price_val = round(item["price"])
                 if price_floor_preference and price_val < price_floor_preference * 0.7:
-                    price_val = round(price_val * 1.3, 2)
+                    price_val = round(price_val * 1.3)
                 comparables.append({
                     "title": item["title"],
                     "price": price_val,
@@ -524,16 +585,16 @@ class MarketResearchAgent:
                 })
         else:
             # If 0 or 1 priced listing from snippets, blend with description baseline
-            existing_price = priced_listings[0]["price"] if priced_listings else None
+            existing_price = round(priced_listings[0]["price"]) if priced_listings else None
             base_min = baseline["min"]
             base_max = baseline["max"]
             base_sug = baseline["suggested"]
 
             seed_prices = [
-                round(base_min * 1.05, 2),
-                round(base_sug * 0.95, 2),
-                round(base_sug * 1.08, 2),
-                round(base_max * 0.96, 2),
+                round(base_min * 1.05),
+                round(base_sug * 0.95),
+                round(base_sug * 1.08),
+                round(base_max * 0.96),
             ]
             if existing_price:
                 seed_prices.append(existing_price)
@@ -552,10 +613,10 @@ class MarketResearchAgent:
                 source_url = base_benchmarks[idx]["source_url"] if idx < len(base_benchmarks) else "https://ondc.org/network-participants"
                 
                 if price_floor_preference and p < price_floor_preference * 0.7:
-                    p = round(p * 1.3, 2)
+                    p = round(p * 1.3)
                 comparables.append({
                     "title": item_title,
-                    "price": p,
+                    "price": round(p),
                     "source": source_name,
                     "source_url": source_url,
                     "is_marketplace_listing": True,
@@ -564,7 +625,7 @@ class MarketResearchAgent:
                     "source": source_name,
                     "url": source_url,
                     "comparable_title": item_title,
-                    "listed_price": p,
+                    "listed_price": round(p),
                     "price_type": "Marketplace Listing Price",
                 })
 
@@ -575,7 +636,7 @@ class MarketResearchAgent:
                     "source": w["source"],
                     "url": w["url"],
                     "comparable_title": w["title"],
-                    "listed_price": w.get("price"),
+                    "listed_price": round(w["price"]) if w.get("price") is not None else None,
                     "price_type": "Live Web Search Craft Reference",
                 })
 
@@ -588,11 +649,11 @@ class MarketResearchAgent:
                 "price_type": "Authenticity & Craft Documentation",
             })
 
-        prices = [c["price"] for c in comparables]
-        min_price = min(prices)
-        max_price = max(prices)
-        avg_price = round(sum(prices) / len(prices), 2)
-        med_price = round(float(median(prices)), 2)
+        prices = [round(c["price"]) for c in comparables]
+        min_price = round(min(prices))
+        max_price = round(max(prices))
+        avg_price = round(sum(prices) / len(prices))
+        med_price = round(float(median(prices)))
 
         return {
             "comparables": comparables,
@@ -685,10 +746,15 @@ class PricingRecommendationAgent:
                 f"This higher tier reflects focused craftsmanship while remaining within premium marketplace ranges."
             )
 
+        # Strict requirement: recommended_price must ALWAYS be a whole-number integer, never float/decimal
+        rounded_int_price = round(recommended_price)
+        rounded_min = round(min_market)
+        rounded_max = round(max_market)
+
         return {
-            "recommended_price": round(recommended_price, 2),
-            "price_range_min": min_market,
-            "price_range_max": max_market,
+            "recommended_price": rounded_int_price,
+            "price_range_min": rounded_min,
+            "price_range_max": rounded_max,
             "cost_breakdown": cost_data,
             "explanation": explanation,
             "sources": market_data["sources"],
@@ -755,8 +821,15 @@ class PricingValidationAgent:
     def validate(recommendation: dict[str, Any]) -> dict[str, Any]:
         price = recommendation.get("recommended_price")
         if price is None or price <= 0:
-            recommendation["recommended_price"] = 450.0  # Sensible fallback
+            recommendation["recommended_price"] = 450  # Sensible whole-number fallback
             recommendation["validation_warning"] = "Price was adjusted to baseline floor."
+        else:
+            recommendation["recommended_price"] = round(price)
+
+        if recommendation.get("price_range_min") is not None:
+            recommendation["price_range_min"] = round(recommendation["price_range_min"])
+        if recommendation.get("price_range_max") is not None:
+            recommendation["price_range_max"] = round(recommendation["price_range_max"])
 
         # Ensure all source URLs have legitimate schemas
         clean_sources = []

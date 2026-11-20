@@ -1692,7 +1692,7 @@ class ProductWizardProvider extends ChangeNotifier {
       token: token,
       reason: 'market_difference',
       context:
-          'Artisan proposed ${_currency} ${customPrice.toStringAsFixed(2)} and requested a fresh storefront comparison.',
+          'Artisan proposed ${_currency} ${customPrice.toStringAsFixed(0)} and requested a fresh storefront comparison.',
     );
     if (rechecked) {
       _customPriceOverride = customPrice;
@@ -1723,7 +1723,7 @@ class ProductWizardProvider extends ChangeNotifier {
         token: token,
         productId: productId,
         revisionId: revisionId,
-        price: double.parse(price.toStringAsFixed(2)),
+        price: price.roundToDouble(),
         selectionSource: source,
       );
       _applyPricingResponse(result);

@@ -156,15 +156,15 @@ async def _save_pricing_revision(
         logger.warning("Dynamic pricing web search error in _save_pricing_revision: %s", exc)
 
     if ai_pricing and ai_pricing.get("recommended_price") is not None and ai_pricing["recommended_price"] > 0:
-        suggested_price = ai_pricing["recommended_price"]
-        price_range_min = ai_pricing.get("price_range_min")
-        price_range_max = ai_pricing.get("price_range_max")
+        suggested_price = round(float(ai_pricing["recommended_price"]))
+        price_range_min = round(float(ai_pricing["price_range_min"])) if ai_pricing.get("price_range_min") is not None else None
+        price_range_max = round(float(ai_pricing["price_range_max"])) if ai_pricing.get("price_range_max") is not None else None
         raw_comparables = ai_pricing.get("comparables", [])
         comparables = [
             {
                 "product_id": int(comp.get("product_id", idx + 1)),
                 "title": str(comp.get("title", "Marketplace Comparable")),
-                "price": round(float(comp.get("price", 0.0)), 2),
+                "price": round(float(comp.get("price", 0.0))),
                 "currency": str(comp.get("currency", settings.CURRENCY_CODE.upper())),
                 "category": comp.get("category", category_slug),
                 "material": comp.get("material", product.material),
