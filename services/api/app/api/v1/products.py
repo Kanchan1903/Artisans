@@ -1538,6 +1538,11 @@ async def update_product_stock(
     product.stock = payload.stock
     await db.commit()
 
+    try:
+        await _sync_product_to_mongo(product)
+    except Exception:
+        pass
+
     stmt = (
         select(Product)
         .where(Product.id == product.id)

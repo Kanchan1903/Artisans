@@ -609,94 +609,157 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppTheme.maroonPrimary,
               ),
             ),
-            InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MyProductsScreen()),
-                );
-              },
-              child: Row(
-                children: [
-                  Text(
-                    l10n.translate('viewAll'),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
+            Row(
+              children: [
+                // "+ Add Product" quick action button
+                InkWell(
+                  onTap: () => _onAddProductTap(context),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
                       color: AppTheme.maroonPrimary,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.maroonPrimary.withOpacity(0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          l10n.translate('addProduct'),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.maroonPrimary),
-                ],
-              ),
+                ),
+                const SizedBox(width: 10),
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+                    ).then((_) => _loadDashboardData());
+                  },
+                  child: Row(
+                    children: [
+                      Text(
+                        l10n.translate('viewAll'),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.maroonPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.maroonPrimary),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         const SizedBox(height: 12),
 
-        // 2-Column Product Cards
-        Row(
-          children: [
-            Expanded(
-              child: _buildFeaturedProductCard(
-                title: _recentProducts.isNotEmpty
-                    ? (_recentProducts[0]['title_${auth.selectedLanguage}'] ??
-                        _recentProducts[0]['title_hi'] ??
-                        _recentProducts[0]['title_en'] ??
-                        l10n.translate('handmadePot'))
-                    : l10n.translate('handmadePot'),
-                price: _recentProducts.isNotEmpty
-                    ? "₹${((_recentProducts[0]['price'] as num?)?.toDouble() ?? 499.0).toStringAsFixed(0)}"
-                    : "₹499",
-                imageAsset: 'assets/images/prod_pottery.jpg',
-                imageUrl: (_recentProducts.isNotEmpty &&
-                        _recentProducts[0]['images'] != null &&
-                        (_recentProducts[0]['images'] as List).isNotEmpty)
-                    ? _recentProducts[0]['images'][0]['url']
-                    : null,
-                onTap: () => _onAddProductTap(context),
-              ),
+        // Product Cards List or Grid
+        if (_recentProducts.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFEBE3D7)),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildFeaturedProductCard(
-                title: _recentProducts.length > 1
-                    ? (_recentProducts[1]['title_${auth.selectedLanguage}'] ??
-                        _recentProducts[1]['title_hi'] ??
-                        _recentProducts[1]['title_en'] ??
-                        l10n.translate('woodenElephant'))
-                    : l10n.translate('woodenElephant'),
-                price: _recentProducts.length > 1
-                    ? "₹${((_recentProducts[1]['price'] as num?)?.toDouble() ?? 799.0).toStringAsFixed(0)}"
-                    : "₹799",
-                imageAsset: 'assets/images/prod_woodcraft.jpg',
-                imageUrl: (_recentProducts.length > 1 &&
-                        _recentProducts[1]['images'] != null &&
-                        (_recentProducts[1]['images'] as List).isNotEmpty)
-                    ? _recentProducts[1]['images'][0]['url']
-                    : null,
-                onTap: () => _onAddProductTap(context),
-              ),
+            child: Column(
+              children: [
+                const Icon(Icons.inventory_2_outlined, size: 40, color: Color(0xFF9E8F88)),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.translate('noProductsDesc'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF7A6864)),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _onAddProductTap(context),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(l10n.translate('addProduct')),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.maroonPrimary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          )
+        else
+          Column(
+            children: _recentProducts.map((prod) {
+              return _buildHomeProductCard(prod, l10n, auth);
+            }).toList(),
+          ),
       ],
     );
   }
 
-  Widget _buildFeaturedProductCard({
-    required String title,
-    required String price,
-    required String imageAsset,
-    String? imageUrl,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildHomeProductCard(
+    Map<String, dynamic> prod,
+    AppLocalizations l10n,
+    AuthProvider auth,
+  ) {
+    final title = prod['title_${auth.selectedLanguage}'] ??
+        prod['title_hi'] ??
+        prod['title_en'] ??
+        'Handcrafted Item';
+    final price = (prod['price'] as num?)?.toDouble() ?? 0.0;
+    int stock = (prod['stock'] as num?)?.toInt() ?? 0;
+    final isPublished = prod['status'] == 'published';
+    final isAvailable = isPublished && stock > 0;
+    final imgUrl = prod['images'] != null && (prod['images'] as List).isNotEmpty
+        ? prod['images'][0]['url'] as String?
+        : null;
+
+    final inStockLabel = l10n.translate('inStock');
+    final isHindi = auth.selectedLanguage == 'hi';
+    final isMarathi = auth.selectedLanguage == 'mr';
+
+    final statusText = isAvailable
+        ? (isMarathi
+            ? "उपलब्ध (In Stock)"
+            : isHindi
+                ? "उपलब्ध (In Stock)"
+                : "In Stock")
+        : (isMarathi
+            ? "संपले (Out of Stock)"
+            : isHindi
+                ? "स्टॉक समाप्त (Out of Stock)"
+                : "Out of Stock");
+
     return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEBE3D7), width: 1.2),
+        border: Border.all(
+          color: isAvailable ? const Color(0xFFEBE3D7) : const Color(0xFFF0D5D5),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -706,105 +769,386 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image + Wishlist Heart Button
-          Stack(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Product Image
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
-                child: imageUrl != null && imageUrl.startsWith('http')
+                borderRadius: BorderRadius.circular(14),
+                child: imgUrl != null && imgUrl.startsWith('http')
                     ? Image.network(
-                        imageUrl,
-                        height: 130,
-                        width: double.infinity,
+                        imgUrl,
+                        width: 82,
+                        height: 82,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Image.asset(
-                          imageAsset,
-                          height: 130,
-                          width: double.infinity,
+                          'assets/images/prod_pottery.jpg',
+                          width: 82,
+                          height: 82,
                           fit: BoxFit.cover,
                         ),
                       )
                     : Image.asset(
-                        imageAsset,
-                        height: 130,
-                        width: double.infinity,
+                        'assets/images/prod_pottery.jpg',
+                        width: 82,
+                        height: 82,
                         fit: BoxFit.cover,
                       ),
               ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.favorite_border_rounded,
-                    size: 18,
-                    color: Color(0xFF6B5854),
-                  ),
+              const SizedBox(width: 12),
+
+              // Title, Price & Status Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF261C1A),
+                              height: 1.25,
+                            ),
+                          ),
+                        ),
+                        // Remove / Delete Option
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFDC2626)),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Remove product',
+                          onPressed: () => _confirmRemoveProduct(prod),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Price & Stock Status Badges
+                    Row(
+                      children: [
+                        Text(
+                          "₹ ${price.toStringAsFixed(0)}",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.maroonPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isAvailable ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isAvailable ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: Color(0xFFF2ECE4)),
+          const SizedBox(height: 8),
 
-          // Title & Price Row
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
+          // Inventory Management Controls: Available Qty (- / +) and Out-of-Stock Toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Quantity Stepper
+              Row(
+                children: [
+                  Text(
+                    "$inStockLabel: ",
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B5854),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => _decreaseStock(prod),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7E6D7),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFEED1BE)),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.remove_rounded, size: 16, color: Color(0xFF6A4A3C)),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => _editQuantityDialog(prod),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: Text(
+                        "$stock",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF261C1A),
+                        ),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => _increaseStock(prod),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: AppTheme.maroonPrimary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Manual Out of Stock / In Stock Toggle Button
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: Icon(
+                  isAvailable ? Icons.block_rounded : Icons.check_circle_outline_rounded,
+                  size: 15,
+                  color: isAvailable ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                ),
+                label: Text(
+                  isAvailable
+                      ? (isMarathi ? 'संपले म्हणून चिन्हांकित करा' : isHindi ? 'स्टॉक समाप्त मार्क करें' : 'Mark Out of Stock')
+                      : (isMarathi ? 'उपलब्ध करा' : isHindi ? 'उपलब्ध करें' : 'Restore Stock'),
+                  style: TextStyle(
+                    fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF261C1A),
+                    color: isAvailable ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      price,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.maroonPrimary,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: AppTheme.maroonPrimary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.shopping_cart_outlined,
-                          size: 15,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                onPressed: () => _toggleProductStockStatus(prod),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _increaseStock(Map<String, dynamic> prod) async {
+    final currentStock = (prod['stock'] as num?)?.toInt() ?? 0;
+    final newStock = currentStock + 1;
+    setState(() {
+      prod['stock'] = newStock;
+      if (prod['status'] != 'published') {
+        prod['status'] = 'published';
+      }
+    });
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.authToken != null && prod['id'] != null) {
+      await ApiService.updateStock(
+        token: auth.authToken!,
+        productId: prod['id'],
+        newStock: newStock,
+      );
+    }
+  }
+
+  Future<void> _decreaseStock(Map<String, dynamic> prod) async {
+    final currentStock = (prod['stock'] as num?)?.toInt() ?? 0;
+    if (currentStock <= 0) return;
+    final newStock = currentStock - 1;
+    setState(() {
+      prod['stock'] = newStock;
+    });
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.authToken != null && prod['id'] != null) {
+      await ApiService.updateStock(
+        token: auth.authToken!,
+        productId: prod['id'],
+        newStock: newStock,
+      );
+    }
+  }
+
+  Future<void> _editQuantityDialog(Map<String, dynamic> prod) async {
+    final currentStock = (prod['stock'] as num?)?.toInt() ?? 0;
+    final ctrl = TextEditingController(text: "$currentStock");
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Update Available Quantity'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Quantity in stock',
+            hintText: 'Enter positive number',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.maroonPrimary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final parsed = int.tryParse(ctrl.text.trim());
+      if (parsed != null && parsed >= 0) {
+        setState(() {
+          prod['stock'] = parsed;
+          if (parsed > 0 && prod['status'] != 'published') {
+            prod['status'] = 'published';
+          }
+        });
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        if (auth.authToken != null && prod['id'] != null) {
+          await ApiService.updateStock(
+            token: auth.authToken!,
+            productId: prod['id'],
+            newStock: parsed,
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _toggleProductStockStatus(Map<String, dynamic> prod) async {
+    final currentStock = (prod['stock'] as num?)?.toInt() ?? 0;
+    final isPublished = prod['status'] == 'published';
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    if (isPublished && currentStock > 0) {
+      // Mark out of stock: set stock to 0 and status to hidden
+      setState(() {
+        prod['stock'] = 0;
+      });
+      if (auth.authToken != null && prod['id'] != null) {
+        await ApiService.updateStock(
+          token: auth.authToken!,
+          productId: prod['id'],
+          newStock: 0,
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product marked as Out of Stock.')),
+        );
+      }
+    } else {
+      // Restore stock: set stock to at least 5 and publish
+      final restoredStock = currentStock > 0 ? currentStock : 5;
+      setState(() {
+        prod['stock'] = restoredStock;
+        prod['status'] = 'published';
+      });
+      if (auth.authToken != null && prod['id'] != null) {
+        await ApiService.updateStock(
+          token: auth.authToken!,
+          productId: prod['id'],
+          newStock: restoredStock,
+        );
+        await ApiService.updateProductAvailability(
+          token: auth.authToken!,
+          productId: prod['id'],
+          status: 'published',
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product restored to In Stock.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmRemoveProduct(Map<String, dynamic> prod) async {
+    final title = prod['title_en'] ?? prod['title_hi'] ?? 'this product';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Remove Product?'),
+        content: Text('Are you sure you want to remove "$title"? It will be removed from your active product listings.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      setState(() {
+        _recentProducts.removeWhere((p) => p['id'] == prod['id']);
+      });
+
+      if (auth.authToken != null && prod['id'] != null) {
+        final success = await ApiService.deleteProduct(
+          token: auth.authToken!,
+          productId: prod['id'],
+        );
+        if (!success) {
+          // If hard delete fails due to foreign key constraint (e.g. historical orders), deactivate/hide it
+          await ApiService.updateProductAvailability(
+            token: auth.authToken!,
+            productId: prod['id'],
+            status: 'hidden',
+          );
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product removed from active listings.')),
+        );
+      }
+    }
   }
 
   // ─── Support Indian Artisans Promo Banner ───────────────────────────────────
