@@ -200,20 +200,24 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                l10n.translate('appTitle'),
-                style: const TextStyle(
-                  fontFamily: 'serif',
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.maroonPrimary,
-                  letterSpacing: 0.2,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  l10n.translate('appTitle'),
+                  style: const TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.maroonPrimary,
+                    letterSpacing: 0.2,
+                  ),
                 ),
               ),
               Text(
                 l10n.translate('createSellGrow'),
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF7A6864),
                 ),
@@ -360,7 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Container(
           width: double.infinity,
-          height: 185,
+          constraints: const BoxConstraints(minHeight: 185),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [
@@ -395,44 +399,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Content Row
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Left Text & Button
                     Expanded(
                       flex: 6,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             l10n.translate('empoweringArtisans'),
                             style: const TextStyle(
                               fontFamily: 'serif',
-                              fontSize: 18,
+                              fontSize: 17,
                               fontWeight: FontWeight.w800,
                               color: AppTheme.maroonPrimary,
-                              height: 1.25,
+                              height: 1.2,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(
                             l10n.translate('turnCreativity'),
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               color: Color(0xFF6B5854),
-                              height: 1.3,
+                              height: 1.25,
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           // Start Selling Button
                           ElevatedButton(
                             onPressed: () => _onAddProductTap(context),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.maroonPrimary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                              minimumSize: const Size(0, 38),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              minimumSize: const Size(0, 36),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -444,12 +449,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Text(
                                   l10n.translate('startSelling'),
                                   style: const TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 12.5,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                const Icon(Icons.arrow_forward_rounded, size: 14),
+                                const SizedBox(width: 5),
+                                const Icon(Icons.arrow_forward_rounded, size: 13),
                               ],
                             ),
                           ),
@@ -462,17 +467,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       flex: 4,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(18),
                         child: Image.asset(
                           'assets/images/artisan_hero.jpg',
-                          height: 150,
+                          height: 140,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            height: 150,
+                            height: 140,
                             color: const Color(0xFFE8CEC6),
                             child: const Icon(
                               Icons.brush_rounded,
-                              size: 44,
+                              size: 40,
                               color: AppTheme.maroonPrimary,
                             ),
                           ),
@@ -1159,6 +1164,17 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _isSyncing
                 ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : Text(l10n.translate('syncNow'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF7A6864)),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Clear drafts',
+            onPressed: () async {
+              await OfflineStorageService.clearOfflineDrafts();
+              await _checkPendingSync();
+            },
           ),
         ],
       ),
