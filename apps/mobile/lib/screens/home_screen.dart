@@ -5,7 +5,6 @@ import 'package:kalasathi_mobile/providers/auth_provider.dart';
 import 'package:kalasathi_mobile/providers/order_provider.dart';
 import 'package:kalasathi_mobile/screens/add_product/add_product_wizard_screen.dart';
 import 'package:kalasathi_mobile/screens/my_products_screen.dart';
-import 'package:kalasathi_mobile/screens/orders_screen.dart';
 import 'package:kalasathi_mobile/screens/inquiries_screen.dart';
 import 'package:kalasathi_mobile/screens/earnings_learn_screen.dart';
 import 'package:kalasathi_mobile/screens/language_picker_screen.dart';
@@ -23,12 +22,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentNavIndex = 0;
   int _pendingSyncCount = 0;
   bool _isSyncing = false;
-  bool _isLoadingProducts = true;
   List<Map<String, dynamic>> _recentProducts = [];
-  Map<String, dynamic>? _earningsData;
   int _unreadInquiriesCount = 0;
+
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -36,6 +36,12 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDashboardData();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDashboardData() async {
@@ -55,35 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (_) {}
 
       try {
-        final earnings = await ApiService.getArtisanDashboard(auth.authToken!);
-        if (mounted) {
-          setState(() {
-            _earningsData = earnings;
-          });
-        }
-      } catch (_) {}
-
-      try {
         final prods = await ApiService.getMyProducts(auth.authToken!);
         if (mounted) {
           setState(() {
             _recentProducts = prods;
-            _isLoadingProducts = false;
           });
         }
-      } catch (_) {
-        if (mounted) {
-          setState(() {
-            _isLoadingProducts = false;
-          });
-        }
-      }
-    } else {
-      if (mounted) {
-        setState(() {
-          _isLoadingProducts = false;
-        });
-      }
+      } catch (_) {}
     }
 
     _checkPendingSync();
@@ -107,25 +91,16 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isSyncing = false);
 
     if (mounted) {
+      final l10n = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "ऑफलाइन सिंक पूर्ण: ${res['synced']} यशस्वी, ${res['failed']} प्रलंबित",
+            "${l10n.translate('syncNow')}: ${res['synced']} ok, ${res['failed']} pending",
           ),
-          backgroundColor: AppTheme.terracotta,
+          backgroundColor: AppTheme.maroonPrimary,
         ),
       );
     }
-  }
-
-  String _getFallbackProductAsset(int index) {
-    const assets = [
-      'assets/images/prod_pottery.jpg',
-      'assets/images/prod_handloom.jpg',
-      'assets/images/prod_jewelry.jpg',
-      'assets/images/prod_woodcraft.jpg',
-    ];
-    return assets[index % assets.length];
   }
 
   @override
@@ -134,1245 +109,1058 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = Provider.of<AuthProvider>(context);
     final orders = Provider.of<OrderProvider>(context);
 
-    // Calculate dynamic real earnings — never hardcode fake numbers!
-    double totalNetEarnings = 0.0;
-    if (_earningsData != null && _earningsData!['gross_sales'] != null) {
-      totalNetEarnings = (_earningsData!['gross_sales'] as num).toDouble();
-    } else {
-      totalNetEarnings = orders.orders.fold<double>(
-        0.0,
-        (sum, o) {
-          final status = o['status']?.toString();
-          final amt = (o['total_amount'] as num?)?.toDouble() ?? 0.0;
-          return status != 'cancelled' ? sum + amt : sum;
-        },
-      );
-    }
-
-    final artisanDisplayName = auth.getArtisanName(l10n);
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F6F0), // Warm sand background
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(68),
-        child: SafeArea(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF9F6F0),
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFEAE5D9), width: 1),
+      backgroundColor: AppTheme.backgroundSand,
+      floatingActionButton: VoiceHelpFab(
+        customMessage: l10n.translate('helpHome'),
+      ),
+      bottomNavigationBar: _buildBottomNavigationBar(l10n),
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: AppTheme.maroonPrimary,
+          onRefresh: () async {
+            await _loadDashboardData();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ─── 1. Header (Lotus Logo + KalaSathi + Bell + Avatar) ──────
+                _buildHeader(context, auth, l10n),
+                const SizedBox(height: 14),
+
+                // ─── 2. Search Bar ───────────────────────────────────────────
+                _buildSearchBar(l10n),
+                const SizedBox(height: 16),
+
+                // ─── 3. Offline Sync Alert if pending ────────────────────────
+                if (_pendingSyncCount > 0) ...[
+                  _buildSyncBanner(l10n),
+                  const SizedBox(height: 14),
+                ],
+
+                // ─── 4. Hero Carousel Banner Card ────────────────────────────
+                _buildHeroCard(context, l10n),
+                const SizedBox(height: 20),
+
+                // ─── 5. Category Quick Actions (5 Rounded Peach Tiles) ───────
+                _buildCategoryTiles(context, l10n),
+                const SizedBox(height: 22),
+
+                // ─── 6. Featured Products Section ────────────────────────────
+                _buildFeaturedProductsSection(context, l10n, auth),
+                const SizedBox(height: 20),
+
+                // ─── 7. Support Indian Artisans Promo Banner ──────────────────
+                _buildSupportArtisansBanner(l10n),
+                const SizedBox(height: 20),
+
+                // ─── 8. Recent Activity Card ─────────────────────────────────
+                _buildRecentActivitySection(context, l10n, orders),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Header Widget ──────────────────────────────────────────────────────────
+  Widget _buildHeader(BuildContext context, AuthProvider auth, AppLocalizations l10n) {
+    final artisanInitial = (auth.artisanProfile?['name']?.toString().trim().isNotEmpty ?? false)
+        ? auth.artisanProfile!['name'].toString().trim()[0].toUpperCase()
+        : 'K';
+
+    return Row(
+      children: [
+        // Stylized Lotus Logo Icon
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7E6E2),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8CEC6), width: 1.2),
+          ),
+          child: Center(
+            child: Icon(
+              Icons.spa_rounded,
+              color: AppTheme.maroonPrimary,
+              size: 28,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        // Brand Name & Subtitle
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.translate('appTitle'),
+                style: const TextStyle(
+                  fontFamily: 'serif',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.maroonPrimary,
+                  letterSpacing: 0.2,
+                ),
               ),
+              Text(
+                l10n.translate('createSellGrow'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF7A6864),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Language Pill
+        InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LanguagePickerScreen(isModal: true)),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE5DDD0), width: 1.2),
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // ─── Terracotta Rounded Square Logo With Bold 'क' ─────────────
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFC84B31), // Terracotta
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFC84B31).withOpacity(0.3),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    "क",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      height: 1.1,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // ─── KalaSathi Brand & Localized Tagline ─────────────────────
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "KalaSathi",
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1E293B),
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                      Text(
-                        l10n.translate('tagline'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontStyle: FontStyle.italic,
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ─── Language Selector Pill ─────────────────────────────────
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LanguagePickerScreen(isModal: true)),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFDDD6FE), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.language_rounded, size: 16, color: Color(0xFF7C3AED)),
-                        const SizedBox(width: 4),
-                        Text(
-                          AppLocalizations.getLanguageNative(auth.selectedLanguage),
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF64748B)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // ─── Notification Bell with Badge ────────────────────────────
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const OrdersScreen()),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF475569), size: 20),
-                      ),
-                    ),
-                    if (orders.pendingOrdersCount > 0)
-                      Positioned(
-                        right: -2,
-                        top: -2,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                          alignment: Alignment.center,
-                          child: Text(
-                            "${orders.pendingOrdersCount}",
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-
-                // ─── Artisan Avatar Profile ──────────────────────────────────
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFC84B31), width: 1.5),
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/images/artisan_avatar.jpg',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Color(0xFFC84B31)),
-                      ),
-                    ),
+                const Icon(Icons.language_rounded, size: 16, color: AppTheme.maroonPrimary),
+                const SizedBox(width: 4),
+                Text(
+                  AppLocalizations.getLanguageNative(auth.selectedLanguage),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.maroonPrimary,
                   ),
                 ),
               ],
             ),
           ),
         ),
-      ),
-      floatingActionButton: const VoiceHelpFab(),
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: const Color(0xFFC84B31),
-          onRefresh: _loadDashboardData,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ─── Offline Sync Banner (if drafts waiting) ─────────────────
-                if (_pendingSyncCount > 0)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.cloud_upload_rounded, color: Color(0xFFC84B31), size: 26),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "$_pendingSyncCount ${l10n.translate('offlineSaved')}",
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
-                              ),
-                              Text(
-                                l10n.translate('offlineSyncDesc'),
-                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ElevatedButton(
-                              onPressed: _isSyncing ? null : _triggerSync,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFC84B31),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                minimumSize: const Size(54, 32),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              ),
-                              child: _isSyncing
-                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : Text(l10n.translate('syncNow'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF64748B)),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              tooltip: 'Clear',
-                              onPressed: () async {
-                                await OfflineStorageService.clearOfflineDrafts();
-                                await _checkPendingSync();
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+        const SizedBox(width: 8),
 
-                // ─── Hero Banner Card (Image 3) ──────────────────────────────
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFFFFBEB), // Soft Warm Cream
-                        Color(0xFFFEF3C7), // Warm Light Gold
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFD97706).withOpacity(0.08),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Left Content
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "${l10n.translate('greeting')}, $artisanDisplayName! 👋",
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              l10n.translate('heroSubtitle'),
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                color: Color(0xFF4B5563),
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFC84B31).withOpacity(0.12),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    l10n.translate('appTitle'),
-                                    style: const TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFFC84B31),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      // Right Image: Artisan woman painting pot
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.asset(
-                          'assets/images/artisan_hero.jpg',
-                          width: 105,
-                          height: 120,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: 105,
-                            height: 120,
-                            color: const Color(0xFFFED7AA),
-                            child: const Icon(Icons.brush_rounded, size: 40, color: Color(0xFFC84B31)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+        // Notification Bell with Red Badge
+        InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InquiriesScreen()),
+            ).then((_) => _loadDashboardData());
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: Colors.transparent,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 18),
-
-                // ─── 4 Quick Action Cards (Image 3) ──────────────────────────
-                Row(
-                  children: [
-                    // Card 1: Add Product (Peach)
-                    Expanded(
-                      child: _buildQuickActionCard(
-                        bgColor: const Color(0xFFFFF2EB),
-                        borderColor: const Color(0xFFFFDDD2),
-                        iconColor: const Color(0xFFE05338),
-                        icon: Icons.add_a_photo_rounded,
-                        title: l10n.translate('addNewProduct'),
-                        subtitle: l10n.translate('addProdSub'),
-                        onTap: () => _onAddProductTap(context),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Card 2: My Products (Lavender)
-                    Expanded(
-                      child: _buildQuickActionCard(
-                        bgColor: const Color(0xFFF3E8FF),
-                        borderColor: const Color(0xFFE9D5FF),
-                        iconColor: const Color(0xFF8B5CF6),
-                        icon: Icons.inventory_2_rounded,
-                        title: l10n.translate('myProdTitle'),
-                        subtitle: _recentProducts.isNotEmpty
-                            ? "${_recentProducts.length} ${l10n.translate('stock')}"
-                            : l10n.translate('myProdSub'),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const MyProductsScreen()),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppTheme.textCharcoal,
+                  size: 26,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    // Card 3: Orders (Mint)
-                    Expanded(
-                      child: _buildQuickActionCard(
-                        bgColor: const Color(0xFFECFDF5),
-                        borderColor: const Color(0xFFA7F3D0),
-                        iconColor: const Color(0xFF059669),
-                        icon: Icons.shopping_bag_rounded,
-                        title: l10n.translate('ordersTitle'),
-                        subtitle: orders.orders.isNotEmpty
-                            ? "${orders.orders.length} ${l10n.translate('ordersTitle')}"
-                            : l10n.translate('ordersSub'),
-                        badgeText: orders.pendingOrdersCount > 0
-                            ? "${orders.pendingOrdersCount} ${l10n.translate('newBadge')}"
-                            : null,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const OrdersScreen()),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Card 4: My Earnings (Amber)
-                    Expanded(
-                      child: _buildQuickActionCard(
-                        bgColor: const Color(0xFFFEF3C7),
-                        borderColor: const Color(0xFFFDE68A),
-                        iconColor: const Color(0xFFD97706),
-                        icon: Icons.account_balance_wallet_rounded,
-                        title: l10n.translate('myEarningsTitle'),
-                        subtitle: l10n.translate('myEarningsSub'),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 0)),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Card 5: Buyer Inquiries Banner Card (Rose / Sky)
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const InquiriesScreen()),
-                    ).then((_) => _loadDashboardData());
-                  },
-                  borderRadius: BorderRadius.circular(20),
+              ),
+              if (_unreadInquiriesCount > 0)
+                Positioned(
+                  top: 5,
+                  right: 5,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF16A34A).withOpacity(0.06),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF16A34A), size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    l10n.translate("inquiriesTitle"),
-                                    style: TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1E293B),
-                                    ),
-                                  ),
-                                  if (_unreadInquiriesCount > 0) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFEF4444),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        "$_unreadInquiriesCount ${l10n.translate('newBadge')}",
-                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                l10n.translate("inquiriesSub"),
-                                style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF16A34A)),
-                      ],
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE53935),
+                      shape: BoxShape.circle,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
 
-                // ─── Performance & Learning Cards (Image 3) ──────────────────
-                // Card 1: This Month's Earnings (Dynamic from real backend)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // Artisan Profile Avatar with Initial
+        InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          },
+          child: CircleAvatar(
+            radius: 19,
+            backgroundColor: AppTheme.maroonPrimary,
+            child: Text(
+              artisanInitial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Search Bar ─────────────────────────────────────────────────────────────
+  Widget _buildSearchBar(AppLocalizations l10n) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF6EE),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: const Color(0xFFEBE1D3), width: 1.2),
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        decoration: InputDecoration(
+          hintText: l10n.translate('searchProductsHint'),
+          hintStyle: const TextStyle(color: Color(0xFF9E8F88), fontSize: 14),
+          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF7A6864), size: 22),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        onSubmitted: (query) {
+          if (query.trim().isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  // ─── Hero Carousel Banner Card ──────────────────────────────────────────────
+  Widget _buildHeroCard(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          height: 185,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFFFBE4D2),
+                Color(0xFFF6D4BC),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFEFC9AD), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7A2024).withOpacity(0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Background ornamental subtle icon
+              Positioned(
+                right: -20,
+                bottom: -20,
+                child: Icon(
+                  Icons.local_florist_rounded,
+                  size: 150,
+                  color: Colors.white.withOpacity(0.2),
+                ),
+              ),
+
+              // Content Row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                child: Row(
+                  children: [
+                    // Left Text & Button
+                    Expanded(
+                      flex: 6,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Flexible(
-                            child: Text(
-                              l10n.translate('monthlyEarningsTitle'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
-                              ),
+                          Text(
+                            l10n.translate('empoweringArtisans'),
+                            style: const TextStyle(
+                              fontFamily: 'serif',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.maroonPrimary,
+                              height: 1.25,
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFECFDF5),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n.translate('turnCreativity'),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF6B5854),
+                              height: 1.3,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          // Start Selling Button
+                          ElevatedButton(
+                            onPressed: () => _onAddProductTap(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.maroonPrimary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                              minimumSize: const Size(0, 38),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 2,
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.trending_up_rounded, size: 14, color: Color(0xFF059669)),
-                                const SizedBox(width: 4),
                                 Text(
-                                  "+24% ${l10n.translate('vsLastMonth')}",
+                                  l10n.translate('startSelling'),
                                   style: const TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF059669),
                                   ),
                                 ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.arrow_forward_rounded, size: 14),
                               ],
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Main Amount & Visual Chart Row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "₹ ${totalNetEarnings.toStringAsFixed(0)}",
-                                  style: const TextStyle(
-                                    fontSize: 30,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1E293B),
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                // Mini 6-month bar chart
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    _buildMiniBar(l10n.translate('month_5'), 24, false),
-                                    _buildMiniBar(l10n.translate('month_6'), 32, false),
-                                    _buildMiniBar(l10n.translate('month_7'), 28, false),
-                                    _buildMiniBar(l10n.translate('month_8'), 42, false),
-                                    _buildMiniBar(l10n.translate('month_9'), 50, false),
-                                    _buildMiniBar(l10n.translate('month_10'), 65, true),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Money Plant Graphic
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Image.asset(
-                              'assets/images/money_plant.jpg',
-                              width: 68,
-                              height: 68,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.eco_rounded,
-                                size: 50,
-                                color: Color(0xFF10B981),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      const Divider(color: Color(0xFFF1F5F9)),
-                      const SizedBox(height: 6),
-
-                      // Bottom Link: View Full Report
-                      InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 0)),
-                          );
-                        },
-                        child: Row(
-                          children: [
-                            Text(
-                              l10n.translate('viewFullReport'),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFC84B31),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFFC84B31)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Card 2: Learn & Grow (Image 3)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            l10n.translate('learnAndGrow'),
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEDE9FE),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.school_rounded, size: 16, color: Color(0xFF7C3AED)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Lesson 1: Photo
-                      _buildLessonRow(
-                        leadingWidget: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(
-                            'assets/images/learn_camera.jpg',
-                            width: 36,
-                            height: 36,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.camera_alt, color: Color(0xFF7C3AED)),
-                          ),
-                        ),
-                        title: l10n.translate('learnPhotoTitle'),
-                        badgeText: "▶ ${l10n.translate('fiveMins')}",
-                        badgeColor: const Color(0xFF7C3AED),
-                        badgeBg: const Color(0xFFEDE9FE),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 1)),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Lesson 2: Pricing
-                      _buildLessonRow(
-                        leadingWidget: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.sell_rounded, color: Color(0xFFD97706), size: 20),
-                        ),
-                        title: l10n.translate('learnPricingTitle'),
-                        badgeText: "▶ ${l10n.translate('fourMins')}",
-                        badgeColor: const Color(0xFFD97706),
-                        badgeBg: const Color(0xFFFEF3C7),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 1)),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Lesson 3: Online Selling Tips
-                      _buildLessonRow(
-                        leadingWidget: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFECFDF5),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.trending_up_rounded, color: Color(0xFF059669), size: 20),
-                        ),
-                        title: l10n.translate('learnTipsTitle'),
-                        badgeText: "▶ ${l10n.translate('fiveMins')}",
-                        badgeColor: const Color(0xFF059669),
-                        badgeBg: const Color(0xFFECFDF5),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 1)),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      const Divider(color: Color(0xFFF1F5F9)),
-                      const SizedBox(height: 6),
-
-                      // Bottom Link: View All Lessons
-                      InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 1)),
-                          );
-                        },
-                        child: Row(
-                          children: [
-                            Text(
-                              l10n.translate('viewAll'),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF7C3AED),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF7C3AED)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-
-                // ─── Recently Added Products (Image 3) ────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l10n.translate('recentlyAdded'),
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
                       ),
                     ),
-                    InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const MyProductsScreen()),
-                        );
-                      },
-                      child: Row(
-                        children: [
-                          Text(
-                            l10n.translate('viewAll'),
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFC84B31),
+                    const SizedBox(width: 8),
+
+                    // Right Artisan Photo
+                    Expanded(
+                      flex: 4,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.asset(
+                          'assets/images/artisan_hero.jpg',
+                          height: 150,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 150,
+                            color: const Color(0xFFE8CEC6),
+                            child: const Icon(
+                              Icons.brush_rounded,
+                              size: 44,
+                              color: AppTheme.maroonPrimary,
                             ),
                           ),
-                          const SizedBox(width: 2),
-                          const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFFC84B31)),
-                        ],
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Dots Indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 14,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppTheme.maroonPrimary,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8C7BC),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8C7BC),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-                // Dynamic Products Horizontal Scroll or Clean Empty State
-                if (_isLoadingProducts)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: CircularProgressIndicator(color: Color(0xFFC84B31)),
-                    ),
-                  )
-                else if (_recentProducts.isNotEmpty)
-                  SizedBox(
-                    height: 230,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _recentProducts.length,
-                      itemBuilder: (context, index) {
-                        final prod = _recentProducts[index];
-                        final title = prod['title_${auth.selectedLanguage}'] ??
-                            prod['title_hi'] ??
-                            prod['title_en'] ??
-                            'उत्पादन';
-                        final price = (prod['price'] as num?)?.toDouble() ?? 0.0;
-                        final stock = (prod['stock'] as num?)?.toInt() ?? 1;
-                        final status = prod['status']?.toString() ?? 'published';
-                        final isPublished = status != 'draft';
+  // ─── Category Quick Actions (5 Rounded Peach Tiles) ─────────────────────────
+  Widget _buildCategoryTiles(BuildContext context, AppLocalizations l10n) {
+    final categories = [
+      {'label': l10n.translate('handicrafts'), 'icon': Icons.palette_outlined},
+      {'label': l10n.translate('homeDecor'), 'icon': Icons.chair_outlined},
+      {'label': l10n.translate('fashion'), 'icon': Icons.checkroom_outlined},
+      {'label': l10n.translate('jewellery'), 'icon': Icons.diamond_outlined},
+      {'label': l10n.translate('more'), 'icon': Icons.grid_view_rounded},
+    ];
 
-                        String? imgUrl;
-                        if (prod['images'] != null && (prod['images'] as List).isNotEmpty) {
-                          imgUrl = prod['images'][0]['url'] as String?;
-                        }
-
-                        return Container(
-                          width: 170,
-                          margin: const EdgeInsets.only(right: 14, bottom: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Product Image with Status Pill Overlay
-                              Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                                    child: imgUrl != null && imgUrl.startsWith('http')
-                                        ? Image.network(
-                                            imgUrl,
-                                            height: 110,
-                                            width: 170,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => Image.asset(
-                                              _getFallbackProductAsset(index),
-                                              height: 110,
-                                              width: 170,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          )
-                                        : Image.asset(
-                                            _getFallbackProductAsset(index),
-                                            height: 110,
-                                            width: 170,
-                                            fit: BoxFit.cover,
-                                          ),
-                                  ),
-                                  // Status Badge
-                                  Positioned(
-                                    top: 8,
-                                    left: 8,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: isPublished ? const Color(0xFF059669) : const Color(0xFFD97706),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        isPublished ? l10n.translate('published') : l10n.translate('draft'),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              // Info Padding
-                              Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF1E293B),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      "₹ ${price.toStringAsFixed(0)}",
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFFC84B31),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      "${l10n.translate('stock')}: $stock",
-                                      style: const TextStyle(
-                                        fontSize: 11.5,
-                                        color: Color(0xFF64748B),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  )
-                else
-                  // Empty State Card
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: categories.map((cat) {
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                children: [
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(24),
+                    height: 58,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      color: const Color(0xFFF7E6D7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFEED1BE), width: 1),
                     ),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 58,
-                          height: 58,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFFF2EB),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.inventory_2_outlined, size: 28, color: Color(0xFFC84B31)),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          l10n.translate('noProductsYet'),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          l10n.translate('heroSubtitle'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                        ),
-                        const SizedBox(height: 14),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AddProductWizardScreen()),
-                            );
-                          },
-                          icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                          label: Text(
-                            l10n.translate('addFirstProduct'),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFC84B31),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          ),
-                        ),
-                      ],
+                    child: Center(
+                      child: Icon(
+                        cat['icon'] as IconData,
+                        color: const Color(0xFF6A4A3C),
+                        size: 26,
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    cat['label'] as String,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF4A3E3B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
 
-                const SizedBox(height: 80), // Padding for Floating Button
+  // ─── Featured Products Section (2-Column Cards) ─────────────────────────────
+  Widget _buildFeaturedProductsSection(
+      BuildContext context, AppLocalizations l10n, AuthProvider auth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              l10n.translate('featuredProducts'),
+              style: const TextStyle(
+                fontFamily: 'serif',
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.maroonPrimary,
+              ),
+            ),
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+                );
+              },
+              child: Row(
+                children: [
+                  Text(
+                    l10n.translate('viewAll'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.maroonPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.maroonPrimary),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 2-Column Product Cards
+        Row(
+          children: [
+            Expanded(
+              child: _buildFeaturedProductCard(
+                title: _recentProducts.isNotEmpty
+                    ? (_recentProducts[0]['title_${auth.selectedLanguage}'] ??
+                        _recentProducts[0]['title_hi'] ??
+                        _recentProducts[0]['title_en'] ??
+                        l10n.translate('handmadePot'))
+                    : l10n.translate('handmadePot'),
+                price: _recentProducts.isNotEmpty
+                    ? "₹${((_recentProducts[0]['price'] as num?)?.toDouble() ?? 499.0).toStringAsFixed(0)}"
+                    : "₹499",
+                imageAsset: 'assets/images/prod_pottery.jpg',
+                imageUrl: (_recentProducts.isNotEmpty &&
+                        _recentProducts[0]['images'] != null &&
+                        (_recentProducts[0]['images'] as List).isNotEmpty)
+                    ? _recentProducts[0]['images'][0]['url']
+                    : null,
+                onTap: () => _onAddProductTap(context),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildFeaturedProductCard(
+                title: _recentProducts.length > 1
+                    ? (_recentProducts[1]['title_${auth.selectedLanguage}'] ??
+                        _recentProducts[1]['title_hi'] ??
+                        _recentProducts[1]['title_en'] ??
+                        l10n.translate('woodenElephant'))
+                    : l10n.translate('woodenElephant'),
+                price: _recentProducts.length > 1
+                    ? "₹${((_recentProducts[1]['price'] as num?)?.toDouble() ?? 799.0).toStringAsFixed(0)}"
+                    : "₹799",
+                imageAsset: 'assets/images/prod_woodcraft.jpg',
+                imageUrl: (_recentProducts.length > 1 &&
+                        _recentProducts[1]['images'] != null &&
+                        (_recentProducts[1]['images'] as List).isNotEmpty)
+                    ? _recentProducts[1]['images'][0]['url']
+                    : null,
+                onTap: () => _onAddProductTap(context),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeaturedProductCard({
+    required String title,
+    required String price,
+    required String imageAsset,
+    String? imageUrl,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEBE3D7), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image + Wishlist Heart Button
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
+                child: imageUrl != null && imageUrl.startsWith('http')
+                    ? Image.network(
+                        imageUrl,
+                        height: 130,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Image.asset(
+                          imageAsset,
+                          height: 130,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Image.asset(
+                        imageAsset,
+                        height: 130,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.favorite_border_rounded,
+                    size: 18,
+                    color: Color(0xFF6B5854),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Title & Price Row
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF261C1A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      price,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.maroonPrimary,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppTheme.maroonPrimary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Support Indian Artisans Promo Banner ───────────────────────────────────
+  Widget _buildSupportArtisansBanner(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFFBE4D2),
+            Color(0xFFF7D5BC),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEFC9AD), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          // Leaves / Lotus Motif
+          const Icon(
+            Icons.eco_rounded,
+            color: Color(0xFF2E7D32),
+            size: 32,
+          ),
+          const SizedBox(width: 12),
+
+          // Text Center
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.translate('supportIndianArtisans'),
+                  style: const TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.maroonPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  l10n.translate('shopHandmadeShopLocal'),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B5854),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Gift Box Icon / Ornament
+          const Icon(
+            Icons.card_giftcard_rounded,
+            color: AppTheme.maroonPrimary,
+            size: 34,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Recent Activity Card ───────────────────────────────────────────────────
+  Widget _buildRecentActivitySection(
+      BuildContext context, AppLocalizations l10n, OrderProvider orders) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              l10n.translate('recentActivity'),
+              style: const TextStyle(
+                fontFamily: 'serif',
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.maroonPrimary,
+              ),
+            ),
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const InquiriesScreen()),
+                );
+              },
+              child: Row(
+                children: [
+                  Text(
+                    l10n.translate('viewAll'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.maroonPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.maroonPrimary),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Activity Card
+        InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InquiriesScreen()),
+            );
+          },
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFEBE3D7), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppTheme.maroonPrimary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.translate('newInquiryOnProduct'),
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF261C1A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.translate('hoursAgo'),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF7A6864),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF7A6864),
+                ),
               ],
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  // ─── Bottom Navigation Bar (5 Items) ────────────────────────────────────────
+  Widget _buildBottomNavigationBar(AppLocalizations l10n) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Color(0xFFEBE3D7), width: 1),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(
+              index: 0,
+              icon: Icons.home_rounded,
+              label: l10n.translate('home'),
+              isActive: _currentNavIndex == 0,
+              onTap: () => setState(() => _currentNavIndex = 0),
+            ),
+            _buildNavItem(
+              index: 1,
+              icon: Icons.inventory_2_outlined,
+              label: l10n.translate('myProducts'),
+              isActive: _currentNavIndex == 1,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyProductsScreen()),
+                );
+              },
+            ),
+            _buildNavItem(
+              index: 2,
+              icon: Icons.trending_up_rounded,
+              label: l10n.translate('analytics'),
+              isActive: _currentNavIndex == 2,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EarningsLearnScreen(initialTab: 0)),
+                );
+              },
+            ),
+            _buildNavItem(
+              index: 3,
+              icon: Icons.chat_bubble_outline_rounded,
+              label: l10n.translate('inquiriesTitle'),
+              badgeCount: _unreadInquiriesCount > 0 ? _unreadInquiriesCount : null,
+              isActive: _currentNavIndex == 3,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const InquiriesScreen()),
+                ).then((_) => _loadDashboardData());
+              },
+            ),
+            _buildNavItem(
+              index: 4,
+              icon: Icons.person_outline_rounded,
+              label: l10n.translate('profile'),
+              isActive: _currentNavIndex == 4,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildQuickActionCard({
-    required Color bgColor,
-    required Color borderColor,
-    required Color iconColor,
+  Widget _buildNavItem({
+    required int index,
     required IconData icon,
-    required String title,
-    required String subtitle,
-    String? badgeText,
+    required String label,
+    required bool isActive,
+    int? badgeCount,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: iconColor.withOpacity(0.18),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(icon, color: iconColor, size: 20),
-                ),
-                if (badgeText != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                icon,
+                color: isActive ? AppTheme.maroonPrimary : const Color(0xFF7A6864),
+                size: 24,
+              ),
+              if (badgeCount != null)
+                Positioned(
+                  top: -4,
+                  right: -8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
-                      color: iconColor,
+                      color: const Color(0xFFE53935),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      badgeText,
+                      "$badgeCount",
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-              ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+              color: isActive ? AppTheme.maroonPrimary : const Color(0xFF7A6864),
             ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+          ),
+          if (isActive)
+            Container(
+              margin: const EdgeInsets.only(top: 3),
+              width: 18,
+              height: 2.5,
+              decoration: BoxDecoration(
+                color: AppTheme.maroonPrimary,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 3),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11.5,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildLessonRow({
-    required Widget leadingWidget,
-    required String title,
-    required String badgeText,
-    required Color badgeColor,
-    required Color badgeBg,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            leadingWidget,
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: badgeBg,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                badgeText,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: badgeColor,
-                ),
-              ),
-            ),
-          ],
-        ),
+  Widget _buildSyncBanner(AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF2EB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFDDD2)),
       ),
-    );
-  }
-
-  Widget _buildMiniBar(String label, double height, bool isCurrent) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        child: Column(
-          children: [
-            Container(
-              height: height,
-              decoration: BoxDecoration(
-                color: isCurrent ? const Color(0xFFC84B31) : const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(4),
-              ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded, color: AppTheme.maroonPrimary, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "$_pendingSyncCount ${l10n.translate('offlineSaved')}",
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.maroonPrimary),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 9.5,
-                color: isCurrent ? const Color(0xFFC84B31) : const Color(0xFF94A3B8),
-                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-              ),
+          ),
+          ElevatedButton(
+            onPressed: _isSyncing ? null : _triggerSync,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.maroonPrimary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              minimumSize: const Size(54, 30),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-          ],
-        ),
+            child: _isSyncing
+                ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Text(l10n.translate('syncNow'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -1383,5 +1171,4 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const AddProductWizardScreen(initialStep: 0)),
     );
   }
-
 }

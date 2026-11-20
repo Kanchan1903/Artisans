@@ -1534,6 +1534,7 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
       BuildContext context, Map<String, dynamic> variation) {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final titleMr = variation['title_mr'] ?? variation['title'] ?? 'पर्याय';
+    final titleHi = variation['title_hi'] ?? variation['title_mr'] ?? variation['title'] ?? 'विकल्प';
     final titleEn = variation['title'] ?? '';
 
     showDialog(
@@ -1558,7 +1559,9 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
               child: Column(
                 children: [
                   Text(
-                    auth.selectedLanguage == 'en' ? titleEn : titleMr,
+                    auth.selectedLanguage == 'en'
+                        ? titleEn
+                        : (auth.selectedLanguage == 'hi' ? titleHi : titleMr),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -3793,7 +3796,12 @@ class _AddProductWizardScreenState extends State<AddProductWizardScreen> {
                       hindi: 'श्रम के घंटे',
                       marathi: 'कामाचे तास'),
                   border: const OutlineInputBorder(),
-                  suffixText: "तास",
+                  suffixText: _localizedCopy(
+                    auth,
+                    english: 'hrs',
+                    hindi: 'घंटे',
+                    marathi: 'तास',
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -4869,7 +4877,12 @@ void _showManualPriceDialog(
                   onPressed: () async {
                     final feedback = wizard.voiceTranscript.trim().isNotEmpty
                         ? wizard.voiceTranscript.trim()
-                        : 'मला बाजारपेठेपेक्षा जास्त किंमत हवी आहे';
+                        : _localizedCopy(
+                            auth,
+                            english: 'I need a higher price based on market rates',
+                            hindi: 'मुझे बाजार भाव के अनुसार अधिक कीमत चाहिए',
+                            marathi: 'मला बाजारपेठेपेक्षा जास्त किंमत हवी आहे',
+                          );
                     Navigator.pop(ctx);
                     await wizard.submitVoicePricingFeedback(
                       voiceFeedback: feedback,

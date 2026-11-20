@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // ─── Earthy Indian Handicraft Palette ───────────────────────────────────────
-  static const Color terracotta = Color(0xFFC85A32);
-  static const Color terracottaDark = Color(0xFF9E3A19);
-  static const Color terracottaLight = Color(0xFFFBECE6);
+  // ─── Reference Indian Handicraft Palette (KalaSathi Warm Maroon & Sand) ──────
+  static const Color maroonPrimary = Color(0xFF6B1D2F);
+  static const Color maroonDark = Color(0xFF4E1422);
+  static const Color maroonLight = Color(0xFFFBECEE);
+
+  static const Color terracotta = Color(0xFF8B263E);
+  static const Color terracottaDark = Color(0xFF6B1D2F);
+  static const Color terracottaLight = Color(0xFFFDF2F4);
+
+  static const Color peachTile = Color(0xFFF9E7D8);
+  static const Color peachTileBorder = Color(0xFFF3D5BD);
 
   static const Color indigo = Color(0xFF2C3E6B);
   static const Color indigoDark = Color(0xFF1B2745);
@@ -14,12 +21,12 @@ class AppTheme {
   static const Color turmericDark = Color(0xFFC78322);
   static const Color turmericLight = Color(0xFFFCF5E8);
 
-  static const Color backgroundSand = Color(0xFFFAF7F2);
+  static const Color backgroundSand = Color(0xFFFBF7F0);
   static const Color surfaceWhite = Color(0xFFFFFFFF);
-  static const Color borderWarm = Color(0xFFE5DDD0);
+  static const Color borderWarm = Color(0xFFEADBCE);
 
-  static const Color textCharcoal = Color(0xFF262220);
-  static const Color textMuted = Color(0xFF6B645F);
+  static const Color textCharcoal = Color(0xFF261C1A);
+  static const Color textMuted = Color(0xFF7A6864);
 
   static const Color successGreen = Color(0xFF2E7D32);
   static const Color successGreenLight = Color(0xFFE8F5E9);
