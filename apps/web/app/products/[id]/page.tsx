@@ -41,6 +41,14 @@ const LANGUAGES_12 = [
   { code: "as", name: "Assamese", native: "অসমীয়া" },
 ];
 
+const CATEGORY_IMAGES: Record<string, string> = {
+  handloom: "/categories/handloom.jpg",
+  jewelry: "/categories/jewelry.jpg",
+  pottery: "/categories/pottery.jpg",
+  "folk-art": "/categories/folk-art.jpg",
+  woodcraft: "/categories/woodcraft.jpg",
+};
+
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
   const productId = Number(params.id);
 
@@ -165,10 +173,12 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
       ? product.description_hi
       : activeTranslation?.description || product.description_en;
 
+  const categoryFallback = product.category?.slug ? CATEGORY_IMAGES[product.category.slug] : null;
+
   const primaryImage =
     product.images?.[selectedImageIdx]?.url ||
     product.images?.[0]?.url ||
-    null;
+    categoryFallback;
 
   const handleB2BSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,7 +274,11 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                   alt={currentTitle}
                   className="relative w-full h-full object-cover"
                   onError={(e) => {
-                    e.currentTarget.style.display = "none";
+                    if (categoryFallback && e.currentTarget.src !== categoryFallback) {
+                      e.currentTarget.src = categoryFallback;
+                    } else {
+                      e.currentTarget.style.display = "none";
+                    }
                   }}
                 />
               )}

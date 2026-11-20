@@ -355,9 +355,10 @@ function ProductsContent() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {displayedProducts.map((p) => {
+                    const categoryFallback = p.category?.slug ? CATEGORY_IMAGES[p.category.slug] : null;
                     const primaryImg = p.images?.find((i) => i.is_primary)?.url
                       ?? p.images?.[0]?.url
-                      ?? null;
+                      ?? categoryFallback;
                     const inStock = p.stock > 0;
 
                     return (
@@ -378,7 +379,11 @@ function ProductsContent() {
                                 alt={p.title_en}
                                 className="relative w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                 onError={(e) => {
-                                  e.currentTarget.style.display = "none";
+                                  if (categoryFallback && e.currentTarget.src !== categoryFallback) {
+                                    e.currentTarget.src = categoryFallback;
+                                  } else {
+                                    e.currentTarget.style.display = "none";
+                                  }
                                 }}
                               />
                             )}
@@ -454,6 +459,14 @@ function ProductsContent() {
     </div>
   );
 }
+
+const CATEGORY_IMAGES: Record<string, string> = {
+  handloom: "/categories/handloom.jpg",
+  jewelry: "/categories/jewelry.jpg",
+  pottery: "/categories/pottery.jpg",
+  "folk-art": "/categories/folk-art.jpg",
+  woodcraft: "/categories/woodcraft.jpg",
+};
 
 export default function ProductsPage() {
   return (
