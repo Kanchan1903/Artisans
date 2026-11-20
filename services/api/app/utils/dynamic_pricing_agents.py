@@ -185,6 +185,41 @@ MARKETPLACE_BENCHMARKS = {
         "default_max": 1600.0,
         "default_suggested": 950.0,
     },
+    "jewelry": {
+        "benchmarks": [
+            {
+                "title": "Handcrafted Minimalist Quartz Wrist Watch",
+                "price": 850.0,
+                "source": "Amazon Karigar Watch & Accessories",
+                "source_url": "https://www.amazon.in/b?node=21557580031",
+                "is_marketplace_listing": True,
+            },
+            {
+                "title": "Classic Black Strap Handcrafted Timepiece",
+                "price": 1150.0,
+                "source": "Etsy India Handcrafted Watch Guild",
+                "source_url": "https://www.etsy.com/in-en",
+                "is_marketplace_listing": True,
+            },
+            {
+                "title": "Artisan Handcrafted Ethnic Jewelry & Accessory",
+                "price": 650.0,
+                "source": "Craftsvilla Jewelry Collection",
+                "source_url": "https://www.craftsvilla.com",
+                "is_marketplace_listing": True,
+            },
+            {
+                "title": "Traditional Handcrafted Metal Bead Ornament",
+                "price": 450.0,
+                "source": "Tribes India (TRIFED)",
+                "source_url": "https://www.tribesindia.com",
+                "is_marketplace_listing": True,
+            },
+        ],
+        "default_min": 450.0,
+        "default_max": 1400.0,
+        "default_suggested": 850.0,
+    },
 }
 
 
@@ -327,6 +362,14 @@ class MarketResearchAgent:
             if any(k in t for k in ["silk", "chanderi", "tussar", "banarasi"]):
                 return {"min": 1400.0, "max": 3800.0, "suggested": 2200.0}
             return {"min": 550.0, "max": 1400.0, "suggested": 850.0}
+        elif category_slug == "jewelry" or "watch" in t or "jewelry" in t or "jewel" in t or "necklace" in t:
+            if any(k in t for k in ["watch", "time", "clock"]):
+                return {"min": 650.0, "max": 1800.0, "suggested": 1150.0}
+            elif any(k in t for k in ["necklace", "set", "pendant"]):
+                return {"min": 450.0, "max": 1200.0, "suggested": 750.0}
+            elif any(k in t for k in ["earring", "stud"]):
+                return {"min": 180.0, "max": 450.0, "suggested": 280.0}
+            return {"min": 350.0, "max": 950.0, "suggested": 550.0}
         return {"min": 350.0, "max": 800.0, "suggested": 500.0}
 
     @classmethod

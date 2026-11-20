@@ -159,7 +159,21 @@ async def _save_pricing_revision(
         suggested_price = ai_pricing["recommended_price"]
         price_range_min = ai_pricing.get("price_range_min")
         price_range_max = ai_pricing.get("price_range_max")
-        comparables = ai_pricing.get("comparables", [])
+        raw_comparables = ai_pricing.get("comparables", [])
+        comparables = [
+            {
+                "product_id": int(comp.get("product_id", idx + 1)),
+                "title": str(comp.get("title", "Marketplace Comparable")),
+                "price": round(float(comp.get("price", 0.0)), 2),
+                "currency": str(comp.get("currency", settings.CURRENCY_CODE.upper())),
+                "category": comp.get("category", category_slug),
+                "material": comp.get("material", product.material),
+                "technique": comp.get("technique", product.technique),
+                "similarity_score": float(comp.get("similarity_score", 0.95)),
+                "product_url": str(comp.get("source_url") or comp.get("product_url", f"/products/{product.id}")),
+            }
+            for idx, comp in enumerate(raw_comparables)
+        ]
         summary = ai_pricing.get("explanation") or f"Recommended based on live web search for '{product.title_en}'."
         factors = [
             f"Ground truth live web search for '{product.title_en}' across online craft marketplaces.",

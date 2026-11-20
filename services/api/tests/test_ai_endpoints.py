@@ -117,3 +117,22 @@ async def test_save_product_draft_with_translations_and_images(client: AsyncClie
     assert product["voice_transcript"] == "हा मातीचा सुंदर पाण्याचा घडा आहे."
     assert len(product["images"]) == 1
     assert len(product["translations"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_voice_description_agent_dynamic_watch_not_clay_pot(client: AsyncClient):
+    payload = {
+        "transcript": "my watch with black colour",
+        "language_hint": "en",
+    }
+    res = await client.post("/api/v1/ai/voice-description-agent", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["title"] == "Black Watch"
+    assert data["category_slug"] == "jewelry"
+    assert data["category"] == "Jewelry & Metalcraft"
+    assert "pottery" not in data["category_slug"]
+    assert "clay" not in data["title"].lower()
+    for kw in data["seo_keywords"]:
+        assert "pottery" not in kw.lower()
+

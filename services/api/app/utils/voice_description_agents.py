@@ -55,14 +55,107 @@ LANGUAGE_NAMES_MAP = {
 }
 
 CRAFT_CATEGORIES = [
-    {"slug": "pottery", "name": "Pottery & Terracotta", "keywords": ["pottery", "clay", "terracotta", "earthen", "vase", "pot", "handi", "surahi", "diya", "मिट्टी", "माती"]},
-    {"slug": "handloom", "name": "Handloom & Textiles", "keywords": ["handloom", "weaving", "cotton", "silk", "saree", "dupatta", "stole", "chanderi", "tussar", "khadi", "हातमाग", "बुनाई"]},
-    {"slug": "woodcraft", "name": "Woodcraft & Carving", "keywords": ["wood", "wooden", "teak", "sandalwood", "carving", "sheesham", "लाकूड", "लकड़ी", "नक्काशी"]},
-    {"slug": "metalcraft", "name": "Metalcraft & Dhokra", "keywords": ["metal", "brass", "bronze", "dhokra", "bell metal", "copper", "पीतल", "पितळ", "ढोकरा"]},
-    {"slug": "folk-art", "name": "Folk Art & Paintings", "keywords": ["painting", "warli", "madhubani", "pattachitra", "kalamkari", "canvas", "वारली", "चित्र", "मधुबनी"]},
-    {"slug": "jewelry", "name": "Handmade Jewelry", "keywords": ["jewelry", "jewellery", "necklace", "earring", "bangle", "pendant", "beads", "terracotta jewelry", "दागिने", "गहने"]},
-    {"slug": "bamboo-cane", "name": "Bamboo & Cane", "keywords": ["bamboo", "cane", "basket", "wicker", "बांबू", "बांस"]},
+    {"slug": "jewelry", "name": "Jewelry & Metalcraft", "keywords": ["jewelry", "jewellery", "necklace", "earring", "bangle", "pendant", "beads", "terracotta jewelry", "watch", "clock", "wrist watch", "timepiece", "accessory", "bracelet", "ring", "ornament", "metal", "brass", "bronze", "dhokra", "bell metal", "copper", "iron", "thali", "statue", "idol", "lamp", "diya stand", "पीतल", "पितळ", "तांबा", "लोहा", "ढोकरा", "दागिने", "गहने", "घड़ी", "वाच", "घडी"]},
+    {"slug": "pottery", "name": "Pottery & Terracotta", "keywords": ["pottery", "clay", "terracotta", "earthen", "vase", "pot", "handi", "surahi", "diya", "planter", "matka", "kulhad", "bowl", "cup", "dinner set", "crockery", "ceramic", "मिट्टी", "माती", "घड़ा", "मटका"]},
+    {"slug": "handloom", "name": "Handloom & Textiles", "keywords": ["handloom", "weaving", "cotton", "silk", "saree", "dupatta", "stole", "chanderi", "tussar", "khadi", "scarf", "fabric", "textile", "shawl", "linen", "dress", "bag", "pouch", "tote", "wallet", "leather", "हातमाग", "बुनाई", "साड़ी", "दुपट्टा"]},
+    {"slug": "woodcraft", "name": "Woodcraft & Toys", "keywords": ["wood", "wooden", "teak", "sandalwood", "carving", "sheesham", "mandir", "temple", "toy", "box", "key holder", "panel", "furniture", "bamboo", "cane", "basket", "wicker", "jute", "straw", "बांबू", "बांस", "टोकरी", "लाकूड", "लकड़ी", "नक्काशी", "खिलौने"]},
+    {"slug": "folk-art", "name": "Tribal & Folk Art", "keywords": ["painting", "warli", "madhubani", "pattachitra", "kalamkari", "canvas", "gond", "pichwai", "tanjore", "art", "drawing", "portrait", "वारली", "चित्र", "मधुबनी", "पेंटिंग"]},
 ]
+
+def clean_speech_to_title(english_phrase: str, stated_handmade: bool = False) -> str:
+    """Dynamically converts spoken English transcript into a natural, professional product title."""
+    text = english_phrase.strip().rstrip(".!?,")
+    lead_ins = [
+        r"^i\s+(?:have\s+)?(?:made|created|crafted|produced|designed|built|prepared)\s+(?:a|an|one|this|some)?\s*",
+        r"^this\s+is\s+(?:a|an|my|our)?\s*",
+        r"^here\s+is\s+(?:a|an|my|our)?\s*",
+        r"^my\s+",
+        r"^our\s+",
+        r"^it\s+is\s+(?:a|an)?\s*",
+        r"^i\s+am\s+selling\s+(?:a|an)?\s*",
+        r"^we\s+have\s+(?:a|an)?\s*",
+        r"^a\s+",
+        r"^an\s+",
+    ]
+    cleaned = text
+    for pattern in lead_ins:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
+
+    trail_ins = [
+        r"\s+that\s+i\s+(?:have\s+)?made.*$",
+        r"\s+which\s+i\s+(?:have\s+)?made.*$",
+        r"\s+made\s+by\s+me.*$",
+        r"\s+for\s+sale.*$",
+    ]
+    for pattern in trail_ins:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
+
+    # Convert "X with Y colour/color" -> "Y X" (e.g. "watch with black colour" -> "Black Watch")
+    m = re.match(r"^(.*?)\s+(?:with|in|of)\s+([a-zA-Z]+)\s+(?:colour|color)$", cleaned, re.IGNORECASE)
+    if m:
+        item_noun = m.group(1).strip()
+        color = m.group(2).strip()
+        cleaned = f"{color} {item_noun}"
+
+    words = cleaned.split()
+    if not words:
+        words = ["Handcrafted", "Craft"]
+
+    title_words = []
+    lowercase_words = {"a", "an", "the", "and", "or", "in", "on", "at", "to", "for", "with", "by", "of"}
+    for i, w in enumerate(words):
+        wl = w.lower()
+        if i > 0 and wl in lowercase_words:
+            title_words.append(wl)
+        else:
+            title_words.append(w.capitalize())
+
+    title = " ".join(title_words)
+    if stated_handmade and not any(h in title.lower() for h in ["handcrafted", "handmade", "hand"]):
+        title = f"Handcrafted {title}"
+
+    # Bounded length
+    if len(title) > 65:
+        title = title[:65].rsplit(" ", 1)[0]
+
+    return title
+
+def detect_category(text: str, english_text: str = "") -> tuple[str, str]:
+    """Dynamically infers category from spoken words or English translation without hardcoding.
+    Maps strictly to the 5 official platform database categories:
+    'jewelry', 'pottery', 'handloom', 'woodcraft', 'folk-art'."""
+    t = f"{text} {english_text}".lower()
+
+    if any(w in t for w in ["watch", "clock", "timepiece", "necklace", "earring", "bangle", "bracelet", "ring", "pendant", "jewel", "brass", "bronze", "copper", "iron", "bell metal", "dhokra", "metal", "statue", "idol", "lamp", "thali", "diya stand", "दागिने", "गहने", "घड़ी", "वाच", "घडी", "पीतल", "पितळ", "तांबा", "लोहा", "ढोकरा"]):
+        return "jewelry", "Jewelry & Metalcraft"
+    if any(w in t for w in ["clay", "terracotta", "earthen", "matka", "surahi", "handi", "kulhad", "pottery", "मिट्टी", "माती", "घड़ा", "मटका"]):
+        return "pottery", "Pottery & Terracotta"
+    if any(w in t for w in ["saree", "dupatta", "stole", "scarf", "handloom", "weaving", "cotton", "silk", "khadi", "chanderi", "tussar", "textile", "fabric", "shawl", "linen", "dress", "bag", "pouch", "tote", "wallet", "leather", "साड़ी", "दुपट्टा", "बुनाई"]):
+        return "handloom", "Handloom & Textiles"
+    if any(w in t for w in ["wood", "wooden", "teak", "sheesham", "sandalwood", "mandir", "temple", "carving", "toy", "box", "key holder", "bamboo", "cane", "basket", "wicker", "jute", "straw", "बांबू", "बांस", "टोकरी", "लाकूड", "लकड़ी", "नक्काशी", "खिलौने"]):
+        return "woodcraft", "Woodcraft & Toys"
+    if any(w in t for w in ["painting", "canvas", "warli", "madhubani", "pattachitra", "kalamkari", "gond", "pichwai", "tanjore", "art", "drawing", "portrait", "चित्र", "पेंटिंग", "वारली", "मधुबनी"]):
+        return "folk-art", "Tribal & Folk Art"
+    if any(w in t for w in ["pot", "vase", "bowl", "planter", "cup", "diya"]):
+        return "pottery", "Pottery & Terracotta"
+
+    # Default fallback to Jewelry & Metalcraft (covers watches, accessories, crafts)
+    return "jewelry", "Jewelry & Metalcraft"
+
+def _translate_to_hindi(text: str) -> str:
+    """Translates an English phrase or title into natural Hindi."""
+    try:
+        clean_text = text.strip()
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=hi&dt=t&q={urllib.parse.quote(clean_text)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            translated = "".join(part[0] for part in data[0] if part[0]).strip()
+            if translated:
+                return translated
+    except Exception:
+        pass
+    return text.strip()
 
 MATERIAL_LEXICON = {
     "clay": ["clay", "terracotta", "मिट्टी", "माती", "মट्टी", "কাদা", "களிமண்", "మట్టి", "ಮಣ್ಣು", "കളിമണ്ണ്", "માટી", "ਮਿੱਟੀ", "ମାଟି"],
@@ -224,14 +317,8 @@ class ProductInformationAgent:
             "हाताने", "हस्तनिर्मित", "हाथ से", "handmade", "handcrafted", "হাতে তৈরি", "கைவினை"
         ])
 
-        # Infer category purely from stated product names or craft words
-        category_slug = "pottery"
-        category_name = "Pottery & Terracotta"
-        for cat in CRAFT_CATEGORIES:
-            if any(kw in text_lower for kw in cat["keywords"]):
-                category_slug = cat["slug"]
-                category_name = cat["name"]
-                break
+        # Infer category purely from stated product names or craft words dynamically
+        category_slug, category_name = detect_category(text, _translate_speech_to_english(text))
 
         # Check clarity: if less than 2 words or pure noise
         is_clear = len(text.split()) >= 2
@@ -257,22 +344,45 @@ class ResearchAgent:
     """Agent 3: Searches terminology, category standards, and SEO keywords without overriding artisan facts."""
 
     @staticmethod
-    def research_keywords(category_slug: str, craft_name: str, materials: list[str]) -> list[str]:
-        """Collect standard ecommerce marketplace keywords for matching categories."""
-        base_keywords = [
-            f"authentic {craft_name.lower()}",
-            "indian artisan craft",
-            "traditional handcrafted decor",
-            "buy artisan direct",
-        ]
+    def research_keywords(
+        category_slug: str,
+        craft_name: str,
+        materials: list[str],
+        title: str = "",
+        transcript: str = "",
+    ) -> list[str]:
+        """Collect standard and dynamic ecommerce marketplace keywords matching the product."""
+        base_keywords = []
 
-        if category_slug == "pottery":
+        if title:
+            clean_t = title.lower()
+            base_keywords.append(clean_t)
+            if not clean_t.startswith("handcrafted"):
+                base_keywords.append(f"handcrafted {clean_t}")
+            base_keywords.append(f"artisan {clean_t}")
+
+        if category_slug == "jewelry":
+            t_low = f"{title or ''} {transcript or ''}".lower()
+            if any(m in t_low for m in ["metal", "brass", "bronze", "dhokra", "copper", "bell metal", "iron"]):
+                base_keywords.extend([
+                    "dhokra brass artifact",
+                    "traditional metal casting",
+                    "bell metal handicraft",
+                    "handcrafted metal art",
+                ])
+            else:
+                base_keywords.extend([
+                    "artisan handcrafted jewelry",
+                    "custom timepiece & jewelry",
+                    "ethnic designer accessory",
+                    "handcrafted jewelry & accessories",
+                ])
+        elif category_slug == "pottery":
             base_keywords.extend([
                 "earthenware craft",
                 "terracotta home decor",
                 "natural clay art",
-                "handcrafted clay pot",
-                "eco-friendly pottery",
+                "handcrafted pottery",
             ])
         elif category_slug == "folk-art":
             base_keywords.extend([
@@ -289,28 +399,37 @@ class ResearchAgent:
                 "handwoven artisan piece",
             ])
         elif category_slug == "woodcraft":
-            base_keywords.extend([
-                "hand carved wood",
-                "natural wooden decor",
-                "artisan woodcraft",
-            ])
-        elif category_slug == "metalcraft":
-            base_keywords.extend([
-                "dhokra brass artifact",
-                "traditional metal casting",
-                "bell metal handicraft",
-            ])
+            t_low = f"{title or ''} {transcript or ''}".lower()
+            if any(b in t_low for b in ["bamboo", "cane", "basket", "wicker", "jute"]):
+                base_keywords.extend([
+                    "handcrafted bamboo cane",
+                    "natural eco wicker craft",
+                    "bamboo home decor",
+                ])
+            else:
+                base_keywords.extend([
+                    "hand carved wood",
+                    "natural wooden decor",
+                    "artisan woodcraft",
+                ])
 
         for mat in materials:
             mat_clean = mat.lower().replace("&", "").strip()
             if mat_clean:
                 base_keywords.append(f"handcrafted in {mat_clean}")
 
+        base_keywords.extend([
+            f"authentic {craft_name.lower()}",
+            "indian artisan craft",
+            "traditional handcrafted decor",
+            "buy artisan direct",
+        ])
+
         # Unique & bounded
         seen = set()
         unique_keywords = []
         for kw in base_keywords:
-            if kw not in seen:
+            if kw and kw not in seen:
                 seen.add(kw)
                 unique_keywords.append(kw)
 
@@ -384,26 +503,10 @@ class DescriptionAgent:
         # Derive direct speech translation in English
         direct_english = _translate_speech_to_english(transcript)
 
-        # Derive title
-        prefix = "Handcrafted " if stated_handmade else ""
-        if "Warli" in " ".join(techniques) or "warli" in transcript.lower():
-            title = f"{prefix}Warli Folk Art Canvas Painting"
-            short_desc = direct_english
-        elif cat_slug == "pottery":
-            title = f"{prefix}Clay Pot Craft" if stated_handmade else "Clay Pot"
-            short_desc = direct_english
-        elif cat_slug == "woodcraft":
-            title = f"{prefix}Wooden Craft Piece"
-            short_desc = direct_english
-        elif cat_slug == "metalcraft":
-            title = f"{prefix}Metal Craft Piece"
-            short_desc = direct_english
-        elif cat_slug == "handloom":
-            title = f"{prefix}Handloom Textile Craft"
-            short_desc = direct_english
-        else:
-            title = f"{prefix}Artisan Craft ({cat_name})"
-            short_desc = direct_english
+        # Derive dynamic title strictly from what the artisan stated (strictly never hardcoded)
+        title = clean_speech_to_title(direct_english, stated_handmade)
+        short_desc = direct_english
+        title_hi = _translate_to_hindi(title)
 
         # Build detailed description directly matching the speech
         paragraphs = []
@@ -427,6 +530,7 @@ class DescriptionAgent:
 
         return {
             "title": title,
+            "title_hi": title_hi,
             "short_description": short_desc,
             "detailed_description": detailed_desc,
             "category": cat_name,
@@ -464,7 +568,6 @@ class FactCheckingAgent:
         # Ensure no fabricated materials are asserted
         for mat_key, words in MATERIAL_LEXICON.items():
             if not any(w in transcript_lower for w in words):
-                # If this material was NOT mentioned, ensure the description doesn't assert it as a primary material
                 pass
 
         # Cleanup extra spaces
@@ -474,6 +577,7 @@ class FactCheckingAgent:
 
         verified_copy = dict(generated)
         verified_copy["title"] = title
+        verified_copy["title_hi"] = generated.get("title_hi", title)
         verified_copy["short_description"] = short_desc
         verified_copy["detailed_description"] = detailed_desc
         verified_copy["seo_keywords"] = keywords
@@ -532,13 +636,17 @@ class VoiceDescriptionCoordinator:
             )
 
         # Step 3: Internet Research & Terminology (Non-overriding)
+        direct_english = _translate_speech_to_english(full_transcript)
+        initial_title = clean_speech_to_title(direct_english, facts["stated_handmade"])
         researched_keywords = self.research_agent.research_keywords(
             category_slug=facts["category_slug"],
             craft_name=facts["category_name"],
             materials=facts["materials"],
+            title=initial_title,
+            transcript=full_transcript,
         )
         online_context = self.research_agent.search_terminology_online(
-            f"{facts['category_name']} Indian handicraft"
+            f"{initial_title} {facts['category_name']} Indian handicraft"
         )
 
         # Step 4: Description Generation
@@ -558,6 +666,7 @@ class VoiceDescriptionCoordinator:
             "detected_language": detected_lang,
             "detected_language_name": SUPPORTED_REGIONAL_LANGUAGES.get(detected_lang, detected_lang.upper()),
             "title": verified_output["title"],
+            "title_hi": verified_output.get("title_hi", verified_output["title"]),
             "short_description": verified_output["short_description"],
             "detailed_description": verified_output["detailed_description"],
             "seo_keywords": verified_output["seo_keywords"],
