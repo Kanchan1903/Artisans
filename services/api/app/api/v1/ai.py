@@ -96,6 +96,37 @@ async def transcribe_speech(
     if file:
         audio_bytes = await file.read()
 
+    # 1. Primary Live STT: ElevenLabs Scribe Speech-to-Text API
+    eleven_key = getattr(settings, "ELEVENLABS_API_KEY", "") or "sk_87a1bb5e785cb1298d8852efbc26e6119d7a08fff472314e"
+    if file and audio_bytes and eleven_key and not simulate_failure:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as stt_client:
+                eleven_files = {"file": (file.filename or "recording.wav", audio_bytes, file.content_type or "audio/wav")}
+                eleven_data = {"model_id": "scribe_v1"}
+                if lang:
+                    eleven_data["language_code"] = lang
+                eleven_headers = {"xi-api-key": eleven_key}
+                stt_res = await stt_client.post(
+                    "https://api.elevenlabs.io/v1/speech-to-text",
+                    headers=eleven_headers,
+                    files=eleven_files,
+                    data=eleven_data,
+                )
+                if stt_res.status_code == 200:
+                    stt_json = stt_res.json()
+                    transcript_text = stt_json.get("text", "").strip()
+                    if transcript_text:
+                        detected_lang = stt_json.get("language_code") or lang
+                        return {
+                            "transcript": transcript_text,
+                            "language": detected_lang,
+                            "provider_used": "elevenlabs_scribe",
+                            "fallback_used": False,
+                            "confidence": 0.95,
+                        }
+        except Exception as exc:
+            logger.warning("ElevenLabs STT live conversion warning: %s", exc)
+
     try:
         files = {"file": (file.filename or "voice.wav", audio_bytes, file.content_type or "audio/wav")} if file else None
         data = {"language": lang, "simulate_failure": "true" if simulate_failure else "false"}

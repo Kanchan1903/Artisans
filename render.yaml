@@ -65,3 +65,7 @@ services:
         value: https://kalasathi-api.onrender.com
       - key: MINIO_PUBLIC_URL
         value: ""
+      - key: LANGSEARCH_API_KEY
+        value: sk-60d823fe6dbd4ccd8b1223ae83d9e830
+      - key: ELEVENLABS_API_KEY
+        value: sk_87a1bb5e785cb1298d8852efbc26e6119d7a08fff472314e

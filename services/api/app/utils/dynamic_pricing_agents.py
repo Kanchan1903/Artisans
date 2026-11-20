@@ -25,6 +25,7 @@ import urllib.request
 from statistics import median
 from typing import Any
 
+from app.config import settings
 from app.utils.voice_description_agents import VoiceAgent
 
 logger = logging.getLogger(__name__)
@@ -251,9 +252,98 @@ class MarketResearchAgent:
         return craft_terms
 
     @classmethod
+    def query_langsearch(cls, phrase: str) -> list[dict[str, Any]]:
+        """Query LangSearch Web Search API for real-time live Indian handicraft marketplace pricing."""
+        api_key = getattr(settings, "LANGSEARCH_API_KEY", "") or "sk-60d823fe6dbd4ccd8b1223ae83d9e830"
+        if not api_key:
+            return []
+        try:
+            url = "https://api.langsearch.com/v1/web-search"
+            payload = json.dumps({"query": f"{phrase} buy online price in india", "count": 6}).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "KalaSathi-Pricing-Agent/1.0",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            raw_items = data.get("data", {}).get("webPages", {}).get("value", [])
+            listings = []
+            for item in raw_items:
+                raw_title = (item.get("name") or "").strip()
+                raw_url = (item.get("url") or "").strip()
+                raw_snippet = (item.get("snippet") or "").strip()
+                combined_text = f"{raw_title} {raw_snippet}"
+
+                # Brand source detection
+                src_name = "Online Marketplace"
+                lower_url = raw_url.lower()
+                if "amazon" in lower_url:
+                    src_name = "Amazon Karigar India"
+                elif "indiamart" in lower_url:
+                    src_name = "IndiaMART Craft Network"
+                elif "etsy" in lower_url:
+                    src_name = "Etsy India Marketplace"
+                elif "craftsvilla" in lower_url:
+                    src_name = "Craftsvilla Artisans"
+                elif "flipkart" in lower_url:
+                    src_name = "Flipkart Samarth"
+                elif "myntra" in lower_url:
+                    src_name = "Myntra Handcrafted"
+                elif "ondc" in lower_url or "mystore" in lower_url:
+                    src_name = "ONDC Artisan Network"
+                elif "tribesindia" in lower_url:
+                    src_name = "Tribes India (TRIFED)"
+                elif "meesho" in lower_url:
+                    src_name = "Meesho Craft Collection"
+                elif "aajjo" in lower_url:
+                    src_name = "Aajjo Indian Craft Network"
+
+                # Find price patterns (₹ 80, Rs 500, INR 850, etc.)
+                prices = re.findall(r'(?:₹|rs\.?|inr)\s*(\d{2,5}(?:,\d{3})*)', combined_text, re.IGNORECASE)
+                prices += re.findall(r'(\d{2,5})\s*(?:rs|rupees|inr|per|\/)', combined_text, re.IGNORECASE)
+
+                clean_prices = []
+                for p in prices:
+                    try:
+                        v = float(p.replace(',', ''))
+                        if 80 <= v <= 45000:
+                            clean_prices.append(v)
+                    except Exception:
+                        pass
+
+                price_val = clean_prices[0] if clean_prices else None
+                listings.append({
+                    "title": raw_title[:85],
+                    "url": raw_url,
+                    "source": src_name,
+                    "snippet": raw_snippet[:180],
+                    "price": price_val,
+                    "is_marketplace_listing": True,
+                })
+            return listings
+        except Exception as e:
+            logger.warning("LangSearch web search request error: %s", e)
+            return []
+
+    @classmethod
     def query_web_search(cls, query_terms: list[str], category_slug: str) -> list[dict[str, Any]]:
-        phrase = " ".join(query_terms[:4]) + " price in india" if query_terms else f"{category_slug} price in india"
-        data = urllib.parse.urlencode({'q': phrase}).encode('utf-8')
+        phrase = " ".join(query_terms[:4]) if query_terms else category_slug
+
+        # 1. Primary: High-fidelity LangSearch API
+        langsearch_results = cls.query_langsearch(phrase)
+        priced_langsearch = [r for r in langsearch_results if r.get("price") is not None]
+        if priced_langsearch:
+            return priced_langsearch
+
+        # 2. Resilient Fallback: DuckDuckGo scraping
+        phrase_ddg = f"{phrase} price in india"
+        data = urllib.parse.urlencode({'q': phrase_ddg}).encode('utf-8')
         req = urllib.request.Request(
             "https://lite.duckduckgo.com/lite/",
             data=data,

@@ -437,7 +437,34 @@ class ResearchAgent:
 
     @staticmethod
     def search_terminology_online(query: str) -> str | None:
-        """Query DuckDuckGo for product naming conventions (network failure safe)."""
+        """Query LangSearch Web Search API for authentic Indian craft heritage, traditions, and naming context."""
+        api_key = getattr(settings, "LANGSEARCH_API_KEY", "") or "sk-60d823fe6dbd4ccd8b1223ae83d9e830"
+        if api_key:
+            try:
+                url = "https://api.langsearch.com/v1/web-search"
+                payload = json.dumps({"query": f"{query} authentic handcrafted Indian artisan", "count": 3}).encode("utf-8")
+                req = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "KalaSathi-ResearchAgent/1.0",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                pages = data.get("data", {}).get("webPages", {}).get("value", [])
+                snippets = [p.get("snippet", "") for p in pages if p.get("snippet")]
+                if snippets:
+                    clean_ctx = " ".join(snippets[:2])
+                    clean_ctx = re.sub(r'\s+', ' ', clean_ctx).strip()
+                    if len(clean_ctx) > 30:
+                        return clean_ctx[:300]
+            except Exception as e:
+                logger.warning("LangSearch terminology search error: %s", e)
+
+        # Fallback to DuckDuckGo instant answer
         try:
             url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json"
             req = urllib.request.Request(url, headers={"User-Agent": "KalaSathi-ResearchAgent/1.0"})
@@ -508,9 +535,15 @@ class DescriptionAgent:
         short_desc = direct_english
         title_hi = _translate_to_hindi(title)
 
-        # Build detailed description directly matching the speech
+        # Build professional detailed description directly matching the speech
         paragraphs = []
         paragraphs.append(direct_english)
+
+        # Authentic craft heritage context derived from LangSearch for traditional arts
+        if online_context and cat_slug in ["folk-art", "pottery", "handloom", "woodcraft"]:
+            clean_ctx = online_context.split(".")[0].strip()
+            if clean_ctx and len(clean_ctx) > 30 and not any(k in clean_ctx.lower() for k in ["cookie", "javascript", "login", "404", "privacy", "http", "sale", "price", "cart", "dollar", "$"]):
+                paragraphs.append(f"Traditional Craft Heritage: {clean_ctx}.")
 
         # Materials & Technique ONLY if explicitly mentioned
         spec_parts = []
@@ -525,6 +558,8 @@ class DescriptionAgent:
 
         if spec_parts:
             paragraphs.append("Product Details:\n- " + "\n- ".join(spec_parts))
+
+        paragraphs.append("Artisan Guarantee: 100% authentic handcrafted creation direct from master artisans. Every purchase directly sustains traditional Indian craft communities.")
 
         detailed_desc = "\n\n".join(paragraphs)
 
@@ -570,10 +605,11 @@ class FactCheckingAgent:
             if not any(w in transcript_lower for w in words):
                 pass
 
-        # Cleanup extra spaces
-        title = re.sub(r"\s+", " ", title).strip()
-        short_desc = re.sub(r"\s+", " ", short_desc).strip()
-        detailed_desc = re.sub(r"\s+", " ", detailed_desc).strip()
+        # Cleanup extra spaces within lines while preserving paragraph breaks
+        title = re.sub(r"[ \t]+", " ", title).strip()
+        short_desc = re.sub(r"[ \t]+", " ", short_desc).strip()
+        cleaned_paras = [re.sub(r"[ \t]+", " ", p).strip() for p in detailed_desc.split("\n") if p.strip()]
+        detailed_desc = "\n\n".join(cleaned_paras)
 
         verified_copy = dict(generated)
         verified_copy["title"] = title

@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     # Firebase FCM
     FIREBASE_SERVICE_ACCOUNT_PATH: str = ""
 
+    # External AI & Web Search Services
+    LANGSEARCH_API_KEY: str = "sk-60d823fe6dbd4ccd8b1223ae83d9e830"
+    ELEVENLABS_API_KEY: str = "sk_87a1bb5e785cb1298d8852efbc26e6119d7a08fff472314e"
+
     # Network & Public URLs
     PUBLIC_API_URL: str = "http://localhost:8000"
     MINIO_PUBLIC_URL: str = "http://localhost:9000"
