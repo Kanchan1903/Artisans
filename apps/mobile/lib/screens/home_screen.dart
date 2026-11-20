@@ -717,37 +717,129 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String? _resolveHomeImageUrl(Map<String, dynamic> prod) {
+    String? rawUrl;
+    if (prod['images'] != null && prod['images'] is List && (prod['images'] as List).isNotEmpty) {
+      final first = (prod['images'] as List)[0];
+      if (first is Map) {
+        rawUrl = (first['url'] ?? first['image_url'] ?? first['secure_url']) as String?;
+      } else if (first is String && first.isNotEmpty) {
+        rawUrl = first;
+      }
+    }
+    if (rawUrl == null || rawUrl.isEmpty) {
+      for (final key in ['image_url', 'url', 'photo_url', 'primary_image']) {
+        if (prod[key] is String && (prod[key] as String).isNotEmpty) {
+          rawUrl = prod[key] as String;
+          break;
+        }
+      }
+    }
+    if (rawUrl == null || rawUrl.isEmpty) return null;
+    if (rawUrl.contains('localhost:8000') || rawUrl.contains('127.0.0.1:8000')) {
+      rawUrl = rawUrl
+          .replaceFirst('http://localhost:8000', 'https://kalasathi-api.onrender.com')
+          .replaceFirst('http://127.0.0.1:8000', 'https://kalasathi-api.onrender.com');
+    } else if (rawUrl.startsWith('/uploads')) {
+      rawUrl = 'https://kalasathi-api.onrender.com$rawUrl';
+    }
+    return rawUrl;
+  }
+
+  String _getHomeFallbackAsset(Map<String, dynamic> prod) {
+    final title = (prod['title_en'] ?? prod['title'] ?? prod['title_hi'] ?? prod['title_mr'] ?? '').toString().toLowerCase();
+    final cat = (prod['category_slug'] ?? prod['category']?['slug'] ?? prod['category']?['name'] ?? '').toString().toLowerCase();
+
+    if (title.contains('jewel') ||
+        title.contains('necklace') ||
+        title.contains('ring') ||
+        title.contains('earring') ||
+        title.contains('cover') ||
+        title.contains('mobile') ||
+        title.contains('watch') ||
+        title.contains('belt') ||
+        cat.contains('jewel') ||
+        cat.contains('fashion')) {
+      return 'assets/images/prod_jewelry.jpg';
+    }
+    if (title.contains('wood') ||
+        title.contains('elephant') ||
+        title.contains('carv') ||
+        title.contains('furniture') ||
+        title.contains('decor') ||
+        cat.contains('wood') ||
+        cat.contains('decor')) {
+      return 'assets/images/prod_woodcraft.jpg';
+    }
+    if (title.contains('saree') ||
+        title.contains('shawl') ||
+        title.contains('cotton') ||
+        title.contains('silk') ||
+        title.contains('fabric') ||
+        title.contains('handloom') ||
+        title.contains('dress') ||
+        cat.contains('handloom') ||
+        cat.contains('textile')) {
+      return 'assets/images/prod_handloom.jpg';
+    }
+    if (title.contains('paint') || title.contains('art') || title.contains('folk') || cat.contains('art')) {
+      return 'assets/images/prod_folkart.jpg';
+    }
+    if (title.contains('pot') || title.contains('clay') || title.contains('terracotta') || title.contains('vase') || cat.contains('pottery')) {
+      return 'assets/images/prod_pottery.jpg';
+    }
+
+    final fallbacks = [
+      'assets/images/prod_jewelry.jpg',
+      'assets/images/prod_woodcraft.jpg',
+      'assets/images/prod_handloom.jpg',
+      'assets/images/prod_folkart.jpg',
+      'assets/images/prod_pottery.jpg',
+    ];
+    final id = prod['id'] is num ? (prod['id'] as num).toInt() : 0;
+    return fallbacks[id.abs() % fallbacks.length];
+  }
+
   Widget _buildHomeProductCard(
     Map<String, dynamic> prod,
     AppLocalizations l10n,
     AuthProvider auth,
   ) {
-    final title = prod['title_${auth.selectedLanguage}'] ??
-        prod['title_hi'] ??
-        prod['title_en'] ??
-        'Handcrafted Item';
+    final isHindi = auth.selectedLanguage == 'hi';
+    final isMarathi = auth.selectedLanguage == 'mr';
+
+    String title;
+    if (isMarathi) {
+      title = prod['title_mr'] ?? prod['title_hi'] ?? prod['title_en'] ?? prod['title'] ?? 'उत्पादन';
+    } else if (isHindi) {
+      title = prod['title_hi'] ?? prod['title_en'] ?? prod['title'] ?? 'उत्पाद';
+    } else {
+      title = prod['title_en'] ?? prod['title'] ?? prod['title_hi'] ?? 'Handcrafted Item';
+    }
+
     final price = (prod['price'] as num?)?.toDouble() ?? 0.0;
     int stock = (prod['stock'] as num?)?.toInt() ?? 0;
     final isPublished = prod['status'] == 'published';
     final isAvailable = isPublished && stock > 0;
-    final imgUrl = prod['images'] != null && (prod['images'] as List).isNotEmpty
-        ? prod['images'][0]['url'] as String?
-        : null;
+    final imgUrl = _resolveHomeImageUrl(prod);
+    final fallbackAsset = _getHomeFallbackAsset(prod);
 
-    final inStockLabel = l10n.translate('inStock');
-    final isHindi = auth.selectedLanguage == 'hi';
-    final isMarathi = auth.selectedLanguage == 'mr';
+    final inStockLabel = isMarathi
+        ? 'साठा'
+        : isHindi
+            ? 'स्टॉक'
+            : 'Stock';
 
     final statusText = isAvailable
         ? (isMarathi
-            ? "उपलब्ध (In Stock)"
+            ? "लाईव्ह"
             : isHindi
-                ? "उपलब्ध (In Stock)"
+                ? "लाइव"
                 : "In Stock")
         : (isMarathi
-            ? "संपले (Out of Stock)"
+            ? "साठा संपला"
             : isHindi
-                ? "स्टॉक समाप्त (Out of Stock)"
+                ? "स्टॉक समाप्त"
                 : "Out of Stock");
 
     return Container(
@@ -776,25 +868,30 @@ class _HomeScreenState extends State<HomeScreen> {
               // Product Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: imgUrl != null && imgUrl.startsWith('http')
-                    ? Image.network(
-                        imgUrl,
-                        width: 82,
-                        height: 82,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.asset(
-                          'assets/images/prod_pottery.jpg',
+                child: Container(
+                  width: 82,
+                  height: 82,
+                  color: const Color(0xFFF7E6D7),
+                  child: imgUrl != null && imgUrl.startsWith('http')
+                      ? Image.network(
+                          imgUrl,
+                          width: 82,
+                          height: 82,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.asset(
+                            fallbackAsset,
+                            width: 82,
+                            height: 82,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Image.asset(
+                          fallbackAsset,
                           width: 82,
                           height: 82,
                           fit: BoxFit.cover,
                         ),
-                      )
-                    : Image.asset(
-                        'assets/images/prod_pottery.jpg',
-                        width: 82,
-                        height: 82,
-                        fit: BoxFit.cover,
-                      ),
+                ),
               ),
               const SizedBox(width: 12),
 
@@ -832,7 +929,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 4),
 
                     // Price & Stock Status Badges
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
                           "₹ ${price.toStringAsFixed(0)}",
@@ -842,7 +942,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: AppTheme.maroonPrimary,
                           ),
                         ),
-                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
@@ -870,11 +969,15 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 8),
 
           // Inventory Management Controls: Available Qty (- / +) and Out-of-Stock Toggle
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // Quantity Stepper
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     "$inStockLabel: ",
@@ -946,7 +1049,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 label: Text(
                   isAvailable
-                      ? (isMarathi ? 'संपले म्हणून चिन्हांकित करा' : isHindi ? 'स्टॉक समाप्त मार्क करें' : 'Mark Out of Stock')
+                      ? (isMarathi ? 'साठा संपला करा' : isHindi ? 'स्टॉक समाप्त मार्क करें' : 'Mark Out of Stock')
                       : (isMarathi ? 'उपलब्ध करा' : isHindi ? 'उपलब्ध करें' : 'Restore Stock'),
                   style: TextStyle(
                     fontSize: 11,

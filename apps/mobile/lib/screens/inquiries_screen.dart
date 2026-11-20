@@ -17,7 +17,7 @@ class InquiriesScreen extends StatefulWidget {
 class _InquiriesScreenState extends State<InquiriesScreen> {
   List<Map<String, dynamic>> _inquiries = [];
   bool _isLoading = true;
-  String _activeTab = 'all'; // all, new, scheduled, confirmed, completed, rejected
+  String _activeTab = 'all';
   String _searchQuery = '';
 
   @override
@@ -27,6 +27,12 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
       _activeTab = widget.initialFilter!;
     }
     _fetchInquiries();
+  }
+
+  String _t(AuthProvider auth, {required String en, required String hi, required String mr}) {
+    if (auth.selectedLanguage == 'mr') return mr;
+    if (auth.selectedLanguage == 'hi') return hi;
+    return en;
   }
 
   Future<void> _fetchInquiries() async {
@@ -92,10 +98,14 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
           }
         });
         if (mounted) {
+          final confirmMsg = _t(auth,
+              en: 'Order Confirmed Successfully!',
+              hi: 'आर्डर सफलतापूर्वक निश्चित किया गया!',
+              mr: 'ऑर्डर यशस्वीपणे निश्चित झाली!');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ऑर्डर यशस्वीपणे निश्चित झाली! (Order Confirmed)'),
-              backgroundColor: Color(0xFF16A34A),
+            SnackBar(
+              content: Text(confirmMsg),
+              backgroundColor: const Color(0xFF16A34A),
             ),
           );
         }
@@ -104,8 +114,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
   }
 
   Future<void> _callBuyer(String phone) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final uri = Uri.parse('tel:$cleanPhone');
+    final uri = Uri.parse('tel:$phone');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
@@ -113,21 +122,31 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
 
   Future<void> _whatsappBuyer(String phone, String productTitle) async {
     final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final msg = Uri.encodeComponent("Namaste! Regarding your inquiry for '$productTitle' on KalaSathi:");
-    final uri = Uri.parse('https://wa.me/$cleanPhone?text=$msg');
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final msgText = _t(auth,
+        en: 'Namaste! Connecting regarding your inquiry for $productTitle on KalaSathi.',
+        hi: 'नमस्ते! कलासाथी पर आपके $productTitle की पूछताछ के संदर्भ में संपर्क कर रहे हैं।',
+        mr: 'नमस्ते! कलासाथी वरील आपल्या $productTitle च्या चौकशीबाबत संपर्क करत आहोत.');
+    final text = Uri.encodeComponent(msgText);
+    final uri = Uri.parse('https://wa.me/$cleanPhone?text=$text');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
   Future<void> _emailBuyer(String email, String productTitle) async {
-    final uri = Uri.parse('mailto:$email?subject=Re: KalaSathi Inquiry - $productTitle');
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final subject = Uri.encodeComponent(_t(auth,
+        en: 'Regarding your inquiry on KalaSathi: $productTitle',
+        hi: 'कलासाथी पर आपकी पूछताछ के संदर्भ में: $productTitle',
+        mr: 'कलासाथी वरील चौकशी संदर्भात: $productTitle'));
+    final uri = Uri.parse('mailto:$email?subject=$subject');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
   }
 
-  void _showScheduleModal(Map<String, dynamic> inq) {
+  void _showScheduleModal(Map<String, dynamic> inq, AuthProvider auth) {
     DateTime selectedDate = DateTime.now().add(const Duration(hours: 2));
     TimeOfDay selectedTime = TimeOfDay.fromDateTime(selectedDate);
     final notesController = TextEditingController();
@@ -135,18 +154,17 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
+        builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 24,
             left: 20,
             right: 20,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -155,9 +173,9 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'ग्राहक संपर्क वेळ ठरवा\n(Schedule Contact)',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  Text(
+                    _t(auth, en: 'Schedule Customer Contact', hi: 'ग्राहक संपर्क समय निर्धारित करें', mr: 'ग्राहक संपर्क वेळ ठरवा'),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
@@ -166,9 +184,9 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Text(
-                'तुम्ही ग्राहकाला कधी संपर्क साधू इच्छिता ते निवडा:',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              Text(
+                _t(auth, en: 'Choose when you would like to contact the buyer:', hi: 'चुनें कि आप खरीदार से कब संपर्क करना चाहते हैं:', mr: 'तुम्ही ग्राहकाला कधी संपर्क साधू इच्छिता ते निवडा:'),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
               ),
               const SizedBox(height: 16),
               // Date & Time Selectors
@@ -236,8 +254,8 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               TextField(
                 controller: notesController,
                 decoration: InputDecoration(
-                  labelText: 'टीप / स्मरणपत्र (Notes / Reminder)',
-                  hintText: 'उदा. दुपारी ४ वाजता व्हॉट्सॲपवर फोटो पाठवणे...',
+                  labelText: _t(auth, en: 'Notes / Reminder', hi: 'नोट / रिमाइंडर', mr: 'टीप / स्मरणपत्र'),
+                  hintText: _t(auth, en: 'e.g. Send photos on WhatsApp at 4 PM...', hi: 'उदा. शाम 4 बजे व्हाट्सएप पर फोटो भेजें...', mr: 'उदा. दुपारी ४ वाजता व्हॉट्सॲपवर फोटो पाठवणे...'),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 maxLines: 2,
@@ -260,13 +278,17 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                       scheduledAt: selectedDate,
                       notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
                     );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('संपर्क शेड्यूल केला: ${selectedDate.day}/${selectedDate.month} ${selectedTime.format(context)}'),
-                      ),
-                    );
+                    if (mounted) {
+                      final scheduledMsg = _t(auth,
+                          en: 'Contact scheduled: ${selectedDate.day}/${selectedDate.month} ${selectedTime.format(context)}',
+                          hi: 'संपर्क निर्धारित: ${selectedDate.day}/${selectedDate.month} ${selectedTime.format(context)}',
+                          mr: 'संपर्क शेड्यूल केला: ${selectedDate.day}/${selectedDate.month} ${selectedTime.format(context)}');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(scheduledMsg)),
+                      );
+                    }
                   },
-                  child: const Text('शेड्यूल निश्चित करा (Save Schedule)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: Text(_t(auth, en: 'Save Schedule', hi: 'शेड्यूल सहेजें', mr: 'शेड्यूल निश्चित करा'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -276,26 +298,25 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
     );
   }
 
-  void _showConfirmOrderModal(Map<String, dynamic> inq) {
-    final priceController = TextEditingController(text: inq['agreed_price']?.toString() ?? '');
-    final qtyController = TextEditingController(text: (inq['quantity_needed'] ?? inq['agreed_quantity'] ?? 1).toString());
+  void _showConfirmOrderModal(Map<String, dynamic> inq, AuthProvider auth) {
+    final priceController = TextEditingController(text: inq['agreed_price']?.toString() ?? inq['product_price']?.toString() ?? '');
+    final qtyController = TextEditingController(text: inq['agreed_quantity']?.toString() ?? inq['quantity']?.toString() ?? '1');
     final deliveryController = TextEditingController(text: inq['delivery_details'] ?? '');
     final notesController = TextEditingController(text: inq['contact_notes'] ?? '');
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 24,
           left: 20,
           right: 20,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -305,9 +326,9 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'ऑर्डर निश्चित करा\n(Confirm Agreed Order)',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  Text(
+                    _t(auth, en: 'Confirm Agreed Order', hi: 'तय आर्डर की पुष्टि करें', mr: 'ऑर्डर निश्चित करा'),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
@@ -317,7 +338,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "उत्पादन: ${inq['product_title'] ?? 'Handmade Creation'}",
+                "${_t(auth, en: 'Product:', hi: 'उत्पाद:', mr: 'उत्पादन:')} ${inq['product_title'] ?? 'Handmade Creation'}",
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFC84B31)),
               ),
               const SizedBox(height: 16),
@@ -325,8 +346,8 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                 controller: priceController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
-                  labelText: 'ठरलेली किंमत (Agreed Selling Price in ₹) *',
-                  hintText: 'उदा. 2500',
+                  labelText: _t(auth, en: 'Agreed Price (in ₹) *', hi: 'तय कीमत (₹ में) *', mr: 'ठरलेली किंमत (₹ मध्ये) *'),
+                  hintText: '2500',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   prefixText: '₹ ',
                 ),
@@ -336,8 +357,8 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                 controller: qtyController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'नग / प्रमाण (Quantity) *',
-                  hintText: 'उदा. 2',
+                  labelText: _t(auth, en: 'Quantity *', hi: 'मात्रा *', mr: 'नग / प्रमाण *'),
+                  hintText: '1',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
@@ -345,8 +366,8 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               TextField(
                 controller: deliveryController,
                 decoration: InputDecoration(
-                  labelText: 'वितरण तपशील (Delivery Address / Timeline) *',
-                  hintText: 'उदा. स्पीड पोस्ट द्वारे, पुणे - 20 नोव्हेंबर पर्यंत...',
+                  labelText: _t(auth, en: 'Delivery Address / Timeline *', hi: 'वितरण पता / समय सीमा *', mr: 'वितरण तपशील (पत्ता / मुदत) *'),
+                  hintText: _t(auth, en: 'e.g. By Speed Post, by Nov 20...', hi: 'उदा. स्पीड पोस्ट द्वारा, 20 नवंबर तक...', mr: 'उदा. स्पीड पोस्ट द्वारे, 20 नोव्हेंबर पर्यंत...'),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 maxLines: 2,
@@ -355,8 +376,8 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               TextField(
                 controller: notesController,
                 decoration: InputDecoration(
-                  labelText: 'इतर तपशील / पेमेंट टीप (Payment / Notes)',
-                  hintText: 'उदा. ५०% ॲडव्हान्स प्राप्त झाला...',
+                  labelText: _t(auth, en: 'Payment / Notes', hi: 'भुगतान / नोट', mr: 'इतर तपशील / पेमेंट टीप'),
+                  hintText: _t(auth, en: 'e.g. 50% advance received...', hi: 'उदा. 50% अग्रिम प्राप्त हुआ...', mr: 'उदा. ५०% ॲडव्हान्स प्राप्त झाला...'),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
@@ -374,8 +395,12 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                     final qty = int.tryParse(qtyController.text.trim()) ?? 1;
                     final delivery = deliveryController.text.trim();
                     if (price <= 0 || delivery.isEmpty) {
+                      final errorMsg = _t(auth,
+                          en: 'Please enter a valid price and delivery details.',
+                          hi: 'कृपया सही कीमत और वितरण विवरण दर्ज करें।',
+                          mr: 'कृपया योग्य किंमत आणि वितरण तपशील प्रविष्ट करा.');
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('कृपया योग्य किंमत आणि वितरण तपशील प्रविष्ट करा.')),
+                        SnackBar(content: Text(errorMsg)),
                       );
                       return;
                     }
@@ -388,7 +413,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                       notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
                     );
                   },
-                  child: const Text('ऑर्डर निश्चित करा (Confirm Order)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  child: Text(_t(auth, en: 'Confirm Order', hi: 'आर्डर की पुष्टि करें', mr: 'ऑर्डर निश्चित करा'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                 ),
               ),
             ],
@@ -400,49 +425,52 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Filter inquiries by activeTab and searchQuery
-    final filtered = _inquiries.where((inq) {
-      final status = inq['status'] as String? ?? 'new';
-      if (_activeTab == 'new' && status != 'new') return false;
-      if (_activeTab == 'scheduled' && status != 'contact_scheduled') return false;
-      if (_activeTab == 'confirmed' && status != 'order_confirmed') return false;
-      if (_activeTab == 'completed' && status != 'completed') return false;
-      if (_activeTab == 'rejected' && status != 'rejected') return false;
-      if (_activeTab == 'pending' && !['new', 'accepted', 'contact_later', 'negotiation', 'contact_scheduled'].contains(status)) return false;
+    final auth = Provider.of<AuthProvider>(context);
 
+    // Apply Filter & Search
+    final filtered = _inquiries.where((inq) {
+      if (_activeTab != 'all' && (inq['status'] ?? 'new') != _activeTab) {
+        return false;
+      }
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
-        final name = (inq['buyer_name'] as String? ?? '').toLowerCase();
-        final prod = (inq['product_title'] as String? ?? '').toLowerCase();
-        final msg = (inq['message_en'] as String? ?? '').toLowerCase();
-        final phone = (inq['buyer_phone'] as String? ?? '').toLowerCase();
-        if (!name.contains(q) && !prod.contains(q) && !msg.contains(q) && !phone.contains(q)) {
-          return false;
-        }
+        final name = (inq['buyer_name'] ?? '').toString().toLowerCase();
+        final phone = (inq['buyer_phone'] ?? '').toString().toLowerCase();
+        final prod = (inq['product_title'] ?? '').toString().toLowerCase();
+        return name.contains(q) || phone.contains(q) || prod.contains(q);
       }
       return true;
     }).toList();
 
-    final newCount = _inquiries.where((i) => (i['status'] ?? 'new') == 'new').length;
-    final scheduledCount = _inquiries.where((i) => i['status'] == 'contact_scheduled').length;
-    final confirmedCount = _inquiries.where((i) => i['status'] == 'order_confirmed').length;
+    // Counts for badge
+    final newCount = _inquiries.where((e) => (e['status'] ?? 'new') == 'new').length;
+    final scheduledCount = _inquiries.where((e) => e['status'] == 'contact_scheduled').length;
+    final confirmedCount = _inquiries.where((e) => e['status'] == 'order_confirmed').length;
+
+    final screenTitle = _t(auth, en: 'Customer Inquiries & Orders', hi: 'ग्राहक पूछताछ और आर्डर', mr: 'ग्राहक चौकशी व ऑर्डर्स');
+    final refreshTooltip = _t(auth, en: 'Refresh', hi: 'रिफ्रेश करें', mr: 'ताजे करा');
+    final voicePrompt = _t(auth,
+        en: "Review customer inquiries, contact buyers directly, schedule calls, or confirm custom orders.",
+        hi: "ग्राहकों की पूछताछ स्वीकार करें, उनसे सीधे संपर्क करें, समय तय करें या आर्डर की पुष्टि करें।",
+        mr: "ग्राहकांची चौकशी स्वीकारून त्यांच्याशी संपर्क साधा, वेळ ठरवा किंवा ठरलेली ऑर्डर निश्चित करा.");
+    final searchHint = _t(auth, en: 'Search by buyer name, phone, or product...', hi: 'ग्राहक नाम, फोन या उत्पाद खोजें...', mr: 'ग्राहक नाव, फोन किंवा उत्पादन शोधा...');
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundSand,
       appBar: AppBar(
-        title: const Text('ग्राहक चौकशी व ऑर्डर्स'),
+        title: Text(screenTitle),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'ताजे करा',
+            tooltip: refreshTooltip,
             onPressed: _fetchInquiries,
           ),
         ],
       ),
-      floatingActionButton: const VoiceHelpFab(
-        customMessage: "ग्राहकांची चौकशी स्वीकारून त्यांच्याशी संपर्क साधा, वेळ ठरवा किंवा ठरलेली ऑर्डर निश्चित करा.",
+      floatingActionButton: VoiceHelpFab(
+        customMessage: voicePrompt,
       ),
       body: SafeArea(
         child: Column(
@@ -454,7 +482,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               child: TextField(
                 onChanged: (val) => setState(() => _searchQuery = val.trim()),
                 decoration: InputDecoration(
-                  hintText: 'ग्राहक नाव, फोन किंवा उत्पादन शोधा...',
+                  hintText: searchHint,
                   prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B)),
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
@@ -479,19 +507,19 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    _buildTabChip('all', 'सर्व (${_inquiries.length})'),
+                    _buildTabChip('all', "${_t(auth, en: 'All', hi: 'सभी', mr: 'सर्व')} (${_inquiries.length})"),
                     const SizedBox(width: 8),
-                    _buildTabChip('new', 'नवीन ($newCount)', badgeColor: const Color(0xFFEF4444)),
+                    _buildTabChip('new', "${_t(auth, en: 'New', hi: 'नए', mr: 'नवीन')} ($newCount)", badgeColor: const Color(0xFFEF4444)),
                     const SizedBox(width: 8),
-                    _buildTabChip('scheduled', 'शेड्यूल ($scheduledCount)', badgeColor: const Color(0xFF3B82F6)),
+                    _buildTabChip('scheduled', "${_t(auth, en: 'Scheduled', hi: 'शेड्यूल', mr: 'शेड्यूल')} ($scheduledCount)", badgeColor: const Color(0xFF3B82F6)),
                     const SizedBox(width: 8),
-                    _buildTabChip('pending', 'प्रलंबित (Pending)'),
+                    _buildTabChip('pending', _t(auth, en: 'Pending', hi: 'लंबित', mr: 'प्रलंबित')),
                     const SizedBox(width: 8),
-                    _buildTabChip('confirmed', 'निश्चित ऑर्डर्स ($confirmedCount)', badgeColor: const Color(0xFF16A34A)),
+                    _buildTabChip('confirmed', "${_t(auth, en: 'Confirmed', hi: 'पुष्ट आर्डर', mr: 'निश्चित ऑर्डर्स')} ($confirmedCount)", badgeColor: const Color(0xFF16A34A)),
                     const SizedBox(width: 8),
-                    _buildTabChip('completed', 'पूर्ण (Completed)'),
+                    _buildTabChip('completed', _t(auth, en: 'Completed', hi: 'पूर्ण', mr: 'पूर्ण')),
                     const SizedBox(width: 8),
-                    _buildTabChip('rejected', 'नाकारलेले (Rejected)'),
+                    _buildTabChip('rejected', _t(auth, en: 'Rejected', hi: 'अस्वीकृत', mr: 'नाकारलेले')),
                   ],
                 ),
               ),
@@ -513,10 +541,10 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                                 children: [
                                   Icon(Icons.inventory_2_outlined, size: 56, color: AppTheme.textMuted.withValues(alpha: 0.5)),
                                   const SizedBox(height: 14),
-                                  const Text(
-                                    "या वर्गात कोणतीही चौकशी नाही\n(No inquiries found in this category)",
+                                  Text(
+                                    _t(auth, en: "No inquiries found in this category", hi: "इस श्रेणी में कोई पूछताछ नहीं मिली", mr: "या वर्गात कोणतीही चौकशी नाही"),
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                                   ),
                                 ],
                               ),
@@ -525,10 +553,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                         : ListView.builder(
                             padding: const EdgeInsets.all(16),
                             itemCount: filtered.length,
-                            itemBuilder: (context, index) {
-                              final inq = filtered[index];
-                              return _buildInquiryCard(inq);
-                            },
+                            itemBuilder: (ctx, idx) => _buildInquiryCard(filtered[idx], auth),
                           ),
               ),
             ),
@@ -542,80 +567,98 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
     final isSelected = _activeTab == key;
     return InkWell(
       onTap: () => setState(() => _activeTab = key),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.terracotta : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: isSelected ? Colors.white : const Color(0xFF475569),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (badgeColor != null && !isSelected) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: badgeColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF475569),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildInquiryCard(Map<String, dynamic> inq) {
-    final inqId = inq['id'] as int? ?? 0;
-    final status = inq['status'] as String? ?? 'new';
-    final buyerName = inq['buyer_name'] as String? ?? 'Interested Buyer';
+  Widget _buildInquiryCard(Map<String, dynamic> inq, AuthProvider auth) {
+    final inqId = inq['id'] as int;
+    final status = (inq['status'] as String? ?? 'new').toLowerCase();
+    final buyerName = inq['buyer_name'] ?? _t(auth, en: 'Buyer', hi: 'ग्राहक', mr: 'ग्राहक');
     final buyerPhone = inq['buyer_phone'] as String?;
     final buyerEmail = inq['buyer_email'] as String?;
-    final productTitle = inq['product_title'] as String? ?? 'Handcrafted Creation';
-    final productImg = inq['product_image_url'] as String?;
-    final message = inq['message_en'] as String? ?? '';
-    final translated = inq['message_translated'] as String?;
-    final qty = inq['quantity_needed'] as int?;
-    final scheduledAtStr = inq['scheduled_contact_at'] as String?;
-    final notes = inq['contact_notes'] as String?;
-    final agreedPrice = inq['agreed_price'] as num?;
-    final agreedQty = inq['agreed_quantity'] as num?;
+    final productTitle = inq['product_title_${auth.selectedLanguage}'] ??
+        inq['product_title'] ??
+        _t(auth, en: 'Handcrafted Item', hi: 'हस्तशिल्प उत्पाद', mr: 'हस्तकला उत्पादन');
+    final productImg = inq['product_image'] as String?;
+    final message = inq['message'] ?? '';
+    final translated = inq['translated_message'] as String?;
+    final agreedPrice = (inq['agreed_price'] as num?)?.toDouble();
+    final agreedQty = inq['agreed_quantity'] as int?;
+    final qty = inq['quantity'] as int?;
     final delivery = inq['delivery_details'] as String?;
+    final notes = inq['contact_notes'] as String?;
+    final scheduledAtStr = inq['scheduled_contact_at'] as String?;
 
     // Status chip colors and text
     Color statusBg = const Color(0xFFFFF2EB);
     Color statusFg = AppTheme.terracotta;
-    String statusLabel = 'नवीन चौकशी (New)';
+    String statusLabel = _t(auth, en: 'New Inquiry', hi: 'नई पूछताछ', mr: 'नवीन चौकशी');
 
     if (status == 'accepted') {
       statusBg = const Color(0xFFEFF6FF);
       statusFg = const Color(0xFF2563EB);
-      statusLabel = 'स्वीकारली (Accepted)';
+      statusLabel = _t(auth, en: 'Accepted', hi: 'स्वीकृत', mr: 'स्वीकारली');
     } else if (status == 'contact_scheduled') {
       statusBg = const Color(0xFFFEF3C7);
       statusFg = const Color(0xFFD97706);
-      statusLabel = 'संपर्क शेड्यूल केला';
+      statusLabel = _t(auth, en: 'Scheduled', hi: 'शेड्यूल', mr: 'संपर्क शेड्यूल केला');
     } else if (status == 'contacted') {
       statusBg = const Color(0xFFF3E8FF);
       statusFg = const Color(0xFF7C3AED);
-      statusLabel = 'संपर्क झाला (Contacted)';
+      statusLabel = _t(auth, en: 'Contacted', hi: 'संपर्क किया', mr: 'संपर्क झाला');
     } else if (status == 'negotiation') {
       statusBg = const Color(0xFFFFFBEB);
       statusFg = const Color(0xFFB45309);
-      statusLabel = 'चर्चा सुरू (Negotiation)';
+      statusLabel = _t(auth, en: 'In Discussion', hi: 'चर्चा जारी', mr: 'चर्चा सुरू');
     } else if (status == 'order_confirmed') {
       statusBg = const Color(0xFFDCFCE7);
       statusFg = const Color(0xFF16A34A);
-      statusLabel = 'ऑर्डर निश्चित (Confirmed)';
+      statusLabel = _t(auth, en: 'Order Confirmed', hi: 'पुष्ट आर्डर', mr: 'ऑर्डर निश्चित');
     } else if (status == 'completed') {
       statusBg = const Color(0xFFE2E8F0);
       statusFg = const Color(0xFF475569);
-      statusLabel = 'पूर्ण (Completed)';
+      statusLabel = _t(auth, en: 'Completed', hi: 'पूर्ण', mr: 'पूर्ण');
     } else if (status == 'rejected') {
       statusBg = const Color(0xFFFEE2E2);
       statusFg = const Color(0xFFDC2626);
-      statusLabel = 'नाकारले (Rejected)';
+      statusLabel = _t(auth, en: 'Rejected', hi: 'अस्वीकृत', mr: 'नाकारले');
     } else if (status == 'contact_later') {
       statusBg = const Color(0xFFF1F5F9);
       statusFg = const Color(0xFF64748B);
-      statusLabel = 'नंतर संपर्क करा';
+      statusLabel = _t(auth, en: 'Contact Later', hi: 'बाद में संपर्क करें', mr: 'नंतर संपर्क करा');
     }
+
+    final qtyPrefix = _t(auth, en: 'Qty:', hi: 'मात्रा:', mr: 'नग:');
+    final buyerPrefix = _t(auth, en: 'Buyer:', hi: 'ग्राहक:', mr: 'ग्राहक:');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -638,7 +681,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Status Badge & Qty
+          // Header Row: Status badge & Inquiry ID
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -646,7 +689,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   statusLabel,
@@ -662,7 +705,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Text(
-                    "नग: ${agreedQty ?? qty} units",
+                    "$qtyPrefix ${agreedQty ?? qty}",
                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                   ),
                 ),
@@ -707,7 +750,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "ग्राहक: $buyerName",
+                      "$buyerPrefix $buyerName",
                       style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
                     ),
                   ],
@@ -756,7 +799,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      "शेड्यूल वेळ: ${scheduledAtStr.replaceAll('T', ' ').split('.').first}",
+                      "${_t(auth, en: 'Scheduled:', hi: 'शेड्यूल समय:', mr: 'शेड्यूल वेळ:')} ${scheduledAtStr.replaceAll('T', ' ').split('.').first}",
                       style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
                     ),
                   ),
@@ -777,10 +820,13 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("ठरलेली रक्कम: ₹$agreedPrice ($agreedQty units)", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                  Text(
+                    "${_t(auth, en: 'Agreed Price:', hi: 'तय कीमत:', mr: 'ठरलेली रक्कम:')} ₹$agreedPrice ($agreedQty ${_t(auth, en: 'units', hi: 'इकाइयां', mr: 'नग')})",
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                  ),
                   if (delivery != null && delivery.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text("डिलिव्हरी: $delivery", style: const TextStyle(fontSize: 12, color: Color(0xFF15803D))),
+                    Text("${_t(auth, en: 'Delivery:', hi: 'वितरण:', mr: 'डिलिव्हरी:')} $delivery", style: const TextStyle(fontSize: 12, color: Color(0xFF15803D))),
                   ],
                 ],
               ),
@@ -789,7 +835,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
 
           if (notes != null && notes.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text("टीप: $notes", style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF64748B))),
+            Text("${_t(auth, en: 'Notes:', hi: 'नोट:', mr: 'टीप:')} $notes", style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF64748B))),
           ],
           const SizedBox(height: 14),
 
@@ -804,7 +850,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                       _callBuyer(buyerPhone);
                     },
                     icon: const Icon(Icons.call_rounded, size: 15),
-                    label: const Text('कॉल करा', style: TextStyle(fontSize: 11.5)),
+                    label: Text(_t(auth, en: 'Call', hi: 'कॉल करें', mr: 'कॉल करा'), style: const TextStyle(fontSize: 11.5)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF059669),
                       foregroundColor: Colors.white,
@@ -821,7 +867,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                       _whatsappBuyer(buyerPhone, productTitle);
                     },
                     icon: const Icon(Icons.chat_rounded, size: 15),
-                    label: const Text('व्हॉट्सॲप', style: TextStyle(fontSize: 11.5)),
+                    label: Text(_t(auth, en: 'WhatsApp', hi: 'व्हाट्सएप', mr: 'व्हॉट्सॲप'), style: const TextStyle(fontSize: 11.5)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF25D366),
                       foregroundColor: Colors.white,
@@ -840,7 +886,7 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
                       _emailBuyer(buyerEmail, productTitle);
                     },
                     icon: const Icon(Icons.email_rounded, size: 15),
-                    label: const Text('ईमेल', style: TextStyle(fontSize: 11.5)),
+                    label: Text(_t(auth, en: 'Email', hi: 'ईमेल', mr: 'ईमेल'), style: const TextStyle(fontSize: 11.5)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF3B82F6),
                       foregroundColor: Colors.white,
@@ -862,44 +908,44 @@ class _InquiriesScreenState extends State<InquiriesScreen> {
               if (status == 'new') ...[
                 OutlinedButton.icon(
                   icon: const Icon(Icons.check_circle_outline_rounded, size: 15, color: Color(0xFF2563EB)),
-                  label: const Text('स्वीकारा (Accept)', style: TextStyle(fontSize: 11.5, color: Color(0xFF2563EB))),
+                  label: Text(_t(auth, en: 'Accept', hi: 'स्वीकार करें', mr: 'स्वीकारा'), style: const TextStyle(fontSize: 11.5, color: Color(0xFF2563EB))),
                   onPressed: () => _updateStatus(inqId, 'accepted'),
                 ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.schedule_rounded, size: 15, color: Color(0xFFD97706)),
-                  label: const Text('वेळ ठरवा (Schedule)', style: TextStyle(fontSize: 11.5, color: Color(0xFFD97706))),
-                  onPressed: () => _showScheduleModal(inq),
+                  label: Text(_t(auth, en: 'Schedule', hi: 'शेड्यूल करें', mr: 'वेळ ठरवा'), style: const TextStyle(fontSize: 11.5, color: Color(0xFFD97706))),
+                  onPressed: () => _showScheduleModal(inq, auth),
                 ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.snooze_rounded, size: 15, color: Color(0xFF64748B)),
-                  label: const Text('नंतर संपर्क (Later)', style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
+                  label: Text(_t(auth, en: 'Contact Later', hi: 'बाद में संपर्क', mr: 'नंतर संपर्क'), style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B))),
                   onPressed: () => _updateStatus(inqId, 'contact_later'),
                 ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.cancel_outlined, size: 15, color: Color(0xFFDC2626)),
-                  label: const Text('नाकारा (Reject)', style: TextStyle(fontSize: 11.5, color: Color(0xFFDC2626))),
+                  label: Text(_t(auth, en: 'Reject', hi: 'अस्वीकार करें', mr: 'नाकारा'), style: const TextStyle(fontSize: 11.5, color: Color(0xFFDC2626))),
                   onPressed: () => _updateStatus(inqId, 'rejected'),
                 ),
               ] else if (status == 'accepted' || status == 'contacted' || status == 'contact_later' || status == 'contact_scheduled') ...[
                 OutlinedButton.icon(
                   icon: const Icon(Icons.schedule_rounded, size: 15, color: Color(0xFFD97706)),
-                  label: const Text('पुन्हा वेळ ठरवा (Reschedule)', style: TextStyle(fontSize: 11.5, color: Color(0xFFD97706))),
-                  onPressed: () => _showScheduleModal(inq),
+                  label: Text(_t(auth, en: 'Reschedule', hi: 'पुनः समय तय करें', mr: 'पुन्हा वेळ ठरवा'), style: const TextStyle(fontSize: 11.5, color: Color(0xFFD97706))),
+                  onPressed: () => _showScheduleModal(inq, auth),
                 ),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.handshake_rounded, size: 15),
-                  label: const Text('ऑर्डर निश्चित करा (Confirm Order)', style: TextStyle(fontSize: 11.5)),
+                  label: Text(_t(auth, en: 'Confirm Order', hi: 'आर्डर की पुष्टि करें', mr: 'ऑर्डर निश्चित करा'), style: const TextStyle(fontSize: 11.5)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF16A34A),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => _showConfirmOrderModal(inq),
+                  onPressed: () => _showConfirmOrderModal(inq, auth),
                 ),
               ] else if (status == 'order_confirmed') ...[
                 ElevatedButton.icon(
                   icon: const Icon(Icons.done_all_rounded, size: 15),
-                  label: const Text('ऑर्डर पूर्ण झाली (Mark Completed)', style: TextStyle(fontSize: 11.5)),
+                  label: Text(_t(auth, en: 'Mark Completed', hi: 'पूर्ण मार्क करें', mr: 'ऑर्डर पूर्ण झाली'), style: const TextStyle(fontSize: 11.5)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E293B),
                     foregroundColor: Colors.white,

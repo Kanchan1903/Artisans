@@ -9,7 +9,6 @@ import 'package:kalasathi_mobile/widgets/voice_help_fab.dart';
 
 class EarningsLearnScreen extends StatefulWidget {
   final int initialTab;
-
   const EarningsLearnScreen({super.key, this.initialTab = 0});
 
   @override
@@ -19,28 +18,80 @@ class EarningsLearnScreen extends StatefulWidget {
 class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   Future<Map<String, dynamic>>? _dashboardFuture;
-  String _selectedTrendPeriod = 'monthly'; // 'daily', 'weekly', 'monthly'
+  String _selectedTrendPeriod = 'monthly';
 
-  final List<Map<String, String>> _lessons = [
-    {
-      'title': '१. स्मार्टफोन फोटोग्राफी',
-      'duration': '२ मिनिटे ऑडिओ धडा',
-      'icon': 'camera',
-      'content': 'शिल्पाचा फोटो काढताना नैसर्गिक सूर्यप्रकाशात बसा. पाठीमागे साधी भिंत ठेवा. परछाई येऊ देऊ नका. आमचे एआय आपोआप पांढरी पार्श्वभूमी तयार करेल.',
-    },
-    {
-      'title': '२. रास्त किंमत आणि नफा',
-      'duration': '३ मिनिटे ऑडिओ धडा',
-      'icon': 'price',
-      'content': 'कच्च्या मालाच्या खर्चात तुमचे दर तासाचे किमान ₹८५ मजुरी जोडा. कलासाथी हमी देते की तुम्ही कधीही तोट्यात विकणार नाही.',
-    },
-    {
-      'title': '३. डिजिटल विक्री आणि संवाद',
-      'duration': '२ मिनिटे ऑडिओ धडा',
-      'icon': 'store',
-      'content': 'ग्राहकांना हस्तकलेची कहाणी आवडते. तुम्ही वस्तू कशी बनवली हे आवाजात सांगा. वेबसाइटवर जगभरातील खरेदीदार ती वाचू शकतात.',
-    },
-  ];
+  String _t(AuthProvider auth, {required String en, required String hi, required String mr}) {
+    if (auth.selectedLanguage == 'mr') return mr;
+    if (auth.selectedLanguage == 'hi') return hi;
+    return en;
+  }
+
+  List<Map<String, String>> _getLessons(String lang) {
+    if (lang == 'en') {
+      return [
+        {
+          'title': '1. Smartphone Photography',
+          'duration': '2 min audio lesson',
+          'icon': 'camera',
+          'content': 'Sit in natural sunlight when taking photos. Keep a plain wall in the background. Avoid shadows. Our AI automatically enhances the craft and creates a clean studio look.',
+        },
+        {
+          'title': '2. Fair Pricing & Profit',
+          'duration': '3 min audio lesson',
+          'icon': 'price',
+          'content': 'Add at least ₹85 per hour of artisan labor to your raw material costs. KalaSathi guarantees you never sell below your production costs.',
+        },
+        {
+          'title': '3. Digital Sales & Stories',
+          'duration': '2 min audio lesson',
+          'icon': 'store',
+          'content': 'Buyers appreciate the cultural heritage and story behind handmade craft. Speak about your process. Buyers across India and worldwide can read your craft story.',
+        },
+      ];
+    } else if (lang == 'hi') {
+      return [
+        {
+          'title': '१. स्मार्टफोन फोटोग्राफी',
+          'duration': '२ मिनट ऑडियो पाठ',
+          'icon': 'camera',
+          'content': 'हस्तशिल्प की फोटो लेते समय प्राकृतिक धूप में बैठें। पीछे सादी दीवार रखें। परछाई न आने दें। हमारा एआई अपने आप सुंदर स्टूडियो बैकग्राउंड तैयार करेगा।',
+        },
+        {
+          'title': '२. उचित मूल्य और लाभ',
+          'duration': '३ मिनट ऑडियो पाठ',
+          'icon': 'price',
+          'content': 'कच्चे माल की लागत में प्रति घंटे कम से कम ₹८५ की मजदूरी जोड़ें। कलासाथी गारंटी देता है कि आप कभी घाटे में नहीं बेचेंगे।',
+        },
+        {
+          'title': '३. डिजिटल बिक्री और कहानी',
+          'duration': '२ मिनट ऑडियो पाठ',
+          'icon': 'store',
+          'content': 'ग्राहकों को हस्तकला की कहानी पसंद आती है। आपने इसे कैसे बनाया, बोलकर बताएं। देश-दुनिया के खरीदार इसे पढ़ सकते हैं।',
+        },
+      ];
+    } else {
+      return [
+        {
+          'title': '१. स्मार्टफोन फोटोग्राफी',
+          'duration': '२ मिनिटे ऑडिओ धडा',
+          'icon': 'camera',
+          'content': 'शिल्पाचा फोटो काढताना नैसर्गिक सूर्यप्रकाशात बसा. पाठीमागे साधी भिंत ठेवा. परछाई येऊ देऊ नका. आमचे एआय आपोआप पांढरी पार्श्वभूमी तयार करेल.',
+        },
+        {
+          'title': '२. रास्त किंमत आणि नफा',
+          'duration': '३ मिनिटे ऑडिओ धडा',
+          'icon': 'price',
+          'content': 'कच्च्या मालाच्या खर्चात तुमचे दर तासाचे किमान ₹८५ मजुरी जोडा. कलासाथी हमी देते की तुम्ही कधीही तोट्यात विकणार नाही.',
+        },
+        {
+          'title': '३. डिजिटल विक्री आणि संवाद',
+          'duration': '२ मिनिटे ऑडिओ धडा',
+          'icon': 'store',
+          'content': 'ग्राहकांना हस्तकलेची कहाणी आवडते. तुम्ही वस्तू कशी बनवली हे आवाजात सांगा. वेबसाइटवर जगभरातील खरेदीदार ती वाचू शकतात.',
+        },
+      ];
+    }
+  }
 
   @override
   void initState() {
@@ -69,6 +120,13 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final auth = Provider.of<AuthProvider>(context);
+
+    final refreshTooltip = _t(auth, en: "Refresh", hi: "रिफ्रेश करें", mr: "ताजे करा");
+    final customVoiceMsg = _t(auth,
+        en: "In Earnings, view your verified sales, payouts, and audio lessons to grow craft sales.",
+        hi: "कमाई अनुभाग में सत्यापित बिक्री, भुगतान और ऑडियो पाठ देखें।",
+        mr: "कमाईच्या भागात थेट डेटाबेसमधील विक्री व उत्पन्न दिसते, आणि धड्यांच्या भागात विक्री वाढवणारे ऑडिओ आहेत.");
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundSand,
@@ -77,7 +135,7 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: "ताजे करा",
+            tooltip: refreshTooltip,
             onPressed: _loadDashboard,
           ),
         ],
@@ -94,21 +152,20 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
           ],
         ),
       ),
-      floatingActionButton: const VoiceHelpFab(
-        customMessage: "कमाईच्या भागात थेट डेटाबेसमधील विक्री व उत्पन्न दिसते, आणि धड्यांच्या भागात विक्री वाढवणारे ऑडिओ आहेत.",
+      floatingActionButton: VoiceHelpFab(
+        customMessage: customVoiceMsg,
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildEarningsTab(l10n),
-          _buildLearnTab(l10n),
+          _buildEarningsTab(l10n, auth),
+          _buildLearnTab(l10n, auth),
         ],
       ),
     );
   }
 
-  Widget _buildEarningsTab(AppLocalizations l10n) {
-    final auth = Provider.of<AuthProvider>(context);
+  Widget _buildEarningsTab(AppLocalizations l10n, AuthProvider auth) {
     final token = auth.authToken;
 
     if (token == null || token.isEmpty) {
@@ -118,11 +175,14 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
           children: [
             const Icon(Icons.lock_outline_rounded, size: 48, color: AppTheme.textMuted),
             const SizedBox(height: 12),
-            const Text("कृपया कमाई पाहण्यासाठी लॉग इन करा.", style: TextStyle(color: AppTheme.textMuted, fontSize: 16)),
+            Text(
+              _t(auth, en: "Please log in to view earnings.", hi: "कृपया कमाई देखने के लिए लॉगिन करें।", mr: "कृपया कमाई पाहण्यासाठी लॉग इन करा."),
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 16),
+            ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-              child: const Text("लॉग इन करा"),
+              child: Text(_t(auth, en: "Log In", hi: "लॉग इन करें", mr: "लॉग इन करा")),
             ),
           ],
         ),
@@ -130,33 +190,31 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
     }
 
     return FutureBuilder<Map<String, dynamic>>(
-      future: _dashboardFuture ?? ApiService.getArtisanDashboard(token),
+      future: _dashboardFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: AppTheme.terracotta));
         }
 
         final data = snapshot.data ?? {};
+        final netEarnings = (data['net_earnings'] as num?)?.toDouble() ?? 0.0;
         final grossSales = (data['gross_sales'] as num?)?.toDouble() ?? 0.0;
         final platformFees = (data['platform_fees'] as num?)?.toDouble() ?? 0.0;
         final refundsCancellations = (data['refunds_cancellations'] as num?)?.toDouble() ?? 0.0;
-        final netEarnings = (data['net_earnings'] as num?)?.toDouble() ?? 0.0;
         final settledPayout = (data['settled_payout'] as num?)?.toDouble() ?? 0.0;
         final pendingPayout = (data['pending_payout'] as num?)?.toDouble() ?? 0.0;
-        final totalOrders = (data['total_orders'] as num?)?.toInt() ?? 0;
-        final productsSold = (data['products_sold'] as num?)?.toInt() ?? 0;
-
-        final dailyTrends = (data['daily_trends'] as List<dynamic>?) ?? [];
-        final weeklyTrends = (data['weekly_trends'] as List<dynamic>?) ?? [];
-        final monthlyTrends = (data['monthly_trends'] as List<dynamic>?) ?? [];
-        final bestSellers = (data['best_selling_products'] as List<dynamic>?) ?? [];
+        final totalOrders = data['total_orders'] ?? 0;
+        final productsSold = data['products_sold'] ?? 0;
+        final bestSellers = (data['best_sellers'] as List<dynamic>?) ?? [];
         final recentOrders = (data['recent_orders'] as List<dynamic>?) ?? [];
+        final dailyTrends = (data['sales_trends_daily'] as List<dynamic>?) ?? [];
+        final weeklyTrends = (data['sales_trends_weekly'] as List<dynamic>?) ?? [];
+        final monthlyTrends = (data['sales_trends_monthly'] as List<dynamic>?) ?? [];
 
         return RefreshIndicator(
           color: AppTheme.terracotta,
           onRefresh: () async {
             _loadDashboard();
-            await _dashboardFuture;
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -164,8 +222,7 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Artisan Profile Banner
-                if ((data['artisan_name'] as String?)?.isNotEmpty == true) ...[
+                if (data['artisan_name'] != null) ...[
                   Row(
                     children: [
                       CircleAvatar(
@@ -180,9 +237,9 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                             data['artisan_name'],
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                          const Text(
-                            "सत्यापित कारागीर",
-                            style: TextStyle(fontSize: 12, color: AppTheme.successGreen, fontWeight: FontWeight.bold),
+                          Text(
+                            _t(auth, en: "Verified Artisan", hi: "सत्यापित कारीगर", mr: "सत्यापित कारागीर"),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.successGreen, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -212,9 +269,9 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            "निव्वळ कमाई",
-                            style: TextStyle(color: AppTheme.textMuted, fontSize: 14, fontWeight: FontWeight.bold),
+                          Text(
+                            _t(auth, en: "Net Earnings", hi: "शुद्ध कमाई", mr: "निव्वळ कमाई"),
+                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 14, fontWeight: FontWeight.bold),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -234,26 +291,26 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                       const Divider(height: 24),
 
                       // Platform Breakdown: Gross - 8% Fee - Refunds
-                      const Text(
-                        "रक्कमेचा हिशोब:",
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMuted),
+                      Text(
+                        _t(auth, en: "Financial Breakdown:", hi: "वित्तीय विवरण:", mr: "रक्कमेचा हिशोब:"),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMuted),
                       ),
                       const SizedBox(height: 10),
-                      _buildBreakdownRow("एकूण विक्री:", "₹ ${grossSales.toStringAsFixed(0)}", AppTheme.textCharcoal),
+                      _buildBreakdownRow(_t(auth, en: "Gross Sales:", hi: "कुल बिक्री:", mr: "एकूण विक्री:"), "₹ ${grossSales.toStringAsFixed(0)}", AppTheme.textCharcoal),
                       const SizedBox(height: 6),
-                      _buildBreakdownRow("कलासाथी फी (८%):", "- ₹ ${platformFees.toStringAsFixed(0)}", Colors.red.shade700),
+                      _buildBreakdownRow(_t(auth, en: "KalaSathi Fee (8%):", hi: "कलासाथी शुल्क (8%):", mr: "कलासाथी फी (८%):"), "- ₹ ${platformFees.toStringAsFixed(0)}", Colors.red.shade700),
                       if (refundsCancellations > 0) ...[
                         const SizedBox(height: 6),
-                        _buildBreakdownRow("रद्द / परतावा:", "- ₹ ${refundsCancellations.toStringAsFixed(0)}", Colors.red.shade700),
+                        _buildBreakdownRow(_t(auth, en: "Refunds / Cancelled:", hi: "रिफंड / रद्द:", mr: "रद्द / परतावा:"), "- ₹ ${refundsCancellations.toStringAsFixed(0)}", Colors.red.shade700),
                       ],
                       const Divider(height: 24),
 
                       // Payout Status Pills (Settled vs Pending)
                       Row(
                         children: [
-                          _buildStatPill("खात्यात जमा", "₹ ${settledPayout.toStringAsFixed(0)}", AppTheme.successGreen),
+                          _buildStatPill(_t(auth, en: "Settled to Bank", hi: "खाते में जमा", mr: "खात्यात जमा"), "₹ ${settledPayout.toStringAsFixed(0)}", AppTheme.successGreen),
                           const SizedBox(width: 12),
-                          _buildStatPill("प्रलंबित रक्कम", "₹ ${pendingPayout.toStringAsFixed(0)}", AppTheme.turmericDark),
+                          _buildStatPill(_t(auth, en: "Pending Payout", hi: "लंबित राशि", mr: "प्रलंबित रक्कम"), "₹ ${pendingPayout.toStringAsFixed(0)}", AppTheme.turmericDark),
                         ],
                       ),
                     ],
@@ -275,7 +332,7 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("एकूण ऑर्डर्स", style: TextStyle(fontSize: 13, color: AppTheme.textMuted, fontWeight: FontWeight.bold)),
+                            Text(_t(auth, en: "Total Orders", hi: "कुल आर्डर", mr: "एकूण ऑर्डर्स"), style: const TextStyle(fontSize: 13, color: AppTheme.textMuted, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
                             Text("$totalOrders", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppTheme.indigo)),
                           ],
@@ -294,7 +351,7 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("विकलेल्या वस्तू", style: TextStyle(fontSize: 13, color: AppTheme.textMuted, fontWeight: FontWeight.bold)),
+                            Text(_t(auth, en: "Items Sold", hi: "बिकी वस्तुएं", mr: "विकलेल्या वस्तू"), style: const TextStyle(fontSize: 13, color: AppTheme.textMuted, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 6),
                             Text("$productsSold", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppTheme.terracotta)),
                           ],
@@ -309,9 +366,9 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      "विक्री आलेख",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Text(
+                      _t(auth, en: "Sales Trends", hi: "बिक्री रुझान", mr: "विक्री आलेख"),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -324,10 +381,10 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                         value: _selectedTrendPeriod,
                         underline: const SizedBox(),
                         icon: const Icon(Icons.arrow_drop_down, color: AppTheme.terracotta),
-                        items: const [
-                          DropdownMenuItem(value: 'daily', child: Text("दैनिक", style: TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'weekly', child: Text("साप्ताहिक", style: TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'monthly', child: Text("मासिक", style: TextStyle(fontSize: 12))),
+                        items: [
+                          DropdownMenuItem(value: 'daily', child: Text(_t(auth, en: "Daily", hi: "दैनिक", mr: "दैनिक"), style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'weekly', child: Text(_t(auth, en: "Weekly", hi: "साप्ताहिक", mr: "साप्ताहिक"), style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'monthly', child: Text(_t(auth, en: "Monthly", hi: "मासिक", mr: "मासिक"), style: const TextStyle(fontSize: 12))),
                         ],
                         onChanged: (val) {
                           if (val != null) setState(() => _selectedTrendPeriod = val);
@@ -337,14 +394,14 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                   ],
                 ),
                 const SizedBox(height: 14),
-                _buildTrendsSection(dailyTrends, weeklyTrends, monthlyTrends),
+                _buildTrendsSection(dailyTrends, weeklyTrends, monthlyTrends, auth),
                 const SizedBox(height: 24),
 
                 // Best-Selling Products Section
                 if (bestSellers.isNotEmpty) ...[
-                  const Text(
-                    "सर्वाधिक विक्री झालेली उत्पादने",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    _t(auth, en: "Best-Selling Products", hi: "शीर्ष बिक्री उत्पाद", mr: "सर्वाधिक विक्री झालेली उत्पादने"),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 14),
                   Container(
@@ -360,6 +417,8 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (ctx, idx) {
                         final item = bestSellers[idx];
+                        final defaultTitle = _t(auth, en: 'Product', hi: 'उत्पाद', mr: 'उत्पादन');
+                        final soldSuffix = _t(auth, en: 'units sold', hi: 'वस्तुएं बिकीं', mr: 'वस्तू विकल्या');
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: idx == 0 ? AppTheme.turmericLight : AppTheme.backgroundSand,
@@ -371,8 +430,8 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                               ),
                             ),
                           ),
-                          title: Text(item['title'] ?? 'उत्पादन', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text("${item['quantity_sold'] ?? item['units_sold'] ?? 0} वस्तू विकल्या"),
+                          title: Text(item['title'] ?? defaultTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("${item['quantity_sold'] ?? item['units_sold'] ?? 0} $soldSuffix"),
                           trailing: Text(
                             "₹ ${((item['gross_revenue'] ?? item['total_revenue']) as num?)?.toStringAsFixed(0) ?? '0'}",
                             style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.terracotta, fontSize: 16),
@@ -386,9 +445,9 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
 
                 // Recent Orders Section
                 if (recentOrders.isNotEmpty) ...[
-                  const Text(
-                    "नुकत्याच आलेल्या ऑर्डर्स",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    _t(auth, en: "Recent Orders", hi: "हाल के आर्डर", mr: "नुकत्याच आलेल्या ऑर्डर्स"),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 14),
                   Container(
@@ -408,10 +467,11 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
                         final ordStatus = (ord['status'] as String? ?? 'pending').toUpperCase();
                         final ordAmount = (ord['artisan_net_earnings'] as num?)?.toDouble() ?? (ord['artisan_share'] as num?)?.toDouble() ?? (ord['total_amount'] as num?)?.toDouble() ?? 0.0;
                         final ordDate = (ord['created_at'] as String? ?? '').split('T').first;
-                        final ordCity = ord['shipping_city'] ?? ord['buyer_city'] ?? 'भारत';
+                        final ordCity = ord['shipping_city'] ?? ord['buyer_city'] ?? _t(auth, en: 'India', hi: 'भारत', mr: 'भारत');
+                        final orderPrefix = _t(auth, en: 'Order', hi: 'आर्डर', mr: 'ऑर्डर');
 
                         return ListTile(
-                          title: Text("ऑर्डर #$ordId", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          title: Text("$orderPrefix #$ordId", style: const TextStyle(fontWeight: FontWeight.bold)),
                           subtitle: Text("$ordDate • $ordCity"),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -444,7 +504,7 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
     );
   }
 
-  Widget _buildTrendsSection(List<dynamic> daily, List<dynamic> weekly, List<dynamic> monthly) {
+  Widget _buildTrendsSection(List<dynamic> daily, List<dynamic> weekly, List<dynamic> monthly, AuthProvider auth) {
     List<dynamic> activeTrends = _selectedTrendPeriod == 'daily'
         ? daily
         : _selectedTrendPeriod == 'weekly'
@@ -460,10 +520,13 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
           border: Border.all(color: AppTheme.borderWarm),
         ),
         alignment: Alignment.center,
-        child: const Text(
-          "सध्या कोणताही विक्री डेटा उपलब्ध नाही. नवीन ऑर्डर्स आल्यावर आलेख दिसेल.",
+        child: Text(
+          _t(auth,
+              en: "No sales trend data yet. Graph will appear as orders arrive.",
+              hi: "वर्तमान में कोई बिक्री डेटा उपलब्ध नहीं है। आर्डर आने पर ग्राफ दिखाई देगा।",
+              mr: "सध्या कोणताही विक्री डेटा उपलब्ध नाही. नवीन ऑर्डर्स आल्यावर आलेख दिसेल."),
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppTheme.textMuted),
+          style: const TextStyle(color: AppTheme.textMuted),
         ),
       );
     }
@@ -499,9 +562,12 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
             }).toList(),
           ),
           const SizedBox(height: 12),
-          const Text(
-            "* हा आलेख थेट मंजूर झालेल्या ऑर्डर्सवर आधारित आहे.",
-            style: TextStyle(fontSize: 11, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
+          Text(
+            _t(auth,
+                en: "* This trend is based directly on approved orders.",
+                hi: "* यह रुझान सीधे स्वीकृत आर्डरों पर आधारित है।",
+                mr: "* हा आलेख थेट मंजूर झालेल्या ऑर्डर्सवर आधारित आहे."),
+            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted, fontStyle: FontStyle.italic),
           ),
         ],
       ),
@@ -565,12 +631,15 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
     );
   }
 
-  Widget _buildLearnTab(AppLocalizations l10n) {
+  Widget _buildLearnTab(AppLocalizations l10n, AuthProvider auth) {
+    final lessons = _getLessons(auth.selectedLanguage);
+    final listenPrompt = _t(auth, en: "Listen to this audio lesson", hi: "यह पाठ ऑडियो में सुनें", mr: "हा धडा आवाजात ऐका");
+
     return ListView.builder(
       padding: const EdgeInsets.all(20),
-      itemCount: _lessons.length,
+      itemCount: lessons.length,
       itemBuilder: (context, index) {
-        final lesson = _lessons[index];
+        final lesson = lessons[index];
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(18),
@@ -619,7 +688,7 @@ class _EarningsLearnScreenState extends State<EarningsLearnScreen> with SingleTi
               const SizedBox(height: 14),
               OutlinedButton.icon(
                 icon: const Icon(Icons.volume_up_rounded),
-                label: const Text("हा धडा आवाजात ऐका"),
+                label: Text(listenPrompt),
                 onPressed: () {
                   VoiceGuidanceService.speakPrompt(context, lesson['content']!);
                 },
