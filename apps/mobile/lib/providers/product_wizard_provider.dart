@@ -396,6 +396,9 @@ class ProductWizardProvider extends ChangeNotifier {
   void addPhoto(Uint8List bytes) {
     if (_photos.length < 4) {
       _photos.add(bytes);
+      if (_photoContentTypes.length < _photos.length) {
+        _photoContentTypes.add('image/jpeg');
+      }
       notifyListeners();
     }
   }

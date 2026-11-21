@@ -141,19 +141,21 @@ async def _save_pricing_revision(
 
     # Dynamic pricing with real-time web search based on product description and title
     ai_pricing = None
-    try:
-        from app.utils.dynamic_pricing_agents import DynamicPricingCoordinator
-        coordinator = DynamicPricingCoordinator()
-        ai_pricing = await coordinator.generate_price_recommendation(
-            title=product.title_en or "Handcrafted Creation",
-            category_slug=category_slug,
-            material=product.material,
-            description=product.description_en or product.voice_transcript,
-            costs=costs,
-            voice_feedback=challenge_context if challenge_reason else None,
-        )
-    except Exception as exc:
-        logger.warning("Dynamic pricing web search error in _save_pricing_revision: %s", exc)
+    has_description = bool((product.description_en and len(product.description_en.strip()) > 10) or (product.voice_transcript and len(product.voice_transcript.strip()) > 5))
+    if len(candidates) < 3 and has_description:
+        try:
+            from app.utils.dynamic_pricing_agents import DynamicPricingCoordinator
+            coordinator = DynamicPricingCoordinator()
+            ai_pricing = await coordinator.generate_price_recommendation(
+                title=product.title_en or "Handcrafted Creation",
+                category_slug=category_slug,
+                material=product.material,
+                description=product.description_en or product.voice_transcript,
+                costs=costs,
+                voice_feedback=challenge_context if challenge_reason else None,
+            )
+        except Exception as exc:
+            logger.warning("Dynamic pricing web search error in _save_pricing_revision: %s", exc)
 
     if ai_pricing and ai_pricing.get("recommended_price") is not None and ai_pricing["recommended_price"] > 0:
         suggested_price = round(float(ai_pricing["recommended_price"]))
@@ -508,9 +510,9 @@ async def _images_from_image_job(payload: ProductCreate, artisan_id: int, db: As
     if not job:
         raise HTTPException(status_code=400, detail="Image job not found for this artisan")
     if job.status == "retake_required":
-        raise HTTPException(status_code=400, detail="Cannot publish: photo must be retaken")
+        raise HTTPException(status_code=409, detail="Cannot publish: photo must be retaken")
     if job.status != "completed" or job.requires_review:
-        raise HTTPException(status_code=400, detail="Cannot publish until image processing and required human review complete")
+        raise HTTPException(status_code=409, detail="Cannot publish until image processing and required human review complete")
     if payload.selected_variant_ids:
         try:
             await apply_variant_selection(job, payload.selected_variant_ids)
@@ -1063,6 +1065,11 @@ async def create_product(
 ):
     """Artisan publishes or creates a new handcrafted product with idempotency and duplicate prevention."""
     user, profile = artisan_tuple
+    if payload.status == ProductStatus.published:
+        raise HTTPException(
+            status_code=409,
+            detail="Products must be saved as drafts and published through the final review endpoint.",
+        )
     now = datetime.now(timezone.utc)
     category_id = payload.category_id
     if payload.category_slug:

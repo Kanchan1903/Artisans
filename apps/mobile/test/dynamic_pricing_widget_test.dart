@@ -44,7 +44,7 @@ void main() {
     // Verify "Approve Price" button
     expect(find.text('Approve Price'), findsOneWidget);
 
-    // Verify "Reject / Try Again" button
-    expect(find.text('Reject / Try Again'), findsOneWidget);
+    // Verify "Argue Price (Voice)" button
+    expect(find.text('Argue Price (Voice)'), findsOneWidget);
   });
 }

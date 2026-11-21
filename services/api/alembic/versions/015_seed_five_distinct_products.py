@@ -96,13 +96,22 @@ def upgrade() -> None:
     product_images = sa.Table("product_images", metadata, autoload_with=bind)
     product_translations = sa.Table("product_translations", metadata, autoload_with=bind)
 
-    # 1. Clean out existing test products to clear duplicate clay pots and stale broken URLs
-    bind.execute(product_images.delete())
+    # 1. Clean out existing test products safely without foreign key conflicts
     try:
-        bind.execute(product_translations.delete())
+        bind.execute(sa.text("DELETE FROM order_items"))
+        bind.execute(sa.text("DELETE FROM inquiries"))
+        bind.execute(sa.text("DELETE FROM reviews"))
+        bind.execute(sa.text("DELETE FROM wishlist_items"))
+        bind.execute(sa.text("DELETE FROM pricing_revisions"))
+        bind.execute(sa.text("DELETE FROM product_translations"))
+        bind.execute(sa.text("DELETE FROM product_images"))
+        bind.execute(sa.text("DELETE FROM products"))
     except Exception:
-        pass
-    bind.execute(products.delete())
+        try:
+            bind.execute(product_images.delete())
+            bind.execute(products.delete())
+        except Exception:
+            pass
 
     # 2. Ensure master demo artisan user exists
     demo_email = "master-artisan@kalasathi.org"
@@ -115,7 +124,7 @@ def upgrade() -> None:
             users.insert().values(
                 email=demo_email,
                 phone="+919876543210",
-                full_name="Master Craftsman of India",
+                full_name="Master Artisan Guild",
                 preferred_language="en",
                 is_active=True,
             )
@@ -130,7 +139,6 @@ def upgrade() -> None:
         art_res = bind.execute(
             artisans.insert().values(
                 user_id=user_id,
-                name="Master Artisan Guild",
                 craft_type="Heritage Crafts & Decor",
                 village="Shilpgram",
                 district="Udaipur",

@@ -109,7 +109,7 @@ async def init_db():
                 ).scalar()
                 if not artisan_id:
                     art_res = connection.execute(
-                        text(f"INSERT INTO artisan_profiles (user_id, name, craft_type, village, district, state, bio, is_approved, years_experience) VALUES ({user_id}, 'Master Artisan Guild', 'Heritage Crafts & Decor', 'Shilpgram', 'Udaipur', 'Rajasthan', 'National heritage award-winning cooperative of master artisans practicing India ancient handicrafts.', true, 25) RETURNING id")
+                        text(f"INSERT INTO artisan_profiles (user_id, craft_type, village, district, state, bio, is_approved, years_experience) VALUES ({user_id}, 'Heritage Crafts & Decor', 'Shilpgram', 'Udaipur', 'Rajasthan', 'National heritage award-winning cooperative of master artisans practicing India ancient handicrafts.', true, 25) RETURNING id")
                     )
                     artisan_id = art_res.scalar()
 

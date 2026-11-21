@@ -26,7 +26,10 @@ void main() {
 
       wizard.titleEn = "Terracotta Water Pitcher";
       wizard.titleHi = "मिट्टी का घड़ा";
+      wizard.updateEnglishDescription("Handcrafted terracotta water pitcher for cooling water naturally.");
       wizard.acceptedPrice = 450.0;
+      wizard.confirmFinalDescription(true);
+      wizard.confirmFinalPrice(true);
       wizard.setInventoryStock(8);
       wizard.draftProductId = 101;
 
