@@ -29,8 +29,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: Text(l10n.translate('settings')),
       ),
-      floatingActionButton: const VoiceHelpFab(
-        customMessage: "येथे तुम्ही भाषा बदलू शकता आणि बँक खात्याची माहिती नोंदवू शकता.",
+      floatingActionButton: VoiceHelpFab(
+        customMessage: auth.selectedLanguage == 'mr'
+            ? "येथे तुम्ही भाषा बदलू शकता आणि बँक खात्याची माहिती नोंदवू शकता."
+            : auth.selectedLanguage == 'hi'
+                ? "यहाँ आप भाषा बदल सकते हैं और बैंक खाते का विवरण जोड़ सकते हैं।"
+                : "Here you can change your language and manage your bank details.",
       ),
       body: SafeArea(
         child: SingleChildScrollView(

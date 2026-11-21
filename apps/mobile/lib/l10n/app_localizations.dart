@@ -8,15 +8,15 @@ class AppLocalizations {
   AppLocalizations(this.locale);
 
   static AppLocalizations of(BuildContext context) {
+    final localizations = Localizations.of<AppLocalizations>(context, AppLocalizations);
+    if (localizations != null) {
+      return localizations;
+    }
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       return AppLocalizations(Locale(auth.selectedLanguage));
     } catch (_) {
-      final localizations = Localizations.of<AppLocalizations>(context, AppLocalizations);
-      if (localizations != null) {
-        return localizations;
-      }
-      return AppLocalizations(const Locale('mr'));
+      return AppLocalizations(const Locale('en'));
     }
   }
 

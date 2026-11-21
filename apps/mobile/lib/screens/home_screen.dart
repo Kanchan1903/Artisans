@@ -205,6 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   l10n.translate('appTitle'),
+                  maxLines: 1,
+                  softWrap: false,
                   style: const TextStyle(
                     fontFamily: 'serif',
                     fontSize: 22,
@@ -216,6 +218,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Text(
                 l10n.translate('createSellGrow'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
@@ -364,7 +368,6 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Container(
           width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 185),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [
@@ -399,7 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Content Row
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -414,30 +417,30 @@ class _HomeScreenState extends State<HomeScreen> {
                             l10n.translate('empoweringArtisans'),
                             style: const TextStyle(
                               fontFamily: 'serif',
-                              fontSize: 17,
+                              fontSize: 16,
                               fontWeight: FontWeight.w800,
                               color: AppTheme.maroonPrimary,
-                              height: 1.2,
+                              height: 1.15,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
                           Text(
                             l10n.translate('turnCreativity'),
                             style: const TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 11,
                               color: Color(0xFF6B5854),
-                              height: 1.25,
+                              height: 1.2,
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           // Start Selling Button
                           ElevatedButton(
                             onPressed: () => _onAddProductTap(context),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.maroonPrimary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              minimumSize: const Size(0, 36),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              minimumSize: const Size(0, 32),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -449,11 +452,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Text(
                                   l10n.translate('startSelling'),
                                   style: const TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(width: 5),
+                                const SizedBox(width: 4),
                                 const Icon(Icons.arrow_forward_rounded, size: 13),
                               ],
                             ),
@@ -470,10 +473,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(18),
                         child: Image.asset(
                           'assets/images/artisan_hero.jpg',
-                          height: 140,
+                          height: 135,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            height: 140,
+                            height: 135,
                             color: const Color(0xFFE8CEC6),
                             child: const Icon(
                               Icons.brush_rounded,

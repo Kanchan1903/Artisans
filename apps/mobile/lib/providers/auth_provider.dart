@@ -4,7 +4,7 @@ import 'package:kalasathi_mobile/services/api_service.dart';
 import 'package:kalasathi_mobile/services/offline_storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  String _selectedLanguage = 'mr'; // Default to Marathi for demo or user choice
+  String _selectedLanguage = 'en'; // Default to English; loaded from offline storage on launch
   String? _authToken;
   Map<String, dynamic>? _artisanProfile;
   bool _isLoading = false;
